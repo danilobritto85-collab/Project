@@ -6,12 +6,14 @@ import { getRedToenailFrame, withRedToenails } from './toenailPolish';
 import amazonSheetUrl from '@assets/amazon_1791470375689.png';
 import backgroundUrl from '@assets/background_1791470375690.png';
 import heroSheetUrl from '@assets/hero_1791470375690.png';
+import ninjaSheetUrl from '@assets/ninja_1791475869252.png';
 import pinAttackUrl from '@assets/pin_attack_1791470375691.png';
 import pinExtendedUrl from '@assets/pin_extended_1791470375691.png';
 
 const WIDTH = 1024;
 const HEIGHT = 576;
-const TARGET_AMAZONS = 5;
+const TARGET_ENEMIES = 5;
+const STARTING_ENEMY_KINDS: readonly EnemyKind[] = ['amazon', 'amazon', 'ninja', 'ninja', 'ninja'];
 const FLOOR_MIN = HEIGHT * 0.75;
 const FLOOR_MAX = HEIGHT * 0.95;
 
@@ -47,21 +49,27 @@ interface SpriteAtlas {
   background: HTMLImageElement | null;
   hero: HTMLCanvasElement | null;
   amazon: HTMLCanvasElement | null;
+  ninja: HTMLCanvasElement | null;
   pinAttack: HTMLCanvasElement | null;
   pinExtended: HTMLCanvasElement | null;
 }
 
-type EnemyState = 'idle' | 'walk' | 'attack' | 'hurt' | 'down';
+type EnemyKind = 'amazon' | 'ninja';
+type EnemyState = 'idle' | 'walk' | 'run' | 'attack' | 'hurt' | 'down';
 
-interface Amazon {
+interface Enemy {
   id: number;
+  kind: EnemyKind;
   x: number;
   y: number;
+  vx: number;
+  vy: number;
   hp: number;
   active: boolean;
   direction: -1 | 1;
   state: EnemyState;
   stateTimer: number;
+  attackPoseIndex: number;
   attackCooldown: number;
   respawnAt: number;
   hue: number;
@@ -90,10 +98,12 @@ interface World {
   actionTimer: number;
   jumpOffset: number;
   jumpVelocity: number;
+  heroVelocityX: number;
+  heroVelocityY: number;
   heroHitCooldown: number;
   score: number;
   defeatedEnemies: number;
-  enemies: Amazon[];
+  enemies: Enemy[];
   currentGrappler: number | null;
   grappleSecondsLeft: number;
   escapeProgress: number;
@@ -149,6 +159,39 @@ const AMAZON_WALK_FRAMES: SpriteRect[] = [
 ];
 const AMAZON_WALK_CYCLE = [0, 1, 2, 1] as const;
 
+const NINJA_SPECIAL_POSE: SpriteRect = { x: 902, y: 385, w: 120, h: 133 };
+const NINJA_FRAMES = {
+  idle: { x: 20, y: 82, w: 112, h: 179 },
+  walk: { x: 363, y: 82, w: 111, h: 179 },
+  run: { x: 704, y: 82, w: 120, h: 179 },
+  kick: { x: 136, y: 333, w: 132, h: 186 },
+  spin: { x: 347, y: 333, w: 155, h: 186 },
+  highKick: { x: 548, y: 331, w: 151, h: 189 },
+  special: NINJA_SPECIAL_POSE,
+  pinPose: NINJA_SPECIAL_POSE,
+  pinLift: NINJA_SPECIAL_POSE,
+  hurt: { x: 24, y: 571, w: 150, h: 186 },
+  down: { x: 550, y: 571, w: 174, h: 185 },
+  defeated: { x: 762, y: 636, w: 254, h: 121 },
+} satisfies Record<string, SpriteRect>;
+
+const NINJA_WALK_FRAMES: SpriteRect[] = [
+  { x: 358, y: 82, w: 112, h: 179 },
+  { x: 458, y: 82, w: 112, h: 179 },
+  { x: 558, y: 82, w: 112, h: 179 },
+];
+const NINJA_RUN_FRAMES: SpriteRect[] = [
+  { x: 700, y: 82, w: 116, h: 179 },
+  { x: 808, y: 82, w: 112, h: 179 },
+  { x: 910, y: 82, w: 112, h: 179 },
+];
+const WALK_CYCLE = [0, 1, 2, 1] as const;
+const ATTACK_FRAMES: Record<EnemyKind, SpriteRect[]> = {
+  amazon: [AMAZON_FRAMES.kick, AMAZON_FRAMES.spin, AMAZON_FRAMES.highKick],
+  ninja: [NINJA_FRAMES.kick, NINJA_FRAMES.spin, NINJA_FRAMES.highKick],
+};
+const ENEMY_FRAMES = { amazon: AMAZON_FRAMES, ninja: NINJA_FRAMES };
+
 const GROUP_OFFSETS = [
   { dx: -82, dy: -8, flipped: false },
   { dx: -41, dy: 4, flipped: false },
@@ -188,7 +231,7 @@ const initialSnapshot: GameSnapshot = {
   phase: 'title',
   heroHp: 100,
   maxHeroHp: 100,
-  activeEnemies: TARGET_AMAZONS,
+  activeEnemies: TARGET_ENEMIES,
   defeatedEnemies: 0,
   score: 0,
   grappleSecondsLeft: 0,
@@ -197,19 +240,23 @@ const initialSnapshot: GameSnapshot = {
   soundEnabled: true,
 };
 
-function createEnemy(id: number, index: number): Amazon {
+function createEnemy(id: number, index: number, kind: EnemyKind): Enemy {
   return {
     id,
+    kind,
     x: 460 + index * 112,
     y: 475 + ((index * 29) % 55),
+    vx: 0,
+    vy: 0,
     hp: 3,
     active: true,
     direction: -1,
     state: 'idle',
     stateTimer: 0,
+    attackPoseIndex: index % 3,
     attackCooldown: 1.3 + index * 0.32,
     respawnAt: 0,
-    hue: index === 0 ? 0 : ((index * 19) % 41) - 20,
+    hue: kind === 'amazon' && index > 0 ? ((index * 19) % 41) - 20 : 0,
   };
 }
 
@@ -225,12 +272,12 @@ function createWorld(): World {
     actionTimer: 0,
     jumpOffset: 0,
     jumpVelocity: 0,
+  heroVelocityX: 0,
+  heroVelocityY: 0,
     heroHitCooldown: 0,
     score: 0,
     defeatedEnemies: 0,
-    enemies: Array.from({ length: TARGET_AMAZONS }, (_, index) =>
-      createEnemy(index + 1, index),
-    ),
+  enemies: STARTING_ENEMY_KINDS.map((kind, index) => createEnemy(index + 1, index, kind)),
     currentGrappler: null,
     grappleSecondsLeft: 0,
     escapeProgress: 0,
@@ -526,9 +573,14 @@ function playGameOver(world: World) {
   });
 }
 
-function spawnParticle(world: World, kind: Particle['kind']) {
-  const heroX = clamp(world.heroX, 110, WIDTH - 110) + world.facing * 65;
-  const heroY = world.heroY - 39;
+function spawnParticle(
+  world: World,
+  kind: Particle['kind'],
+  offsetX = world.facing * 65,
+  offsetY = -39,
+) {
+  const heroX = clamp(world.heroX, 110, WIDTH - 110) + offsetX;
+  const heroY = world.heroY + offsetY;
   world.particles.push({
     x: heroX + (random(world) - 0.5) * 34,
     y: heroY + (random(world) - 0.5) * 10,
@@ -604,6 +656,54 @@ function drawAtlasSprite(
   context.restore();
 }
 
+function enemyAnimationFrame(enemy: Enemy, now: number): SpriteRect {
+  const frames = ENEMY_FRAMES[enemy.kind];
+  if (enemy.state === 'walk') {
+    const cycleIndex = Math.floor(now / 175 + enemy.id * 0.67) % WALK_CYCLE.length;
+    const frameIndex = WALK_CYCLE[cycleIndex];
+    return enemy.kind === 'ninja'
+      ? NINJA_WALK_FRAMES[frameIndex]
+      : AMAZON_WALK_FRAMES[frameIndex];
+  }
+  if (enemy.state === 'run') {
+    return enemy.kind === 'ninja'
+      ? NINJA_RUN_FRAMES[Math.floor(now / 145 + enemy.id) % NINJA_RUN_FRAMES.length]
+      : frames.run;
+  }
+  if (enemy.state === 'attack') {
+    return ATTACK_FRAMES[enemy.kind][enemy.attackPoseIndex % ATTACK_FRAMES[enemy.kind].length];
+  }
+  if (enemy.state === 'hurt') return frames.hurt;
+  if (enemy.state === 'down') return frames.down;
+  return frames.idle;
+}
+
+function drawEnemySprite(
+  context: CanvasRenderingContext2D,
+  atlas: SpriteAtlas,
+  enemy: Enemy,
+  frame: SpriteRect,
+  now: number,
+  height = 180,
+  lift = 0,
+  groundOffset = 7,
+) {
+  const width = Math.max(126, (height * frame.w) / frame.h);
+  drawAtlasSprite(
+    context,
+    atlas[enemy.kind],
+    frame,
+    enemy.x,
+    enemy.y,
+    width,
+    height,
+    enemy.direction < 0,
+    enemy.kind === 'amazon' ? enemy.hue : 0,
+    lift,
+    groundOffset,
+  );
+}
+
 function drawParticle(context: CanvasRenderingContext2D, particle: Particle) {
   const progress = particle.age / particle.life;
   context.save();
@@ -665,18 +765,23 @@ function drawWorld(
   context.fillStyle = floorTint;
   context.fillRect(0, 408, WIDTH, HEIGHT - 408);
 
+  const groupSequence = world.phase === 'group-defeat' ||
+    (world.phase === 'game-over' && world.defeatKind === 'group');
+  if (groupSequence) {
+    context.translate(Math.sin(now / 48) * 1.35, Math.cos(now / 57) * 0.8);
+  }
+
   const specialSequence = world.phase === 'special-defeat' ||
     (world.phase === 'game-over' && world.defeatKind === 'special');
   if (specialSequence || world.phase === 'grapple') {
     const isStruggle = specialSequence;
-    // The pair is already drawn together in these sheets. Do not render a
-    // second standalone heroine or grappler underneath the combined pose.
+    const grappler = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
+    const ninjaGrappler = grappler?.kind === 'ninja';
     const bystanders = world.enemies
-      .filter((amazon) => amazon.hp > 0 && amazon.active && amazon.id !== world.currentGrappler)
+      .filter((enemy) => enemy.hp > 0 && enemy.active && enemy.id !== world.currentGrappler)
       .sort((a, b) => a.y - b.y);
-    for (const amazon of bystanders) {
-      drawAtlasSprite(context, atlas.amazon, AMAZON_FRAMES.idle,
-        amazon.x, amazon.y, 126, 180, amazon.direction < 0, amazon.hue);
+    for (const enemy of bystanders) {
+      drawEnemySprite(context, atlas, enemy, enemyAnimationFrame(enemy, now), now);
     }
     const remaining = isStruggle ? world.defeatSecondsLeft : world.grappleSecondsLeft;
     const duration = isStruggle ? SPECIAL_DEFEAT_DURATION : GRAPPLE_DURATION;
@@ -688,16 +793,35 @@ function drawWorld(
       ? STRUGGLE_FRAMES[struggleFrame]
       : sequenceFrame(GRAPPLE_FRAMES, elapsed, duration);
     const struggleMotion = isStruggle ? Math.sin(now / 85) * 1.2 : 0;
-    drawAtlasSprite(
-      context,
-      isStruggle ? atlas.pinExtended : atlas.pinAttack,
-      frame,
-      clamp(world.heroX + struggleMotion, 110, WIDTH - 110),
-      world.heroY,
-      (190 * frame.w) / frame.h,
-      190,
-      world.facing < 0,
-    );
+    if (ninjaGrappler && grappler) {
+      const heroPose = isStruggle ? HERO_FRAMES.down : HERO_FRAMES.hurt;
+      const heroX = clamp(world.heroX + struggleMotion, 110, WIDTH - 110);
+      drawAtlasSprite(
+        context,
+        atlas.hero,
+        heroPose,
+        heroX,
+        world.heroY,
+        isStruggle ? 206 : 150,
+        isStruggle ? 88 : 164,
+        world.facing < 0,
+      );
+      grappler.x = world.heroX - grappler.direction * 28;
+      grappler.y = world.heroY - 2;
+      drawEnemySprite(context, atlas, grappler, NINJA_FRAMES.special, now, 180, 0, 7);
+    } else {
+      // Amazon grapples use the paired pose sheets; they already contain both fighters.
+      drawAtlasSprite(
+        context,
+        isStruggle ? atlas.pinExtended : atlas.pinAttack,
+        frame,
+        clamp(world.heroX + struggleMotion, 110, WIDTH - 110),
+        world.heroY,
+        (190 * frame.w) / frame.h,
+        190,
+        world.facing < 0,
+      );
+    }
     if (isStruggle) world.particles.forEach((particle) => drawParticle(context, particle));
   } else if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
     const centerX = clamp(world.heroX, 160, WIDTH - 160);
@@ -720,61 +844,36 @@ function drawWorld(
     GROUP_OFFSETS.map((offset, index) => ({ offset, index }))
       .sort((a, b) => world.enemies[a.index].y - world.enemies[b.index].y)
       .forEach(({ offset, index }) => {
-      const amazon = world.enemies[index];
-      if (!amazon) return;
-      const pinElapsed = amazon.pinElapsed ?? 0;
+      const enemy = world.enemies[index];
+      if (!enemy) return;
+      const pinElapsed = enemy.pinElapsed ?? 0;
       const approaching = pinElapsed === 0;
-      const stepIndex = [0, 1, 2, 1][Math.floor(now / 130 + index) % 4];
-      const pose = approaching ? AMAZON_WALK_FRAMES[stepIndex]
-        : pinElapsed < 0.12 ? AMAZON_FRAMES.idle
-        : pinElapsed < 0.32 ? AMAZON_FRAMES.pinLift : AMAZON_FRAMES.pinPose;
+      const frames = ENEMY_FRAMES[enemy.kind];
+      const pose = approaching ? enemyAnimationFrame(enemy, now)
+        : pinElapsed < 0.12 ? frames.idle
+        : pinElapsed < 0.32 ? frames.pinLift : frames.pinPose;
       // Gentle breathing changes the upper silhouette, never the planted feet.
       const breathing = pinElapsed > 0.32 ? Math.sin(pinElapsed * 2.5 + index) * 0.7 : 0;
-      drawAtlasSprite(
-        context,
-        atlas.amazon,
-        pose,
-        amazon.x,
-        amazon.y,
-        126,
-        180 + breathing,
-        approaching ? amazon.direction < 0 : offset.flipped,
-        amazon.hue,
-        0,
-        7,
-      );
+      const width = Math.max(126, ((180 + breathing) * pose.w) / pose.h);
+      drawAtlasSprite(context, atlas[enemy.kind], pose, enemy.x, enemy.y,
+        width, 180 + breathing, approaching ? enemy.direction < 0 : offset.flipped,
+        enemy.kind === 'amazon' ? enemy.hue : 0, 0, 7);
     });
   } else {
     const actors: Array<{ y: number; draw: () => void }> = [];
-    const activeEnemies = world.enemies.filter(
-      (amazon) => amazon.hp > 0 && amazon.active,
+    const visibleEnemies = world.enemies.filter(
+      (enemy) => enemy.active || (enemy.hp <= 0 && enemy.respawnAt > now),
     );
 
-    for (const amazon of activeEnemies) {
-      let rect = AMAZON_FRAMES.idle;
-      if (amazon.state === 'walk') {
-        const step = AMAZON_WALK_CYCLE[Math.floor(now / 175 + amazon.id * 0.67) % AMAZON_WALK_CYCLE.length];
-        rect = AMAZON_WALK_FRAMES[step];
-      }
-      else if (amazon.state === 'attack') rect = AMAZON_FRAMES.kick;
-      else if (amazon.state === 'hurt') rect = AMAZON_FRAMES.hurt;
-      else if (amazon.state === 'down') rect = AMAZON_FRAMES.down;
+    for (const enemy of visibleEnemies) {
+      const defeated = !enemy.active;
+      const rect = defeated
+        ? enemy.stateTimer > 0 ? ENEMY_FRAMES[enemy.kind].down : ENEMY_FRAMES[enemy.kind].defeated
+        : enemyAnimationFrame(enemy, now);
       actors.push({
-        y: amazon.y,
+        y: enemy.y,
         draw: () =>
-          drawAtlasSprite(
-            context,
-            atlas.amazon,
-            rect,
-            amazon.x,
-            amazon.y,
-            126,
-            180,
-            amazon.direction < 0,
-            amazon.hue,
-            0,
-            7,
-          ),
+          drawEnemySprite(context, atlas, enemy, rect, now, defeated ? 120 : 180),
       });
     }
 
