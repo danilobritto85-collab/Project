@@ -1,3 +1,3 @@
 - [Uploaded game art](uploaded-game-art.md) — inspect real image dimensions and format before assigning sprite crop coordinates.
-- [Sequence visibility](sequence-visibility.md) — defeat stays visible; five Amazonas use the group pin pose while ninjas remain neutral behind them.
+- [Sequence visibility](sequence-visibility.md) — defeats stay visible and moving; Amazonas alone use the group pin pose, and Ninja defeats end with the supplied sequence.
 - [Amazon styling](amazon-styling.md) — Amazon toenails are red, including paired scenes and palette variants.

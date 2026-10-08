@@ -1095,17 +1095,46 @@ function drawWorld(
     for (const enemy of bystanders) {
       drawEnemySprite(context, atlas, enemy, enemyAnimationFrame(enemy, now));
     }
-    const frameIndex = Math.floor(
-      world.ninjaFootsmotherElapsed * NINJA_FOOTSMOTHER_FRAMES.length,
-    ) % NINJA_FOOTSMOTHER_FRAMES.length;
-    drawFootsmotherFrame(
-      context,
-      atlas.ninjaFootsmother,
-      NINJA_FOOTSMOTHER_FRAMES[frameIndex],
-      clamp(world.heroX, 180, WIDTH - 180),
-      clamp(world.heroY, FLOOR_MIN, FLOOR_MAX),
-      grappler?.direction === -1,
-    );
+    const elapsed = Math.max(0, world.ninjaFootsmotherElapsed);
+    const endingStartsAt =
+      NINJA_FOOTSMOTHER_DURATION - NINJA_FOOTSMOTHER_ENDING_DURATION;
+    const heroX = clamp(world.heroX, 180, WIDTH - 180);
+    const groundY = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
+    const flipped = grappler?.direction === -1;
+    if (elapsed < endingStartsAt) {
+      const frameIndex = Math.floor(
+        elapsed * NINJA_FOOTSMOTHER_FRAME_RATE,
+      ) % NINJA_FOOTSMOTHER_FRAMES.length;
+      drawFootsmotherFrame(
+        context,
+        atlas.ninjaFootsmother,
+        NINJA_FOOTSMOTHER_FRAMES[frameIndex],
+        heroX,
+        groundY,
+        flipped,
+      );
+    } else {
+      const endingFrameIndex = elapsed >= NINJA_FOOTSMOTHER_DURATION
+        ? 1 + (Math.floor(
+          (elapsed - NINJA_FOOTSMOTHER_DURATION) * NINJA_FOOTSMOTHER_FRAME_RATE,
+        ) % (NINJA_FOOTSMOTHER_ENDING_FRAMES.length - 1))
+        : Math.min(
+          NINJA_FOOTSMOTHER_ENDING_FRAMES.length - 1,
+          Math.floor(
+            (elapsed - endingStartsAt) /
+              (NINJA_FOOTSMOTHER_ENDING_DURATION /
+                NINJA_FOOTSMOTHER_ENDING_FRAMES.length),
+          ),
+        );
+      drawFootsmotherFrame(
+        context,
+        atlas.ninjaFootsmotherEnding,
+        NINJA_FOOTSMOTHER_ENDING_FRAMES[endingFrameIndex],
+        heroX,
+        groundY,
+        flipped,
+      );
+    }
   }
 
   const specialSequence = world.phase === 'special-defeat' ||
@@ -1785,6 +1814,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       amazon: null,
       ninja: null,
       ninjaFootsmother: null,
+      ninjaFootsmotherEnding: null,
       pinAttack: null,
       pinExtended: null,
     };
@@ -1895,9 +1925,19 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       loadImage(amazonSheetUrl),
       loadImage(ninjaSheetUrl),
       loadImage(ninjaFootsmotherUrl),
+      loadImage(ninjaFootsmotherEndingUrl),
       loadImage(pinAttackUrl),
       loadImage(pinExtendedUrl),
-    ]).then(([background, hero, amazon, ninja, ninjaFootsmother, pinAttack, pinExtended]) => {
+    ]).then(([
+      background,
+      hero,
+      amazon,
+      ninja,
+      ninjaFootsmother,
+      ninjaFootsmotherEnding,
+      pinAttack,
+      pinExtended,
+    ]) => {
       if (disposed) return;
       atlas = {
         background,
@@ -1905,6 +1945,10 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
         amazon: withRedToenails(removeCheckerboard(amazon), 'amazon'),
         ninja: removeNinjaCheckerboard(ninja),
         ninjaFootsmother: removeFootsmotherCheckerboard(ninjaFootsmother),
+        ninjaFootsmotherEnding: removeFootsmotherCheckerboard(
+          ninjaFootsmotherEnding,
+          false,
+        ),
         pinAttack: withRedToenails(removeCheckerboard(pinAttack, true), 'pinAttack'),
         pinExtended: withRedToenails(removeCheckerboard(pinExtended, true), 'pinExtended'),
       };

@@ -22,3 +22,9 @@ During group defeat, only the five Amazonas use the planted-foot victory pose; N
 **Why:** Reusing Ninja kick frames as group pin poses made the Ninjas appear to stomp the fallen heroine alongside the Amazons.
 
 **How to apply:** Keep standard Ninja attacks in normal combat, but render their walk/idle poses in the back row during group defeat while the five Amazons hold the foreground formation.
+
+For the Kunoichi's ten-second defeat, use the original six-frame sheet for the opening 8.5 seconds, the new three-frame sheet for the final 1.5 seconds, then loop its last two frames after HP reaches zero.
+
+**Why:** The user wants the new sequence to finish the Ninja defeat while preserving the ten-second HP drain and the existing requirement that defeat scenes keep moving without a static Game Over screen.
+
+**How to apply:** Select the ending sheet from elapsed defeat time; keep the HP timer unchanged and continue animating the final frames after the defeat transition.
