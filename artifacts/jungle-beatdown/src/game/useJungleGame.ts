@@ -1163,9 +1163,12 @@ function drawWorld(
 
     const groupActors: Array<{ y: number; draw: () => void }> = [];
     world.enemies.filter((enemy) => enemy.kind === 'ninja').forEach((enemy) => {
+      const pose = enemy.state === 'walk'
+        ? enemyAnimationFrame(enemy, now)
+        : NINJA_FRAMES.idle;
       groupActors.push({
         y: enemy.y,
-        draw: () => drawEnemySprite(context, atlas, enemy, NINJA_FRAMES.idle),
+        draw: () => drawEnemySprite(context, atlas, enemy, pose),
       });
     });
     world.enemies.filter((enemy) => enemy.kind === 'amazon').forEach((enemy, index) => {

@@ -16,3 +16,9 @@ For the five-Amazon defeat, use a close cluster around the fallen heroine, with 
 **Why:** The user clarified that the group defeat should show all five Amazons together, standing over the heroine in victory.
 
 **How to apply:** Bring all five full-size sprites in close, orient the outer Amazons toward the heroine, and keep their feet planted while allowing subtle body movement. Do not apply normal-combat spacing during this sequence.
+
+During group defeat, only the five Amazonas use the planted-foot victory pose; Ninjas stay neutral in the back row and do not use kick or pin poses.
+
+**Why:** Reusing Ninja kick frames as group pin poses made the Ninjas appear to stomp the fallen heroine alongside the Amazons.
+
+**How to apply:** Keep standard Ninja attacks in normal combat, but render their walk/idle poses in the back row during group defeat while the five Amazons hold the foreground formation.
