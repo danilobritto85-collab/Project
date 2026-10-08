@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import {
   AudioLines,
   VolumeX,
@@ -15,9 +16,62 @@ function formatScore(score: number) {
   return Math.max(0, score).toString().padStart(6, '0');
 }
 
+interface TouchButtonProps {
+  code: string;
+  label: string;
+  glyph: string;
+  caption?: string;
+  className?: string;
+  onPress: (code: string) => void;
+  onRelease: (code: string) => void;
+}
+
+function TouchButton({
+  code,
+  label,
+  glyph,
+  caption,
+  className = '',
+  onPress,
+  onRelease,
+}: TouchButtonProps) {
+  const release = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    onRelease(code);
+  };
+
+  return (
+    <button
+      className={`touch-control-button ${className}`}
+      type="button"
+      aria-label={label}
+      onPointerDown={(event) => {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        onPress(code);
+      }}
+      onPointerUp={release}
+      onPointerCancel={release}
+      onLostPointerCapture={() => onRelease(code)}
+      onContextMenu={(event) => event.preventDefault()}
+    >
+      <span className="touch-control-glyph">{glyph}</span>
+      {caption && <span className="touch-control-caption">{caption}</span>}
+    </button>
+  );
+}
+
 function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const { snapshot, startGame, restartGame, toggleSound, heroPortrait } = useJungleGame(canvasRef);
+  const {
+    snapshot,
+    startGame,
+    restartGame,
+    toggleSound,
+    heroPortrait,
+    pressVirtualControl,
+    releaseVirtualControl,
+  } = useJungleGame(canvasRef);
   const hpPercent = Math.max(0, Math.min(100, (snapshot.heroHp / snapshot.maxHeroHp) * 100));
   const escapePercent = Math.max(0, Math.min(100, snapshot.escapeProgress * 100));
   const isTitle = snapshot.phase === 'title';
@@ -83,7 +137,7 @@ function App() {
                 <div className="hud-box">
                   <div className="hud-heading"><span><Heart size={12} /> Exploradora</span><strong>{snapshot.heroHp} / {snapshot.maxHeroHp}</strong></div>
                   <div className="hp-track"><div className="hp-fill" style={{ width: `${hpPercent}%` }} /></div>
-                  <div className="enemy-track" aria-label={`${snapshot.activeEnemies} guerreiras ativas, ${snapshot.defeatedEnemies} derrotadas`}>
+                  <div className="enemy-track" aria-label={`${snapshot.activeEnemies} inimigas ativas, ${snapshot.defeatedEnemies} derrotadas`}>
                     {Array.from({ length: 5 }, (_, index) => (
                       <i key={index} className={`enemy-pip ${index >= snapshot.activeEnemies ? 'down' : ''}`} />
                     ))}
@@ -103,7 +157,7 @@ function App() {
                     <div className="eyebrow">Briga de rua, trilha de selva</div>
                     <h1 className="game-title">Jungle <span>Beatdown</span></h1>
                     <p className="title-description">
-                       Cinco guerreiras. Uma arena na selva. Mova-se, lute e sobreviva ao cerco por quanto tempo conseguir.
+                       Duas amazonas e três kunoichis. Mova-se, lute e sobreviva ao cerco na selva.
                     </p>
                     <button className="start-button" type="button" onClick={startGame} data-testid="button-start">
                       <Play fill="currentColor" /> Iniciar partida
@@ -134,7 +188,7 @@ function App() {
               <div className="sequence-hud defeat-hud" role="status"
                 data-testid={isSpecialDefeat ? 'status-special-defeat' : 'status-group-defeat'}>
                 <div className="sequence-info">
-                  <span className="sequence-label">{isSpecialDefeat ? 'Luta para se soltar' : 'Cerco das guerreiras'}</span>
+                    <span className="sequence-label">{isSpecialDefeat ? 'Luta para se soltar' : 'Cerco das inimigas'}</span>
                   <span className="sequence-hint">Sequência de derrota</span>
                 </div>
                 <strong className="sequence-time">{Math.max(0, snapshot.defeatSecondsLeft).toFixed(1)}<small>s</small></strong>
@@ -158,7 +212,24 @@ function App() {
 
             {isPlaying && (
               <div className="phase-chip">
-                {`${snapshot.activeEnemies} ${snapshot.activeEnemies === 1 ? 'guerreira ativa' : 'guerreiras ativas'} · ${snapshot.defeatedEnemies} derrotadas`}
+                {`${snapshot.activeEnemies} ${snapshot.activeEnemies === 1 ? 'oponente ativo' : 'oponentes ativos'} · ${snapshot.defeatedEnemies} derrotadas`}
+              </div>
+            )}
+
+            {(isPlaying || isGrapple) && (
+              <div className="touch-controls" role="group" aria-label="Controles touch">
+                <div className="touch-dpad" role="group" aria-label="Mover">
+                  <TouchButton code="KeyW" label="Mover para cima" glyph="▲" className="touch-up" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
+                  <TouchButton code="KeyA" label="Mover para a esquerda" glyph="◀" className="touch-left" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
+                  <TouchButton code="KeyD" label="Mover para a direita" glyph="▶" className="touch-right" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
+                  <TouchButton code="KeyS" label="Mover para baixo" glyph="▼" className="touch-down" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
+                </div>
+                <div className="touch-action-pad" role="group" aria-label="Ações">
+                  <TouchButton code="KeyJ" label="Soco ou escapar" glyph="J" caption="SOCO" className="touch-punch" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
+                  <TouchButton code="KeyK" label="Chute" glyph="K" caption="CHUTE" className="touch-kick" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
+                  <TouchButton code="Space" label="Pular" glyph="⤒" caption="PULAR" className="touch-jump" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
+                  <TouchButton code="ShiftLeft" label="Correr" glyph="»" caption="CORRER" className="touch-run" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
+                </div>
               </div>
             )}
           </div>
@@ -172,9 +243,10 @@ function App() {
               <div className="control-item"><kbd>K</kbd> Chute</div>
               <div className="control-item"><kbd>Espaço</kbd> Pular</div>
             </div>
+            <div className="touch-control-note">No celular, use os botões sobre a arena.</div>
           </div>
         </section>
-        <div className="footer-note"><Swords size={12} /> <span>5 guerreiras</span> · arena de combate 2.5D · feita para jogar</div>
+        <div className="footer-note"><Swords size={12} /> <span>2 Amazonas · 3 Kunoichis</span> · arena de combate 2.5D · feita para jogar</div>
       </div>
     </main>
   );

@@ -157,7 +157,6 @@ const AMAZON_WALK_FRAMES: SpriteRect[] = [
   { x: 460, y: 82, w: 112, h: 179 },
   { x: 560, y: 82, w: 112, h: 179 },
 ];
-const AMAZON_WALK_CYCLE = [0, 1, 2, 1] as const;
 
 const NINJA_SPECIAL_POSE: SpriteRect = { x: 902, y: 385, w: 120, h: 133 };
 const NINJA_FRAMES = {
@@ -193,11 +192,11 @@ const ATTACK_FRAMES: Record<EnemyKind, SpriteRect[]> = {
 const ENEMY_FRAMES = { amazon: AMAZON_FRAMES, ninja: NINJA_FRAMES };
 
 const GROUP_OFFSETS = [
-  { dx: -82, dy: -8, flipped: false },
-  { dx: -41, dy: 4, flipped: false },
-  { dx: 41, dy: 4, flipped: true },
+  { dx: -260, dy: -8, flipped: false },
+  { dx: -130, dy: 4, flipped: false },
   { dx: 0, dy: -20, flipped: true },
-  { dx: 82, dy: -8, flipped: true },
+  { dx: 130, dy: 4, flipped: true },
+  { dx: 260, dy: -8, flipped: true },
 ] as const;
 
 const GRAPPLE_FRAMES: SpriteRect[] = [
@@ -388,6 +387,118 @@ function removeCheckerboard(image: HTMLImageElement, combinedPose = false) {
     if (pixel + canvas.width < pixelCount) addIfChecker(pixel + canvas.width);
     pixels[pixel * 4 + 3] = 0;
   }
+  context.putImageData(frame, 0, 0);
+  return canvas;
+}
+
+function removeNinjaCheckerboard(image: HTMLImageElement) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 768;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) return canvas;
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const frame = context.getImageData(0, 0, canvas.width, canvas.height);
+  const pixels = frame.data;
+  const colors = [[0, 0, 0, 0], [0, 0, 0, 0]];
+
+  // This sheet's checker is warm-tinted; estimate its dark and light tones
+  // from the clean top edge instead of treating every gray pixel as background.
+  for (let y = 2; y < 8; y += 1) {
+    for (let x = 0; x < canvas.width; x += 1) {
+      const pixel = (y * canvas.width + x) * 4;
+      const brightness =
+        (pixels[pixel] + pixels[pixel + 1] + pixels[pixel + 2]) / 3;
+      const tone = colors[brightness < 52 ? 0 : 1];
+      tone[0] += pixels[pixel];
+      tone[1] += pixels[pixel + 1];
+      tone[2] += pixels[pixel + 2];
+      tone[3] += 1;
+    }
+  }
+  for (const tone of colors) {
+    const count = tone[3] || 1;
+    tone[0] /= count;
+    tone[1] /= count;
+    tone[2] /= count;
+  }
+  const midpoint = colors[0].slice(0, 3).map((value, channel) =>
+    (value + colors[1][channel]) / 2,
+  );
+
+  const pixelCount = canvas.width * canvas.height;
+  const checkerMask = new Uint8Array(pixelCount);
+  const foregroundSeed = new Uint8Array(pixelCount);
+  for (let y = 0; y < canvas.height; y += 1) {
+    for (let x = 0; x < canvas.width; x += 1) {
+      const index = y * canvas.width + x;
+      const pixel = index * 4;
+      const red = pixels[pixel];
+      const green = pixels[pixel + 1];
+      const blue = pixels[pixel + 2];
+      const warmCheckerTone =
+        red - green >= 2 &&
+        blue - green <= 7 &&
+        red - blue >= 0;
+      const darkDifference = Math.max(
+        Math.abs(red - colors[0][0]),
+        Math.abs(green - colors[0][1]),
+        Math.abs(blue - colors[0][2]),
+      );
+      const lightDifference = Math.max(
+        Math.abs(red - colors[1][0]),
+        Math.abs(green - colors[1][1]),
+        Math.abs(blue - colors[1][2]),
+      );
+      const midpointDifference = Math.max(
+        Math.abs(red - midpoint[0]),
+        Math.abs(green - midpoint[1]),
+        Math.abs(blue - midpoint[2]),
+      );
+      const matchesChecker =
+        warmCheckerTone &&
+        (darkDifference <= 14 ||
+          lightDifference <= 14 ||
+          midpointDifference <= 12);
+      checkerMask[index] = matchesChecker ? 1 : 0;
+      foregroundSeed[index] =
+        !matchesChecker &&
+        (Math.max(red, green, blue) - Math.min(red, green, blue) > 20 ||
+          blue > red + 3 ||
+          green > blue + 7 ||
+          (Math.min(red, green, blue) > 150 &&
+            Math.max(red, green, blue) - Math.min(red, green, blue) < 20))
+          ? 1
+          : 0;
+    }
+  }
+
+  for (let y = 0; y < canvas.height; y += 1) {
+    for (let x = 0; x < canvas.width; x += 1) {
+      const index = y * canvas.width + x;
+      if (!checkerMask[index]) continue;
+      let protectsForeground = false;
+      for (let dy = -2; dy <= 2 && !protectsForeground; dy += 1) {
+        for (let dx = -2; dx <= 2; dx += 1) {
+          const neighborX = x + dx;
+          const neighborY = y + dy;
+          if (
+            neighborX >= 0 &&
+            neighborX < canvas.width &&
+            neighborY >= 0 &&
+            neighborY < canvas.height &&
+            foregroundSeed[neighborY * canvas.width + neighborX]
+          ) {
+            protectsForeground = true;
+            break;
+          }
+        }
+      }
+      if (!protectsForeground) pixels[index * 4 + 3] = 0;
+    }
+  }
+
   context.putImageData(frame, 0, 0);
   return canvas;
 }
@@ -683,7 +794,6 @@ function drawEnemySprite(
   atlas: SpriteAtlas,
   enemy: Enemy,
   frame: SpriteRect,
-  now: number,
   height = 180,
   lift = 0,
   groundOffset = 7,
@@ -781,34 +891,34 @@ function drawWorld(
       .filter((enemy) => enemy.hp > 0 && enemy.active && enemy.id !== world.currentGrappler)
       .sort((a, b) => a.y - b.y);
     for (const enemy of bystanders) {
-      drawEnemySprite(context, atlas, enemy, enemyAnimationFrame(enemy, now), now);
+      drawEnemySprite(context, atlas, enemy, enemyAnimationFrame(enemy, now));
     }
     const remaining = isStruggle ? world.defeatSecondsLeft : world.grappleSecondsLeft;
     const duration = isStruggle ? SPECIAL_DEFEAT_DURATION : GRAPPLE_DURATION;
     const elapsed = duration - remaining;
     const struggleFrame = elapsed < 0.72
-      ? Math.min(2, Math.floor(elapsed / 0.24))
-      : [3, 4, 5, 4][Math.floor(now / 240) % 4];
+      ? Math.min(2, Math.floor(elapsed / 0.18))
+      : [3, 4, 5, 4][Math.floor(now / 180) % 4];
     const frame = isStruggle
       ? STRUGGLE_FRAMES[struggleFrame]
       : sequenceFrame(GRAPPLE_FRAMES, elapsed, duration);
-    const struggleMotion = isStruggle ? Math.sin(now / 85) * 1.2 : 0;
+    const struggleMotion = isStruggle ? Math.sin(now / 82) * 2 : 0;
     if (ninjaGrappler && grappler) {
-      const heroPose = isStruggle ? HERO_FRAMES.down : HERO_FRAMES.hurt;
-      const heroX = clamp(world.heroX + struggleMotion, 110, WIDTH - 110);
+      const ninjaMotion = isStruggle ? Math.sin(now / 92) * 2.1 : 0;
+      const heroX = clamp(world.heroX + struggleMotion + ninjaMotion, 110, WIDTH - 110);
       drawAtlasSprite(
         context,
         atlas.hero,
-        heroPose,
+        HERO_FRAMES.defeated,
         heroX,
-        world.heroY,
-        isStruggle ? 206 : 150,
-        isStruggle ? 88 : 164,
+        world.heroY + Math.sin(now / 104) * (isStruggle ? 1.6 : 0),
+        230,
+        80,
         world.facing < 0,
       );
-      grappler.x = world.heroX - grappler.direction * 28;
-      grappler.y = world.heroY - 2;
-      drawEnemySprite(context, atlas, grappler, NINJA_FRAMES.special, now, 180, 0, 7);
+      const ninjaLift = isStruggle ? Math.abs(Math.sin(now / 88)) * 2.6 : 0;
+      drawEnemySprite(context, atlas, grappler, NINJA_FRAMES.special,
+        180 + ninjaLift, 0, 7);
     } else {
       // Amazon grapples use the paired pose sheets; they already contain both fighters.
       drawAtlasSprite(
@@ -824,7 +934,7 @@ function drawWorld(
     }
     if (isStruggle) world.particles.forEach((particle) => drawParticle(context, particle));
   } else if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
-    const centerX = clamp(world.heroX, 160, WIDTH - 160);
+    const centerX = clamp(world.heroX, 260, WIDTH - 260);
     const centerY = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
     const elapsed = world.actionTimer > 0
       ? 0.9 - world.actionTimer
@@ -873,7 +983,7 @@ function drawWorld(
       actors.push({
         y: enemy.y,
         draw: () =>
-          drawEnemySprite(context, atlas, enemy, rect, now, defeated ? 120 : 180),
+          drawEnemySprite(context, atlas, enemy, rect, defeated ? 120 : 180),
       });
     }
 
@@ -905,14 +1015,22 @@ function enterGameOver(world: World) {
   playGameOver(world);
 }
 
-function beginSpecialGrapple(world: World, amazon: Amazon) {
+function beginSpecialGrapple(world: World, enemy: Enemy) {
   world.phase = 'grapple';
-  world.currentGrappler = amazon.id;
+  world.currentGrappler = enemy.id;
   world.grappleSecondsLeft = GRAPPLE_DURATION;
   world.escapeProgress = 0;
   world.heroAction = 'hurt';
-  amazon.state = 'attack';
-  amazon.stateTimer = 5.2;
+  world.heroVelocityX = 0;
+  world.heroVelocityY = 0;
+  world.facing = enemy.x < world.heroX ? -1 : 1;
+  enemy.direction = world.heroX < enemy.x ? -1 : 1;
+  enemy.x = world.heroX - enemy.direction * 28;
+  enemy.y = world.heroY - 2;
+  enemy.vx = 0;
+  enemy.vy = 0;
+  enemy.state = 'attack';
+  enemy.stateTimer = 5.2;
   world.heroHitCooldown = 1.1;
   playStomp(world);
 }
@@ -924,6 +1042,8 @@ function escapeGrapple(world: World) {
   world.escapeProgress = 0;
   world.heroAction = 'idle';
   world.actionTimer = 0.35;
+  world.heroVelocityX = 0;
+  world.heroVelocityY = 0;
   world.heroHitCooldown = 1.2;
   world.heroX = clamp(world.heroX - world.facing * 60, 48, WIDTH - 48);
   playHit(world);
@@ -938,22 +1058,24 @@ function doHeroAttack(world: World, action: 'punch' | 'kick') {
   const damage = action === 'punch' ? 1 : 1;
   let connected = false;
 
-  for (const amazon of world.enemies.filter((item) => item.hp > 0 && item.active)) {
-    const dx = amazon.x - world.heroX;
-    const dy = Math.abs(amazon.y - world.heroY);
+  for (const enemy of world.enemies.filter((item) => item.hp > 0 && item.active)) {
+    const dx = enemy.x - world.heroX;
+    const dy = Math.abs(enemy.y - world.heroY);
     if (
       dy < 65 &&
       Math.abs(dx) < range &&
       (Math.sign(dx) === world.facing || Math.abs(dx) < 42)
     ) {
-      amazon.hp -= damage;
-      amazon.state = amazon.hp <= 0 ? 'down' : 'hurt';
-      amazon.stateTimer = amazon.hp <= 0 ? 2 : 0.34;
-      amazon.attackCooldown = Math.max(amazon.attackCooldown, 0.7);
+      enemy.hp -= damage;
+      enemy.state = enemy.hp <= 0 ? 'down' : 'hurt';
+      enemy.stateTimer = enemy.hp <= 0 ? 1.15 : 0.34;
+      enemy.vx = 0;
+      enemy.vy = 0;
+      enemy.attackCooldown = Math.max(enemy.attackCooldown, 0.7);
       connected = true;
-      if (amazon.hp <= 0) {
-        amazon.active = false;
-        amazon.respawnAt = performance.now() + 2000;
+      if (enemy.hp <= 0) {
+        enemy.active = false;
+        enemy.respawnAt = performance.now() + 2200;
         world.score += 100;
         world.defeatedEnemies += 1;
       }
@@ -972,54 +1094,78 @@ function handleMovement(world: World, pressed: Set<string>, dt: number) {
   if (pressed.has('KeyS') || pressed.has('ArrowDown')) depth += 1;
   const moving = horizontal !== 0 || depth !== 0;
   const running = pressed.has('ShiftLeft') || pressed.has('ShiftRight');
-  const speed = running ? 326 : 220;
-
-  if (horizontal !== 0) {
-    world.facing = horizontal < 0 ? -1 : 1;
-    world.heroX += horizontal * speed * dt;
+  const inputLength = Math.hypot(horizontal, depth);
+  if (inputLength > 1) {
+    horizontal /= inputLength;
+    depth /= inputLength;
   }
-  if (depth !== 0) world.heroY += depth * 142 * dt;
+  if (horizontal !== 0) world.facing = horizontal < 0 ? -1 : 1;
+  const speed = running ? 326 : 220;
+  const targetVelocityX = horizontal * speed;
+  const targetVelocityY = depth * speed * 0.56;
+  const response = Math.min(1, dt * (moving ? 10 : 8.5));
+  world.heroVelocityX += (targetVelocityX - world.heroVelocityX) * response;
+  world.heroVelocityY += (targetVelocityY - world.heroVelocityY) * response;
+  world.heroX += world.heroVelocityX * dt;
+  world.heroY += world.heroVelocityY * dt;
   world.heroX = clamp(world.heroX, 48, WIDTH - 48);
   world.heroY = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
+  if ((world.heroX === 48 && world.heroVelocityX < 0) ||
+      (world.heroX === WIDTH - 48 && world.heroVelocityX > 0)) {
+    world.heroVelocityX = 0;
+  }
+  if ((world.heroY === FLOOR_MIN && world.heroVelocityY < 0) ||
+      (world.heroY === FLOOR_MAX && world.heroVelocityY > 0)) {
+    world.heroVelocityY = 0;
+  }
 
-  if (moving && world.jumpOffset <= 0 && world.actionTimer <= 0) {
-    world.heroAction = running ? 'run' : 'walk';
+  const actualSpeed = Math.hypot(world.heroVelocityX, world.heroVelocityY);
+  if (actualSpeed > 16 && world.jumpOffset <= 0 && world.actionTimer <= 0) {
+    world.heroAction = running && moving ? 'run' : 'walk';
     world.footstepTimer -= dt;
     if (world.footstepTimer <= 0) {
       playSweep(world, 100, 25, 0.13, 0.025);
-      world.footstepTimer = running ? 0.22 : 0.38;
+      world.footstepTimer = world.heroAction === 'run' ? 0.22 : 0.38;
     }
-  } else if (!moving && world.actionTimer <= 0 && world.jumpOffset <= 0) {
+  } else if (actualSpeed <= 16 && world.actionTimer <= 0 && world.jumpOffset <= 0) {
+    world.heroVelocityX = 0;
+    world.heroVelocityY = 0;
     world.heroAction = 'idle';
   }
 }
 
 function updateEnemies(world: World, dt: number, now: number) {
-  const activeEnemies = world.enemies.filter(
-    (amazon) => amazon.hp > 0 && amazon.active,
-  );
-
   if (world.phase === 'playing') {
-    for (const amazon of world.enemies) {
-      if (!amazon.active && amazon.respawnAt > 0 && now >= amazon.respawnAt) {
+    for (const enemy of world.enemies) {
+      if (!enemy.active && enemy.hp <= 0) {
+        enemy.stateTimer = Math.max(0, enemy.stateTimer - dt);
+      }
+      if (!enemy.active && enemy.respawnAt > 0 && now >= enemy.respawnAt) {
         const edge = random(world) > 0.5 ? -22 : WIDTH + 22;
-        amazon.x = edge;
-        amazon.y = FLOOR_MIN + 12 + random(world) * (FLOOR_MAX - FLOOR_MIN - 12);
-        amazon.hp = 3;
-        amazon.active = true;
-        amazon.state = 'walk';
-        amazon.stateTimer = 1;
-        amazon.respawnAt = 0;
-        amazon.hue = Math.round(random(world) * 60 - 30);
+        enemy.x = edge;
+        enemy.y = FLOOR_MIN + 12 + random(world) * (FLOOR_MAX - FLOOR_MIN - 12);
+        enemy.vx = 0;
+        enemy.vy = 0;
+        enemy.hp = 3;
+        enemy.active = true;
+        enemy.direction = edge < 0 ? 1 : -1;
+        enemy.state = 'walk';
+        enemy.stateTimer = 0.5;
+        enemy.attackCooldown = 0.7 + random(world) * 0.7;
+        enemy.attackPoseIndex = Math.floor(random(world) * 3);
+        enemy.respawnAt = 0;
+        enemy.hue = enemy.kind === 'amazon' ? Math.round(random(world) * 60 - 30) : 0;
       }
     }
   }
 
-  for (const amazon of activeEnemies) {
-    amazon.stateTimer = Math.max(0, amazon.stateTimer - dt);
-    amazon.attackCooldown = Math.max(0, amazon.attackCooldown - dt);
-    if (amazon.stateTimer <= 0 && (amazon.state === 'hurt' || amazon.state === 'down')) {
-      amazon.state = 'idle';
+  const activeEnemies = world.enemies.filter((enemy) => enemy.hp > 0 && enemy.active);
+  for (const enemy of activeEnemies) {
+    enemy.stateTimer = Math.max(0, enemy.stateTimer - dt);
+    enemy.attackCooldown = Math.max(0, enemy.attackCooldown - dt);
+    if (enemy.stateTimer <= 0 &&
+        (enemy.state === 'hurt' || enemy.state === 'down' || enemy.state === 'attack')) {
+      enemy.state = 'idle';
     }
     if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
       continue;
@@ -1027,35 +1173,46 @@ function updateEnemies(world: World, dt: number, now: number) {
 
     if (world.phase === 'grapple' || world.phase === 'special-defeat' ||
       (world.phase === 'game-over' && world.defeatKind === 'special')) {
-      if (amazon.id !== world.currentGrappler) {
+      if (enemy.id !== world.currentGrappler) {
         const bystanders = activeEnemies.filter((enemy) => enemy.id !== world.currentGrappler);
-        const index = bystanders.findIndex((enemy) => enemy.id === amazon.id);
+        const index = bystanders.findIndex((item) => item.id === enemy.id);
         const perimeterX = clamp(world.heroX + [-350, -235, 235, 350][index] +
           Math.sin(now / 1200 + index) * 12, 48, WIDTH - 48);
         const perimeterY = clamp(world.heroY - 12 + (index % 2) * 24 +
           Math.sin(now / 1400 + index) * 3, FLOOR_MIN, FLOOR_MAX);
-        amazon.x += (perimeterX - amazon.x) * Math.min(1, dt * 4);
-        amazon.y += (perimeterY - amazon.y) * Math.min(1, dt * 4);
-        amazon.state = Math.abs(perimeterX - amazon.x) > 3 ? 'walk' : 'idle';
+        enemy.x += (perimeterX - enemy.x) * Math.min(1, dt * 4);
+        enemy.y += (perimeterY - enemy.y) * Math.min(1, dt * 4);
+        enemy.state = Math.hypot(perimeterX - enemy.x, perimeterY - enemy.y) > 3 ? 'walk' : 'idle';
       }
       continue;
     }
     if (world.phase !== 'playing') continue;
 
-    const dx = world.heroX - amazon.x;
-    const dy = world.heroY - amazon.y;
+    const dx = world.heroX - enemy.x;
+    const dy = world.heroY - enemy.y;
     const distance = Math.hypot(dx, dy);
-    amazon.direction = dx < 0 ? -1 : 1;
+    enemy.direction = dx < 0 ? -1 : 1;
 
     if (distance > 78) {
-      const pace = distance > 250 ? 92 : 68;
-      amazon.x += (dx / Math.max(distance, 1)) * pace * dt;
-      amazon.y += (dy / Math.max(distance, 1)) * pace * 0.56 * dt;
-      amazon.state = 'walk';
-    } else if (amazon.attackCooldown <= 0) {
-      amazon.state = 'attack';
-      amazon.stateTimer = 0.48;
-      amazon.attackCooldown = 1.35 + random(world) * 0.8;
+      const pace = (distance > 250 ? 92 : 68) * (enemy.kind === 'ninja' ? 1.14 : 1);
+      const velocityResponse = Math.min(1, dt * 7.5);
+      const targetVelocityX = (dx / Math.max(distance, 1)) * pace;
+      const targetVelocityY = (dy / Math.max(distance, 1)) * pace * 0.56;
+      enemy.vx += (targetVelocityX - enemy.vx) * velocityResponse;
+      enemy.vy += (targetVelocityY - enemy.vy) * velocityResponse;
+      enemy.x += enemy.vx * dt;
+      enemy.y += enemy.vy * dt;
+      enemy.state = distance > 250 && Math.hypot(enemy.vx, enemy.vy) > 88 ? 'run' : 'walk';
+    } else if (enemy.attackCooldown <= 0) {
+      const velocityResponse = Math.min(1, dt * 10);
+      enemy.vx += (0 - enemy.vx) * velocityResponse;
+      enemy.vy += (0 - enemy.vy) * velocityResponse;
+      enemy.x += enemy.vx * dt;
+      enemy.y += enemy.vy * dt;
+      enemy.state = 'attack';
+      enemy.stateTimer = 0.48;
+      enemy.attackPoseIndex = (enemy.attackPoseIndex + 1) % ATTACK_FRAMES[enemy.kind].length;
+      enemy.attackCooldown = (enemy.kind === 'ninja' ? 1.08 : 1.3) + random(world) * 0.75;
       if (distance < 106 && world.heroHitCooldown <= 0) {
         world.heroHp = Math.max(0, world.heroHp - (7 + Math.floor(random(world) * 4)));
         world.heroHitCooldown = 0.68;
@@ -1068,22 +1225,34 @@ function updateEnemies(world: World, dt: number, now: number) {
           world.defeatSecondsLeft = GROUP_DEFEAT_DURATION;
           world.heroAction = 'hurt';
           world.actionTimer = 0.9;
+          world.heroVelocityX = 0;
+          world.heroVelocityY = 0;
           continue;
         }
         if (world.heroHp <= 42 && random(world) < 0.1) {
-          beginSpecialGrapple(world, amazon);
+          beginSpecialGrapple(world, enemy);
           continue;
         }
       }
-    } else if (amazon.state !== 'attack' && amazon.state !== 'hurt') {
-      amazon.state = 'idle';
+    } else {
+      const velocityResponse = Math.min(1, dt * 9);
+      enemy.vx += (0 - enemy.vx) * velocityResponse;
+      enemy.vy += (0 - enemy.vy) * velocityResponse;
+      enemy.x += enemy.vx * dt;
+      enemy.y += enemy.vy * dt;
+      if (enemy.state !== 'attack' && enemy.state !== 'hurt') {
+        enemy.state = Math.hypot(enemy.vx, enemy.vy) > 14 ? 'walk' : 'idle';
+      }
     }
-    amazon.x = clamp(amazon.x, -24, WIDTH + 24);
-    amazon.y = clamp(amazon.y, FLOOR_MIN, FLOOR_MAX);
+    enemy.x = clamp(enemy.x, -24, WIDTH + 24);
+    enemy.y = clamp(enemy.y, FLOOR_MIN, FLOOR_MAX);
+    if ((enemy.x <= -24 && enemy.vx < 0) || (enemy.x >= WIDTH + 24 && enemy.vx > 0)) {
+      enemy.vx = 0;
+    }
   }
 
   if (world.phase === 'playing') {
-    const combatants = world.enemies.filter((amazon) => amazon.hp > 0 && amazon.active);
+    const combatants = world.enemies.filter((enemy) => enemy.hp > 0 && enemy.active);
     for (let pass = 0; pass < 2; pass += 1) {
       for (let i = 0; i < combatants.length; i += 1) {
         for (let j = i + 1; j < combatants.length; j += 1) {
@@ -1108,39 +1277,35 @@ function updateEnemies(world: World, dt: number, now: number) {
         }
       }
     }
-    combatants.forEach((amazon) => {
-      amazon.x = clamp(amazon.x, -24, WIDTH + 24);
-      amazon.y = clamp(amazon.y, FLOOR_MIN, FLOOR_MAX);
+    combatants.forEach((enemy) => {
+      enemy.x = clamp(enemy.x, -24, WIDTH + 24);
+      enemy.y = clamp(enemy.y, FLOOR_MIN, FLOOR_MAX);
     });
   }
 
   if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
-    const centerX = clamp(world.heroX, 160, WIDTH - 160);
-    world.enemies.forEach((amazon, index) => {
+    const centerX = clamp(world.heroX, 260, WIDTH - 260);
+    world.enemies.forEach((enemy, index) => {
       const offset = GROUP_OFFSETS[index % GROUP_OFFSETS.length];
       const targetX = centerX + offset.dx;
       const targetY = clamp(world.heroY + offset.dy, FLOOR_MIN, FLOOR_MAX);
-      const dx = targetX - amazon.x;
-      const dy = targetY - amazon.y;
+      const dx = targetX - enemy.x;
+      const dy = targetY - enemy.y;
       const distance = Math.hypot(dx, dy);
       if (distance > 2) {
         const step = Math.min(distance, 110 * dt);
-        amazon.x += (dx / distance) * step;
-        amazon.y += (dy / distance) * step;
-        amazon.direction = dx < 0 ? -1 : 1;
-        amazon.state = 'walk';
-        amazon.pinElapsed = 0;
+        enemy.x += (dx / distance) * step;
+        enemy.y += (dy / distance) * step;
+        enemy.direction = dx < 0 ? -1 : 1;
+        enemy.state = 'walk';
+        enemy.pinElapsed = 0;
       } else {
-        amazon.x = targetX;
-        amazon.y = targetY;
-        amazon.state = 'idle';
-        amazon.pinElapsed = (amazon.pinElapsed ?? 0) + dt;
+        enemy.x = targetX;
+        enemy.y = targetY;
+        enemy.state = 'idle';
+        enemy.pinElapsed = (enemy.pinElapsed ?? 0) + dt;
       }
     });
-  }
-
-  if (activeEnemies.length < TARGET_AMAZONS && world.phase === 'playing') {
-    // Defeated opponents remain inactive until their individual two-second respawn.
   }
 }
 
@@ -1191,13 +1356,19 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
     world.smokeTimer -= dt;
     world.heartTimer -= dt;
     if (world.smokeTimer <= 0) {
-      spawnParticle(world, 'smoke');
-      world.smokeTimer = 0.14;
+      const grappler = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
+      const effectX = world.facing * (grappler?.kind === 'ninja' ? 50 : 65);
+      const effectY = grappler?.kind === 'ninja' ? -58 : -39;
+      spawnParticle(world, 'smoke', effectX, effectY);
+      world.smokeTimer = 0.12;
       if (world.phase === 'special-defeat') playSweep(world, 350, 245, 0.3, 0.014, 'sine');
     }
     if (world.heartTimer <= 0) {
-      spawnParticle(world, 'heart');
-      world.heartTimer = 0.46;
+      const grappler = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
+      const effectX = world.facing * (grappler?.kind === 'ninja' ? 50 : 65);
+      const effectY = grappler?.kind === 'ninja' ? -58 : -39;
+      spawnParticle(world, 'heart', effectX, effectY);
+      world.heartTimer = 0.28;
     }
     world.particles.forEach((particle) => {
       particle.age += dt;
@@ -1264,6 +1435,41 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
     if (soundEnabled) playStomp(world);
   }, []);
 
+  const pressVirtualControl = useCallback((code: string) => {
+    const world = worldRef.current;
+    const wasPressed = pressedRef.current.has(code);
+    pressedRef.current.add(code);
+
+    if (code === 'KeyJ') {
+      if (world.phase === 'grapple') {
+        world.escapeProgress = Math.min(1, world.escapeProgress + 0.105);
+        if (world.escapeProgress >= 1) escapeGrapple(world);
+        playHit(world);
+      } else if (world.phase === 'playing' && !wasPressed) {
+        doHeroAttack(world, 'punch');
+      } else if (world.phase === 'title' && !wasPressed) {
+        startGame();
+      }
+    }
+    if (code === 'KeyK' && world.phase === 'playing' && !wasPressed) {
+      doHeroAttack(world, 'kick');
+    }
+    if (code === 'Space' && world.phase === 'playing' && world.jumpOffset === 0 && !wasPressed) {
+      world.jumpVelocity = 380;
+      world.heroAction = 'jump';
+      world.actionTimer = 0.32;
+      playStomp(world);
+    }
+    if ((code === 'Enter' || code === 'NumpadEnter') && world.phase === 'title' && !wasPressed) {
+      startGame();
+    }
+    if (code === 'KeyR' && world.phase === 'game-over' && !wasPressed) restartGame();
+  }, [restartGame, startGame]);
+
+  const releaseVirtualControl = useCallback((code: string) => {
+    pressedRef.current.delete(code);
+  }, []);
+
   const toggleSound = useCallback(() => {
     const world = worldRef.current;
     world.soundEnabled = !world.soundEnabled;
@@ -1288,6 +1494,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       background: null,
       hero: null,
       amazon: null,
+      ninja: null,
       pinAttack: null,
       pinExtended: null,
     };
@@ -1297,8 +1504,24 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
     if (import.meta.env.DEV) {
       const params = new URLSearchParams(window.location.search);
       const scene = params.get('_scene');
-      if (scene === 'grapple' || scene === 'special-defeat' || scene === 'group-defeat') {
+      if (scene === 'playing' || scene === 'grapple' ||
+          scene === 'special-defeat' || scene === 'group-defeat') {
         const world = worldRef.current;
+        if (scene === 'playing') {
+          world.phase = 'playing';
+          world.heroX = WIDTH / 2;
+          world.heroY = 508;
+          world.heroHp = 100;
+          world.defeatKind = null;
+          world.currentGrappler = null;
+          world.enemies.forEach((enemy) => {
+            enemy.hp = 3;
+            enemy.active = true;
+            enemy.state = 'walk';
+            enemy.stateTimer = 0;
+            enemy.respawnAt = 0;
+          });
+        } else {
         const duration = scene === 'grapple' ? GRAPPLE_DURATION
           : scene === 'special-defeat' ? SPECIAL_DEFEAT_DURATION : GROUP_DEFEAT_DURATION;
         const requestedElapsed = Number(params.get('_elapsed') ?? 0);
@@ -1309,20 +1532,33 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
         world.heroY = 508;
         world.heroHp = scene === 'group-defeat' ? 0 : 35;
         world.defeatStartHp = 35;
-        world.currentGrappler = scene === 'group-defeat' ? null : world.enemies[0].id;
+        world.enemies.forEach((enemy) => {
+          enemy.hp = 3;
+          enemy.active = true;
+        });
+        const preferredKind = params.get('_grappler') === 'ninja' ? 'ninja' : 'amazon';
+        const selectedGrappler = world.enemies.find((enemy) => enemy.kind === preferredKind) ??
+          world.enemies[0];
+        selectedGrappler.direction = selectedGrappler.x < world.heroX ? 1 : -1;
+        selectedGrappler.x = world.heroX - selectedGrappler.direction * 28;
+        selectedGrappler.y = world.heroY - 2;
+        selectedGrappler.state = 'attack';
+        selectedGrappler.stateTimer = duration;
+        world.currentGrappler = scene === 'group-defeat' ? null : selectedGrappler.id;
         world.defeatKind = scene === 'group-defeat' ? 'group'
           : scene === 'special-defeat' ? 'special' : null;
         world.grappleSecondsLeft = scene === 'grapple' ? duration - elapsed : 0;
         world.defeatSecondsLeft = scene === 'grapple' ? 0 : duration - elapsed;
         world.actionTimer = scene === 'group-defeat' && elapsed < 0.9 ? 0.9 - elapsed : 0;
         if (scene === 'group-defeat' && elapsed > 4) {
-          world.enemies.forEach((amazon, index) => {
+          world.enemies.forEach((enemy, index) => {
             const offset = GROUP_OFFSETS[index];
-            amazon.x = clamp(world.heroX, 160, WIDTH - 160) + offset.dx;
-            amazon.y = clamp(world.heroY + offset.dy, FLOOR_MIN, FLOOR_MAX);
-            amazon.pinElapsed = elapsed - 3;
-            amazon.state = 'idle';
+            enemy.x = clamp(world.heroX, 260, WIDTH - 260) + offset.dx;
+            enemy.y = clamp(world.heroY + offset.dy, FLOOR_MIN, FLOOR_MAX);
+            enemy.pinElapsed = elapsed - 3;
+            enemy.state = 'idle';
           });
+        }
         }
         world.soundEnabled = false;
         world.sound.enabled = false;
@@ -1334,14 +1570,16 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       loadImage(backgroundUrl),
       loadImage(heroSheetUrl),
       loadImage(amazonSheetUrl),
+      loadImage(ninjaSheetUrl),
       loadImage(pinAttackUrl),
       loadImage(pinExtendedUrl),
-    ]).then(([background, hero, amazon, pinAttack, pinExtended]) => {
+    ]).then(([background, hero, amazon, ninja, pinAttack, pinExtended]) => {
       if (disposed) return;
       atlas = {
         background,
         hero: removeCheckerboard(hero),
         amazon: withRedToenails(removeCheckerboard(amazon), 'amazon'),
+        ninja: removeNinjaCheckerboard(ninja),
         pinAttack: withRedToenails(removeCheckerboard(pinAttack, true), 'pinAttack'),
         pinExtended: withRedToenails(removeCheckerboard(pinExtended, true), 'pinExtended'),
       };
@@ -1388,32 +1626,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
         'Space',
       ];
       if (controlKeys.includes(event.code)) event.preventDefault();
-      pressedRef.current.add(event.code);
-      const world = worldRef.current;
-      if (event.code === 'KeyJ') {
-        if (world.phase === 'grapple') {
-          world.escapeProgress = Math.min(1, world.escapeProgress + 0.105);
-          if (world.escapeProgress >= 1) escapeGrapple(world);
-          playHit(world);
-        } else if (world.phase === 'playing' && !event.repeat) {
-          doHeroAttack(world, 'punch');
-        } else if (world.phase === 'title' && !event.repeat) {
-          startGame();
-        }
-      }
-      if (event.code === 'KeyK' && world.phase === 'playing' && !event.repeat) {
-        doHeroAttack(world, 'kick');
-      }
-      if (event.code === 'Space' && world.phase === 'playing' && world.jumpOffset === 0) {
-        world.jumpVelocity = 380;
-        world.heroAction = 'jump';
-        world.actionTimer = 0.32;
-        playStomp(world);
-      }
-      if ((event.code === 'Enter' || event.code === 'NumpadEnter') && world.phase === 'title') {
-        startGame();
-      }
-      if (event.code === 'KeyR' && world.phase === 'game-over') restartGame();
+      pressVirtualControl(event.code);
     };
     const onKeyUp = (event: KeyboardEvent) => {
       pressedRef.current.delete(event.code);
@@ -1442,7 +1655,15 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
         void worldRef.current.sound.context.close();
       }
     };
-  }, [canvasRef, restartGame, startGame]);
+  }, [canvasRef, pressVirtualControl, restartGame, startGame]);
 
-  return { snapshot, startGame, restartGame, toggleSound, heroPortrait };
+  return {
+    snapshot,
+    startGame,
+    restartGame,
+    toggleSound,
+    heroPortrait,
+    pressVirtualControl,
+    releaseVirtualControl,
+  };
 }
