@@ -10,6 +10,7 @@ import ninjaSheetUrl from '@assets/ninja_1791475869252.png';
 import pinAttackUrl from '@assets/pin_attack_1791470375691.png';
 import pinExtendedUrl from '@assets/pin_extended_1791470375691.png';
 import ninjaFootsmotherUrl from '@assets/ninja_footsmother.png';
+import ninjaFootsmotherEndingUrl from '@assets/ninja_footsmother_ending.png';
 
 const WIDTH = 1024;
 const HEIGHT = 576;
@@ -57,6 +58,7 @@ interface SpriteAtlas {
   amazon: HTMLCanvasElement | null;
   ninja: HTMLCanvasElement | null;
   ninjaFootsmother: HTMLCanvasElement | null;
+  ninjaFootsmotherEnding: HTMLCanvasElement | null;
   pinAttack: HTMLCanvasElement | null;
   pinExtended: HTMLCanvasElement | null;
 }
@@ -203,6 +205,11 @@ const NINJA_FOOTSMOTHER_FRAMES: SpriteRect[] = [
   { x: 341, y: 286, w: 341, h: 286 },
   { x: 682, y: 286, w: 342, h: 286 },
 ];
+const NINJA_FOOTSMOTHER_ENDING_FRAMES: SpriteRect[] = [
+  { x: 0, y: 0, w: 232, h: 212 },
+  { x: 232, y: 0, w: 232, h: 212 },
+  { x: 464, y: 0, w: 232, h: 212 },
+];
 const WALK_CYCLE = [0, 1, 2, 1] as const;
 const ATTACK_FRAMES: Record<EnemyKind, SpriteRect[]> = {
   amazon: [AMAZON_FRAMES.kick, AMAZON_FRAMES.spin, AMAZON_FRAMES.highKick],
@@ -244,6 +251,8 @@ const STRUGGLE_FRAMES: SpriteRect[] = [
 const GRAPPLE_DURATION = 5;
 const SPECIAL_DEFEAT_DURATION = 10;
 export const NINJA_FOOTSMOTHER_DURATION = 10;
+const NINJA_FOOTSMOTHER_ENDING_DURATION = 1.5;
+const NINJA_FOOTSMOTHER_FRAME_RATE = 6;
 const GROUP_DEFEAT_DURATION = 20;
 
 function sequenceFrame(frames: SpriteRect[], elapsed: number, duration: number) {
@@ -530,10 +539,13 @@ function removeNinjaCheckerboard(image: HTMLImageElement) {
   return canvas;
 }
 
-function removeFootsmotherCheckerboard(image: HTMLImageElement) {
+function removeFootsmotherCheckerboard(
+  image: HTMLImageElement,
+  includeBottomMargin = true,
+) {
   const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 572;
+  canvas.width = image.naturalWidth || image.width;
+  canvas.height = image.naturalHeight || image.height;
   const context = canvas.getContext('2d', { willReadFrequently: true });
   if (!context) return canvas;
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
@@ -544,8 +556,14 @@ function removeFootsmotherCheckerboard(image: HTMLImageElement) {
     { red: 0, green: 0, blue: 0, count: 0 },
     { red: 0, green: 0, blue: 0, count: 0 },
   ];
-  for (const y of [...Array.from({ length: 7 }, (_, index) => index + 2),
-    ...Array.from({ length: 7 }, (_, index) => canvas.height - 9 + index)]) {
+  const sampleRows = Array.from({ length: 7 }, (_, index) => index + 2);
+  if (includeBottomMargin) {
+    sampleRows.push(...Array.from(
+      { length: 7 },
+      (_, index) => canvas.height - 9 + index,
+    ));
+  }
+  for (const y of sampleRows) {
     for (let x = 0; x < canvas.width; x += 1) {
       const pixel = (y * canvas.width + x) * 4;
       const red = pixels[pixel];
