@@ -111,13 +111,15 @@ type SoundEngine = {
   enabled: boolean;
 };
 
+const spriteBoundsCache = new WeakMap<HTMLCanvasElement, Map<string, SpriteRect>>();
+
 const HERO_FRAMES = {
   idle: { x: 28, y: 83, w: 105, h: 178 },
   walk: { x: 348, y: 83, w: 110, h: 178 },
   run: { x: 710, y: 84, w: 145, h: 177 },
   punch: { x: 113, y: 337, w: 142, h: 181 },
   kick: { x: 430, y: 337, w: 153, h: 182 },
-  jump: { x: 820, y: 317, w: 108, h: 179 },
+  jump: { x: 820, y: 340, w: 108, h: 176 },
   hurt: { x: 25, y: 575, w: 159, h: 180 },
   down: { x: 318, y: 575, w: 172, h: 179 },
   defeated: { x: 814, y: 648, w: 191, h: 106 },
@@ -253,18 +255,114 @@ function removeCheckerboard(image: HTMLImageElement) {
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
   const frame = context.getImageData(0, 0, canvas.width, canvas.height);
   const pixels = frame.data;
-  for (let i = 0; i < pixels.length; i += 4) {
+  const pixelCount = canvas.width * canvas.height;
+  const checkerCandidate = new Uint8Array(pixelCount);
+  const visited = new Uint8Array(pixelCount);
+  const queue = new Uint32Array(pixelCount);
+
+  for (let i = 0, pixel = 0; i < pixels.length; i += 4, pixel += 1) {
     const r = pixels[i];
     const g = pixels[i + 1];
     const b = pixels[i + 2];
-    // These supplied sheets also contain dark gray checker tiles.
-    // Keep near-black outlines, while keying both checkerboard shades.
-    if (Math.abs(r - g) < 15 && Math.abs(g - b) < 15 && r > 20) {
-      pixels[i + 3] = 0;
+    const channelRange = Math.max(r, g, b) - Math.min(r, g, b);
+    // Only consider neutral checker tones; flood-fill below protects gray
+    // details inside sprites unless they connect to the sheet's outer edge.
+    if (channelRange < 9 && Math.max(r, g, b) > 18) {
+      checkerCandidate[pixel] = 1;
     }
+  }
+
+  let tail = 0;
+  const addIfChecker = (pixel: number) => {
+    if (checkerCandidate[pixel] && !visited[pixel]) {
+      visited[pixel] = 1;
+      queue[tail++] = pixel;
+    }
+  };
+  for (let x = 0; x < canvas.width; x += 1) {
+    addIfChecker(x);
+    addIfChecker((canvas.height - 1) * canvas.width + x);
+  }
+  for (let y = 1; y < canvas.height - 1; y += 1) {
+    addIfChecker(y * canvas.width);
+    addIfChecker(y * canvas.width + canvas.width - 1);
+  }
+  for (let head = 0; head < tail; head += 1) {
+    const pixel = queue[head];
+    const x = pixel % canvas.width;
+    if (x > 0) addIfChecker(pixel - 1);
+    if (x + 1 < canvas.width) addIfChecker(pixel + 1);
+    if (pixel >= canvas.width) addIfChecker(pixel - canvas.width);
+    if (pixel + canvas.width < pixelCount) addIfChecker(pixel + canvas.width);
+    pixels[pixel * 4 + 3] = 0;
   }
   context.putImageData(frame, 0, 0);
   return canvas;
+}
+
+function getVisibleBounds(image: HTMLCanvasElement, rect: SpriteRect): SpriteRect {
+  let cache = spriteBoundsCache.get(image);
+  if (!cache) {
+    cache = new Map();
+    spriteBoundsCache.set(image, cache);
+  }
+  const key = `${rect.x},${rect.y},${rect.w},${rect.h}`;
+  const cached = cache.get(key);
+  if (cached) return cached;
+
+  const context = image.getContext('2d', { willReadFrequently: true });
+  if (!context) return rect;
+  const pixels = context.getImageData(rect.x, rect.y, rect.w, rect.h).data;
+  const length = rect.w * rect.h;
+  const visited = new Uint8Array(length);
+  const queue = new Uint32Array(length);
+  let largest: SpriteRect = { x: 0, y: 0, w: rect.w, h: rect.h };
+  let largestArea = 0;
+
+  for (let start = 0; start < length; start += 1) {
+    if (visited[start] || pixels[start * 4 + 3] < 32) continue;
+    let head = 0;
+    let tail = 0;
+    let minX = rect.w;
+    let minY = rect.h;
+    let maxX = 0;
+    let maxY = 0;
+    visited[start] = 1;
+    queue[tail++] = start;
+
+    while (head < tail) {
+      const pixel = queue[head++];
+      const x = pixel % rect.w;
+      const y = Math.floor(pixel / rect.w);
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+      const visit = (next: number) => {
+        if (!visited[next] && pixels[next * 4 + 3] >= 32) {
+          visited[next] = 1;
+          queue[tail++] = next;
+        }
+      };
+      if (x > 0) visit(pixel - 1);
+      if (x + 1 < rect.w) visit(pixel + 1);
+      if (y > 0) visit(pixel - rect.w);
+      if (y + 1 < rect.h) visit(pixel + rect.w);
+    }
+
+    if (tail > largestArea) {
+      largestArea = tail;
+      largest = { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+    }
+  }
+
+  // Grapple sheets intentionally contain two interlocked characters.
+  if (largestArea === 0 || rect.w * rect.h > 50000) {
+    cache.set(key, rect);
+    return rect;
+  }
+  cache.set(key, largest);
+  return largest;
 }
 
 function ensureSound(world: World) {
@@ -388,10 +486,11 @@ function drawAtlasSprite(
   flipped = false,
   hue = 0,
   lift = 0,
+  groundOffset = 0,
 ) {
   if (!image) {
     context.fillStyle = hue ? '#a66a3f' : '#68734a';
-    context.fillRect(x - drawW / 2, groundY - drawH - lift, drawW, drawH);
+    context.fillRect(x - drawW / 2, groundY - drawH - lift + groundOffset, drawW, drawH);
     return;
   }
 
@@ -402,16 +501,21 @@ function drawAtlasSprite(
     context.scale(-1, 1);
     context.translate(-x, 0);
   }
+  const visible = getVisibleBounds(image, rect);
+  const scaleX = drawW / rect.w;
+  const scaleY = drawH / rect.h;
+  const visibleW = visible.w * scaleX;
+  const visibleH = visible.h * scaleY;
   context.drawImage(
     image,
-    rect.x,
-    rect.y,
-    rect.w,
-    rect.h,
-    x - drawW / 2,
-    groundY - drawH - lift,
-    drawW,
-    drawH,
+    rect.x + visible.x,
+    rect.y + visible.y,
+    visible.w,
+    visible.h,
+    x - drawW / 2 + visible.x * scaleX,
+    groundY - lift - visibleH + groundOffset,
+    visibleW,
+    visibleH,
   );
   context.restore();
 }
@@ -507,6 +611,8 @@ function drawWorld(
         188,
         offset.flipped,
         world.enemies[index]?.hue ?? 0,
+        0,
+        7,
       );
     });
   } else {
@@ -534,6 +640,8 @@ function drawWorld(
             180,
             amazon.direction < 0,
             amazon.hue,
+            0,
+            7,
           ),
       });
     }
