@@ -10,7 +10,11 @@ import {
   Swords,
 } from 'lucide-react';
 import jungleBackground from '@assets/background_1791470375690.png';
-import { useJungleGame } from './game/useJungleGame';
+import {
+  NINJA_FOOTSMOTHER_DURATION,
+  STATE_NINJA_FOOTSMOTHER,
+  useJungleGame,
+} from './game/useJungleGame';
 
 function formatScore(score: number) {
   return Math.max(0, score).toString().padStart(6, '0');
@@ -77,12 +81,14 @@ function App() {
   const isTitle = snapshot.phase === 'title';
   const isGrapple = snapshot.phase === 'grapple';
   const isSpecialDefeat = snapshot.phase === 'special-defeat';
+  const isNinjaFootsmother = snapshot.phase === STATE_NINJA_FOOTSMOTHER;
   const isGroupDefeat = snapshot.phase === 'group-defeat';
   const isPlaying = snapshot.phase === 'playing';
-  const isDefeatSequence = isSpecialDefeat || isGroupDefeat;
+  const isDefeatSequence = isSpecialDefeat || isNinjaFootsmother || isGroupDefeat;
   const showRetry = isDefeatSequence || snapshot.phase === 'game-over';
   const sequencePercent = Math.max(0, Math.min(100,
-    (snapshot.defeatSecondsLeft / (isSpecialDefeat ? 10 : 20)) * 100));
+    (snapshot.defeatSecondsLeft /
+      (isSpecialDefeat || isNinjaFootsmother ? NINJA_FOOTSMOTHER_DURATION : 20)) * 100));
 
   return (
     <main className="game-shell">
@@ -138,7 +144,7 @@ function App() {
                   <div className="hud-heading"><span><Heart size={12} /> Exploradora</span><strong>{snapshot.heroHp} / {snapshot.maxHeroHp}</strong></div>
                   <div className="hp-track"><div className="hp-fill" style={{ width: `${hpPercent}%` }} /></div>
                   <div className="enemy-track" aria-label={`${snapshot.activeEnemies} inimigas ativas, ${snapshot.defeatedEnemies} derrotadas`}>
-                    {Array.from({ length: 5 }, (_, index) => (
+                    {Array.from({ length: 8 }, (_, index) => (
                       <i key={index} className={`enemy-pip ${index >= snapshot.activeEnemies ? 'down' : ''}`} />
                     ))}
                   </div>
@@ -186,10 +192,16 @@ function App() {
 
             {isDefeatSequence && (
               <div className="sequence-hud defeat-hud" role="status"
-                data-testid={isSpecialDefeat ? 'status-special-defeat' : 'status-group-defeat'}>
+                data-testid={isNinjaFootsmother ? 'status-ninja-footsmother'
+                  : isSpecialDefeat ? 'status-special-defeat' : 'status-group-defeat'}>
                 <div className="sequence-info">
-                    <span className="sequence-label">{isSpecialDefeat ? 'Luta para se soltar' : 'Cerco das inimigas'}</span>
-                  <span className="sequence-hint">Sequência de derrota</span>
+                  <span className="sequence-label">
+                    {isNinjaFootsmother ? 'Footsmother da kunoichi'
+                      : isSpecialDefeat ? 'Luta para se soltar' : 'Cerco das inimigas'}
+                  </span>
+                  <span className="sequence-hint">
+                    {isNinjaFootsmother ? 'Imobilização · 10 segundos' : 'Sequência de derrota'}
+                  </span>
                 </div>
                 <strong className="sequence-time">{Math.max(0, snapshot.defeatSecondsLeft).toFixed(1)}<small>s</small></strong>
                 <div className="sequence-track" aria-hidden="true">

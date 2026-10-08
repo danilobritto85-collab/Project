@@ -21,8 +21,8 @@ Individual poses from irregular sheets need a silhouette mask, not just a tighte
 
 **How to apply:** Isolate the connected artwork for single-character frames while retaining both participants in paired scenes. Inspect crowded scenes for artifacts repeated from a shared crop.
 
-For warm-tinted checkerboards behind dark costumes, calibrate the two background tones from a clean margin and protect nearby cool/dark foreground pixels before clearing matches.
+For warm-tinted checkerboards behind dark costumes, sample both tones from clean margins and key by RGB palette rather than broad grayscale or a large silhouette halo.
 
-**Why:** A warm brown checkerboard is not removed by neutral-gray keys, while a broad color key breaks black clothing and hair.
+**Why:** A warm brown checkerboard is not removed by neutral-gray keys; broad keys damage black clothing, while wide edge protection leaves checker pixels around the silhouette.
 
-**How to apply:** Compare against the sampled palette across RGB channels, preserve silhouette-color seeds, and inspect both idle and combat poses after removal.
+**How to apply:** Compare full RGB against the sampled warm tones, keep cool dark outline colors outside the key, and inspect both idle and paired combat poses for leftover tiles or holes.
