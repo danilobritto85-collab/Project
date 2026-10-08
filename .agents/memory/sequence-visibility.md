@@ -5,6 +5,8 @@ description: User's requirement that defeat and struggle action remain visible w
 
 Keep defeat and struggle scenes visible. Use small countdown indicators rather than a modal or full-screen dimming layer during the sequence.
 
-**Why:** The user reported that “aparece uma janela com contagem que não deixa ver mais nada” and requested “deixe mais clean.”
+Do not show a Game Over screen at the end; keep the characters moving.
 
-**How to apply:** Put the countdown and escape instructions outside the main fight area. Present the final Game Over screen only after the timed animation has finished, not when it begins.
+**Why:** The user reported that “aparece uma janela com contagem que não deixa ver mais nada,” requested “deixe mais clean,” and then explicitly said “Tire a tela da game over, e deixe elas se movimentando.”
+
+**How to apply:** Put countdown and escape instructions outside the main fight area. Ending the timed combat outcome must not freeze the visual simulation or replace it with an end-screen modal.

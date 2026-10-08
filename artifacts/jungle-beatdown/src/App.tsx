@@ -24,7 +24,6 @@ function App() {
   const isGrapple = snapshot.phase === 'grapple';
   const isSpecialDefeat = snapshot.phase === 'special-defeat';
   const isGroupDefeat = snapshot.phase === 'group-defeat';
-  const isGameOver = snapshot.phase === 'game-over';
   const isPlaying = snapshot.phase === 'playing';
   const isDefeatSequence = isSpecialDefeat || isGroupDefeat;
   const sequencePercent = Math.max(0, Math.min(100,
@@ -140,19 +139,6 @@ function App() {
                 <strong className="sequence-time">{Math.max(0, snapshot.defeatSecondsLeft).toFixed(1)}<small>s</small></strong>
                 <div className="sequence-track" aria-hidden="true">
                   <div className="sequence-fill" style={{ width: `${sequencePercent}%` }} />
-                </div>
-              </div>
-            )}
-
-            {isGameOver && (
-              <div className="state-overlay">
-                <div className="end-card" role="status" data-testid="status-game-over">
-                  <p className="card-kicker">Expedição encerrada</p>
-                  <h2 className="overlay-title">Fim de jogo</h2>
-                  <p className="overlay-text">Pontuação final <strong>{formatScore(snapshot.score)}</strong></p>
-                  <button className="primary-button" type="button" onClick={restartGame} data-testid="button-restart-game-over">
-                    <RotateCcw /> Jogar novamente
-                  </button>
                 </div>
               </div>
             )}

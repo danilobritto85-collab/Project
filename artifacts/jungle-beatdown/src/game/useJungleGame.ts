@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
+import { repairForegroundMask } from './spriteMask';
 
 import amazonSheetUrl from '@assets/amazon_1791470375689.png';
 import backgroundUrl from '@assets/background_1791470375690.png';
@@ -302,6 +303,7 @@ function removeCheckerboard(image: HTMLImageElement, combinedPose = false) {
   // The combined illustrations enclose patches of checkerboard between the
   // two bodies, so their background cannot be reached from the sheet edge.
   if (combinedPose) {
+    repairForegroundMask(pixels, canvas.width, canvas.height);
     context.putImageData(frame, 0, 0);
     return canvas;
   }
@@ -493,8 +495,8 @@ function playGameOver(world: World) {
 }
 
 function spawnParticle(world: World, kind: Particle['kind']) {
-  const heroX = world.heroX + world.facing * 18;
-  const heroY = world.heroY - 58;
+  const heroX = clamp(world.heroX, 110, WIDTH - 110) + world.facing * 65;
+  const heroY = world.heroY - 39;
   world.particles.push({
     x: heroX + (random(world) - 0.5) * 34,
     y: heroY + (random(world) - 0.5) * 10,
@@ -503,7 +505,7 @@ function spawnParticle(world: World, kind: Particle['kind']) {
     age: 0,
     life: kind === 'heart' ? 1.65 : 1.2,
     kind,
-    size: kind === 'heart' ? 9 + random(world) * 8 : 12 + random(world) * 12,
+    size: kind === 'heart' ? 6 + random(world) * 6 : 8 + random(world) * 8,
   });
 }
 
@@ -636,27 +638,24 @@ function drawWorld(
     }
     const remaining = isStruggle ? world.defeatSecondsLeft : world.grappleSecondsLeft;
     const duration = isStruggle ? SPECIAL_DEFEAT_DURATION : GRAPPLE_DURATION;
-    const frame = sequenceFrame(
-      isStruggle ? STRUGGLE_FRAMES : GRAPPLE_FRAMES,
-      duration - remaining,
-      duration,
-    );
-    const struggleMotion = isStruggle && world.phase !== 'game-over'
-      ? Math.sin(now / 85) * 1.8 : 0;
+    const frame = isStruggle && world.phase === 'game-over'
+      ? STRUGGLE_FRAMES[[3, 4, 5, 4][Math.floor(now / 450) % 4]]
+      : sequenceFrame(isStruggle ? STRUGGLE_FRAMES : GRAPPLE_FRAMES, duration - remaining, duration);
+    const struggleMotion = isStruggle ? Math.sin(now / 85) * 1.2 : 0;
     drawAtlasSprite(
       context,
       isStruggle ? atlas.pinExtended : atlas.pinAttack,
       frame,
-      clamp(world.heroX + struggleMotion, 180, WIDTH - 180),
+      clamp(world.heroX + struggleMotion, 110, WIDTH - 110),
       world.heroY,
-      352,
-      318,
+      (190 * frame.w) / frame.h,
+      190,
       world.facing < 0,
     );
     if (isStruggle) world.particles.forEach((particle) => drawParticle(context, particle));
   } else if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
     const tremor =
-      world.phase === 'group-defeat' && world.groupShake > 0
+      world.groupShake > 0
         ? Math.sin(now / 34) * world.groupShake
         : 0;
     const centerX = clamp(world.heroX + tremor, 135, WIDTH - 135);
@@ -685,10 +684,10 @@ function drawWorld(
         context,
         atlas.amazon,
         AMAZON_FRAMES.pinPose,
-        amazon.x + tremor,
+        amazon.x + tremor + Math.sin(now / 600 + index) * 2,
         amazon.y,
         160,
-        188,
+        188 + Math.sin(now / 450 + index) * 2,
         offset.flipped,
         amazon.hue,
         0,
@@ -870,16 +869,19 @@ function updateEnemies(world: World, dt: number, now: number) {
     if (amazon.stateTimer <= 0 && (amazon.state === 'hurt' || amazon.state === 'down')) {
       amazon.state = 'idle';
     }
-    if (world.phase === 'group-defeat' || world.phase === 'game-over') {
+    if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
       continue;
     }
 
-    if (world.phase === 'grapple' || world.phase === 'special-defeat') {
+    if (world.phase === 'grapple' || world.phase === 'special-defeat' ||
+      (world.phase === 'game-over' && world.defeatKind === 'special')) {
       if (amazon.id !== world.currentGrappler) {
         const bystanders = activeEnemies.filter((enemy) => enemy.id !== world.currentGrappler);
         const index = bystanders.findIndex((enemy) => enemy.id === amazon.id);
-        const perimeterX = clamp(world.heroX + [-350, -235, 235, 350][index], 48, WIDTH - 48);
-        const perimeterY = clamp(world.heroY - 12 + (index % 2) * 24, FLOOR_MIN, FLOOR_MAX);
+        const perimeterX = clamp(world.heroX + [-350, -235, 235, 350][index] +
+          Math.sin(now / 1200 + index) * 12, 48, WIDTH - 48);
+        const perimeterY = clamp(world.heroY - 12 + (index % 2) * 24 +
+          Math.sin(now / 1400 + index) * 3, FLOOR_MIN, FLOOR_MAX);
         amazon.x += (perimeterX - amazon.x) * Math.min(1, dt * 4);
         amazon.y += (perimeterY - amazon.y) * Math.min(1, dt * 4);
         amazon.state = Math.abs(perimeterX - amazon.x) > 3 ? 'walk' : 'idle';
@@ -929,7 +931,7 @@ function updateEnemies(world: World, dt: number, now: number) {
     amazon.y = clamp(amazon.y, FLOOR_MIN, FLOOR_MAX);
   }
 
-  if (world.phase === 'group-defeat') {
+  if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
     const offsets = GROUP_OFFSETS;
     world.enemies.forEach((amazon, index) => {
       const offset = offsets[index % offsets.length];
@@ -983,15 +985,18 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
       world.heartTimer = 0.12;
       playSweep(world, 550, 220, 0.6, 0.045, 'sine');
     }
-  } else if (world.phase === 'special-defeat') {
-    world.defeatSecondsLeft = Math.max(0, world.defeatSecondsLeft - dt);
-    world.heroHp = Math.max(0, (world.defeatSecondsLeft / SPECIAL_DEFEAT_DURATION) * world.defeatStartHp);
+  } else if (world.phase === 'special-defeat' ||
+    (world.phase === 'game-over' && world.defeatKind === 'special')) {
+    if (world.phase === 'special-defeat') {
+      world.defeatSecondsLeft = Math.max(0, world.defeatSecondsLeft - dt);
+      world.heroHp = Math.max(0, (world.defeatSecondsLeft / SPECIAL_DEFEAT_DURATION) * world.defeatStartHp);
+    }
     world.smokeTimer -= dt;
     world.heartTimer -= dt;
     if (world.smokeTimer <= 0) {
       spawnParticle(world, 'smoke');
       world.smokeTimer = 0.14;
-      playSweep(world, 350, 245, 0.3, 0.014, 'sine');
+      if (world.phase === 'special-defeat') playSweep(world, 350, 245, 0.3, 0.014, 'sine');
     }
     if (world.heartTimer <= 0) {
       spawnParticle(world, 'heart');
@@ -1004,17 +1009,18 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
       particle.vy -= 8 * dt;
     });
     world.particles = world.particles.filter((particle) => particle.age < particle.life);
-    if (world.defeatSecondsLeft <= 0) {
+    if (world.phase === 'special-defeat' && world.defeatSecondsLeft <= 0) {
       world.heroHp = 0;
       enterGameOver(world);
     }
-  } else if (world.phase === 'group-defeat') {
+  } else if (world.phase === 'group-defeat' ||
+    (world.phase === 'game-over' && world.defeatKind === 'group')) {
     // Complete the fall first, then keep the group pin for the full 20 seconds.
-    if (world.actionTimer <= 0) {
+    if (world.phase === 'group-defeat' && world.actionTimer <= 0) {
       world.defeatSecondsLeft = Math.max(0, world.defeatSecondsLeft - dt);
     }
     world.groupShake = 1.5 + Math.sin(now / 145) * 0.7;
-    if (world.defeatSecondsLeft <= 0) enterGameOver(world);
+    if (world.phase === 'group-defeat' && world.defeatSecondsLeft <= 0) enterGameOver(world);
   }
 
   updateEnemies(world, dt, now);
