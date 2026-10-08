@@ -1,0 +1,37 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "1fylhKzUwv0Z_yEqY1k8q"
+uri = "file://attached_assets/generated_audio/amazon_kick.mp3"
+type = "audio"
+title = "amazon_kick"
+description = "Generated sound effect: A short, punchy arcade beat-em-up sound for a powerful adult Amazon warrior kick: quick leather-and-air whoosh followed by a firm stylized impact thud. Fictional game sound ef…"
+
+[[outputs]]
+id = "nibNTn1QvUwhWGJxo4kAc"
+uri = "file://attached_assets/generated_audio/ninja_kick.mp3"
+type = "audio"
+title = "ninja_kick"
+description = "Generated sound effect: A distinct fast ninja kick for a pixel-art arcade fighting game: sharp slicing swish, brief airy rush and crisp compact thwack, agile and precise, not realistic gore. No voice…"
+
+[[outputs]]
+id = "5cRCqMWadsNkJDi2Keujl"
+uri = "file://attached_assets/generated_audio/heroine_struggle.mp3"
+type = "audio"
+title = "heroine_struggle"
+description = "Generated sound effect: A short nonverbal exertion vocalization from an adult female action-game hero struggling to break free from a combat hold: two restrained effort grunts and a tense breath, cle…"
+
+[[outputs]]
+id = "5G4ek18lT7rIvAVrw0QB1"
+uri = "file://attached_assets/generated_audio/enemy_laugh.mp3"
+type = "audio"
+title = "enemy_laugh"
+description = "Generated sound effect: A brief taunting villain laugh from an adult female enemy in a stylized arcade beat-em-up game, confident and playful, not sinister horror, no words, no music, isolated clean …"
+
+[[outputs]]
+id = "3X7iXH9gvqhOge43L4oyT"
+uri = "file://attached_assets/generated_audio/heroine_hurt.mp3"
+type = "audio"
+title = "heroine_hurt"
+description = "Generated sound effect: A brief nonverbal pain grunt from an adult female action-game hero taking a hit. Determined fighter, mild surprise and effort, clearly non-erotic, no words, no music, clean is…"

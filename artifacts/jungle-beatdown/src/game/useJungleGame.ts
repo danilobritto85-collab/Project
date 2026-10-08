@@ -11,6 +11,11 @@ import pinAttackUrl from '@assets/pin_attack_1791470375691.png';
 import pinExtendedUrl from '@assets/pin_extended_1791470375691.png';
 import ninjaFootsmotherUrl from '@assets/ninja_footsmother.png';
 import ninjaFootsmotherEndingUrl from '@assets/ninja_footsmother_ending.png';
+import amazonKickAudioUrl from '@assets/generated_audio/amazon_kick.mp3';
+import ninjaKickAudioUrl from '@assets/generated_audio/ninja_kick.mp3';
+import heroineHurtAudioUrl from '@assets/generated_audio/heroine_hurt.mp3';
+import heroineStruggleAudioUrl from '@assets/generated_audio/heroine_struggle.mp3';
+import enemyLaughAudioUrl from '@assets/generated_audio/enemy_laugh.mp3';
 
 const WIDTH = 1024;
 const HEIGHT = 576;
@@ -126,12 +131,23 @@ interface World {
   particles: Particle[];
   smokeTimer: number;
   heartTimer: number;
+  struggleVoiceTimer: number;
   randomSeed: number;
 }
+
+type SoundCue =
+  | 'amazonKick'
+  | 'ninjaKick'
+  | 'heroineHurt'
+  | 'heroineStruggle'
+  | 'enemyLaugh';
 
 type SoundEngine = {
   context: AudioContext | null;
   enabled: boolean;
+  clips: Partial<Record<SoundCue, HTMLAudioElement>>;
+  active: Set<HTMLAudioElement>;
+  lastPlayed: Partial<Record<SoundCue, number>>;
 };
 
 const spriteBoundsCache = new WeakMap<HTMLCanvasElement, Map<string, SpriteRect>>();
@@ -320,10 +336,17 @@ function createWorld(): World {
     ninjaFootsmotherElapsed: 0,
     footstepTimer: 0,
     soundEnabled: true,
-    sound: { context: null, enabled: true },
+    sound: {
+      context: null,
+      enabled: true,
+      clips: {},
+      active: new Set<HTMLAudioElement>(),
+      lastPlayed: {},
+    },
     particles: [],
     smokeTimer: 0,
     heartTimer: 0,
+    struggleVoiceTimer: 0,
     randomSeed: 3917,
   };
 }
@@ -810,6 +833,32 @@ function playSweep(
   gain.connect(context.destination);
   oscillator.start();
   oscillator.stop(context.currentTime + duration);
+}
+
+function playClip(world: World, cue: SoundCue, volume = 1, cooldownMs = 0) {
+  if (!world.sound.enabled) return;
+  const template = world.sound.clips[cue];
+  if (!template) return;
+  const now = performance.now();
+  const lastPlayed = world.sound.lastPlayed[cue] ?? -Infinity;
+  if (now - lastPlayed < cooldownMs) return;
+  world.sound.lastPlayed[cue] = now;
+
+  const clip = template.cloneNode(true) as HTMLAudioElement;
+  clip.volume = clamp(volume, 0, 1);
+  world.sound.active.add(clip);
+  const release = () => world.sound.active.delete(clip);
+  clip.addEventListener('ended', release, { once: true });
+  clip.addEventListener('error', release, { once: true });
+  void clip.play().catch(release);
+}
+
+function stopClips(world: World) {
+  for (const clip of world.sound.active) {
+    clip.pause();
+    clip.currentTime = 0;
+  }
+  world.sound.active.clear();
 }
 
 function playHit(world: World) {
@@ -1302,7 +1351,9 @@ function beginSpecialGrapple(world: World, enemy: Enemy) {
   enemy.state = 'attack';
   enemy.stateTimer = 5.2;
   world.heroHitCooldown = 1.1;
+  world.struggleVoiceTimer = 1.45;
   playStomp(world);
+  playClip(world, 'heroineStruggle', 0.62, 900);
 }
 
 function escapeGrapple(world: World) {
@@ -1485,12 +1536,19 @@ function updateEnemies(world: World, dt: number, now: number) {
       enemy.stateTimer = 0.48;
       enemy.attackPoseIndex = (enemy.attackPoseIndex + 1) % ATTACK_FRAMES[enemy.kind].length;
       enemy.attackCooldown = (enemy.kind === 'ninja' ? 1.08 : 1.3) + random(world) * 0.75;
+      playClip(
+        world,
+        enemy.kind === 'ninja' ? 'ninjaKick' : 'amazonKick',
+        enemy.kind === 'ninja' ? 0.48 : 0.56,
+        120,
+      );
       if (distance < 106 && world.heroHitCooldown <= 0) {
         world.heroHp = Math.max(0, world.heroHp - (7 + Math.floor(random(world) * 4)));
         world.heroHitCooldown = 0.68;
         world.heroAction = 'hurt';
         world.actionTimer = 0.36;
         playStomp(world);
+        playClip(world, 'heroineHurt', 0.64, 430);
         if (world.heroHp <= 0) {
           world.phase = 'group-defeat';
           world.defeatKind = 'group';
@@ -1500,6 +1558,7 @@ function updateEnemies(world: World, dt: number, now: number) {
           world.actionTimer = 0.9;
           world.heroVelocityX = 0;
           world.heroVelocityY = 0;
+          playClip(world, 'enemyLaugh', 0.52, 1600);
           continue;
         }
         if (world.heroHp <= 42 && random(world) < 0.1) {
@@ -1622,6 +1681,11 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
     }
   } else if (world.phase === 'grapple') {
     world.grappleSecondsLeft = Math.max(0, world.grappleSecondsLeft - dt);
+    world.struggleVoiceTimer -= dt;
+    if (world.struggleVoiceTimer <= 0) {
+      playClip(world, 'heroineStruggle', 0.56, 1000);
+      world.struggleVoiceTimer = 1.55 + random(world) * 0.55;
+    }
     if (world.grappleSecondsLeft <= 0) {
       world.defeatStartHp = world.heroHp;
       world.particles = [];
@@ -1642,11 +1706,13 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
         world.heroVelocityX = 0;
         world.heroVelocityY = 0;
         playSweep(world, 550, 220, 0.6, 0.045, 'sine');
+        playClip(world, 'enemyLaugh', 0.55, 1600);
       } else {
         world.phase = 'special-defeat';
         world.defeatKind = 'special';
         world.defeatSecondsLeft = SPECIAL_DEFEAT_DURATION;
         playSweep(world, 550, 220, 0.6, 0.045, 'sine');
+        playClip(world, 'enemyLaugh', 0.55, 1600);
       }
     }
   } else if (world.phase === STATE_NINJA_FOOTSMOTHER ||
@@ -1723,11 +1789,11 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
     const world = worldRef.current;
     if (world.phase === 'title' || world.phase === 'game-over') {
       const soundEnabled = world.soundEnabled;
-      const previousContext = world.sound.context;
+      const previousSound = world.sound;
       Object.assign(world, createWorld(), {
         phase: 'playing',
         soundEnabled,
-        sound: { context: previousContext, enabled: soundEnabled },
+        sound: { ...previousSound, enabled: soundEnabled },
       });
       pressedRef.current.clear();
       setSnapshot(publishSnapshot(world));
@@ -1738,11 +1804,11 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
   const restartGame = useCallback(() => {
     const world = worldRef.current;
     const soundEnabled = world.soundEnabled;
-    const previousContext = world.sound.context;
+    const previousSound = world.sound;
     Object.assign(world, createWorld(), {
       phase: 'playing',
       soundEnabled,
-      sound: { context: previousContext, enabled: soundEnabled },
+      sound: { ...previousSound, enabled: soundEnabled },
     });
     pressedRef.current.clear();
     setSnapshot(publishSnapshot(world));
@@ -1793,6 +1859,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
     if (!world.soundEnabled && world.sound.context) {
       void world.sound.context.suspend();
     }
+    if (!world.soundEnabled) stopClips(world);
     setSnapshot(publishSnapshot(world));
   }, []);
 
@@ -1816,6 +1883,19 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       pinAttack: null,
       pinExtended: null,
     };
+    const soundUrls: Record<SoundCue, string> = {
+      amazonKick: amazonKickAudioUrl,
+      ninjaKick: ninjaKickAudioUrl,
+      heroineHurt: heroineHurtAudioUrl,
+      heroineStruggle: heroineStruggleAudioUrl,
+      enemyLaugh: enemyLaughAudioUrl,
+    };
+    const worldSound = worldRef.current.sound;
+    for (const [cue, url] of Object.entries(soundUrls) as [SoundCue, string][]) {
+      const audio = new Audio(url);
+      audio.preload = 'auto';
+      worldSound.clips[cue] = audio;
+    }
 
     // Development-only scene previews make timed animation states inspectable
     // without changing normal gameplay or exposing shortcuts in production.
@@ -2015,6 +2095,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
     return () => {
       disposed = true;
       window.cancelAnimationFrame(frameId);
+      stopClips(worldRef.current);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', clearPressed);
