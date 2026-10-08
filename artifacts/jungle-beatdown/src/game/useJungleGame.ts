@@ -147,13 +147,14 @@ const AMAZON_WALK_FRAMES: SpriteRect[] = [
   { x: 460, y: 82, w: 112, h: 179 },
   { x: 560, y: 82, w: 112, h: 179 },
 ];
+const AMAZON_WALK_CYCLE = [0, 1, 2, 1] as const;
 
 const GROUP_OFFSETS = [
-  { dx: -110, dy: -8, flipped: false },
-  { dx: -55, dy: 8, flipped: false },
-  { dx: 55, dy: 8, flipped: true },
-  { dx: 0, dy: -26, flipped: false },
-  { dx: 110, dy: -8, flipped: true },
+  { dx: -240, dy: -12, flipped: false },
+  { dx: -120, dy: 18, flipped: false },
+  { dx: 120, dy: 18, flipped: true },
+  { dx: 0, dy: -44, flipped: false },
+  { dx: 240, dy: -12, flipped: true },
 ] as const;
 
 const GRAPPLE_FRAMES: SpriteRect[] = [
@@ -679,9 +680,13 @@ function drawWorld(
     }
     const remaining = isStruggle ? world.defeatSecondsLeft : world.grappleSecondsLeft;
     const duration = isStruggle ? SPECIAL_DEFEAT_DURATION : GRAPPLE_DURATION;
-    const frame = isStruggle && world.phase === 'game-over'
-      ? STRUGGLE_FRAMES[[3, 4, 5, 4][Math.floor(now / 450) % 4]]
-      : sequenceFrame(isStruggle ? STRUGGLE_FRAMES : GRAPPLE_FRAMES, duration - remaining, duration);
+    const elapsed = duration - remaining;
+    const struggleFrame = elapsed < 0.72
+      ? Math.min(2, Math.floor(elapsed / 0.24))
+      : [3, 4, 5, 4][Math.floor(now / 240) % 4];
+    const frame = isStruggle
+      ? STRUGGLE_FRAMES[struggleFrame]
+      : sequenceFrame(GRAPPLE_FRAMES, elapsed, duration);
     const struggleMotion = isStruggle ? Math.sin(now / 85) * 1.2 : 0;
     drawAtlasSprite(
       context,
@@ -695,7 +700,7 @@ function drawWorld(
     );
     if (isStruggle) world.particles.forEach((particle) => drawParticle(context, particle));
   } else if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
-    const centerX = clamp(world.heroX, 180, WIDTH - 180);
+    const centerX = clamp(world.heroX, 300, WIDTH - 300);
     const centerY = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
     const elapsed = world.actionTimer > 0
       ? 0.9 - world.actionTimer
@@ -747,7 +752,10 @@ function drawWorld(
 
     for (const amazon of activeEnemies) {
       let rect = AMAZON_FRAMES.idle;
-      if (amazon.state === 'walk') rect = AMAZON_FRAMES.walk;
+      if (amazon.state === 'walk') {
+        const step = AMAZON_WALK_CYCLE[Math.floor(now / 175 + amazon.id * 0.67) % AMAZON_WALK_CYCLE.length];
+        rect = AMAZON_WALK_FRAMES[step];
+      }
       else if (amazon.state === 'attack') rect = AMAZON_FRAMES.kick;
       else if (amazon.state === 'hurt') rect = AMAZON_FRAMES.hurt;
       else if (amazon.state === 'down') rect = AMAZON_FRAMES.down;
@@ -975,8 +983,40 @@ function updateEnemies(world: World, dt: number, now: number) {
     amazon.y = clamp(amazon.y, FLOOR_MIN, FLOOR_MAX);
   }
 
+  if (world.phase === 'playing') {
+    const combatants = world.enemies.filter((amazon) => amazon.hp > 0 && amazon.active);
+    for (let pass = 0; pass < 2; pass += 1) {
+      for (let i = 0; i < combatants.length; i += 1) {
+        for (let j = i + 1; j < combatants.length; j += 1) {
+          const first = combatants[i];
+          const second = combatants[j];
+          let dx = first.x - second.x;
+          let dy = first.y - second.y;
+          if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) {
+            dx = first.id < second.id ? -1 : 1;
+            dy = (first.id + second.id) % 2 === 0 ? -1 : 1;
+          }
+          const crowding = Math.hypot(dx / 102, dy / 52);
+          if (crowding >= 1) continue;
+
+          const directionX = (dx / 102) / crowding;
+          const directionY = (dy / 52) / crowding;
+          const separation = Math.min(2.2, (1 - crowding) * 64 * dt);
+          first.x += directionX * separation;
+          second.x -= directionX * separation;
+          first.y += directionY * separation;
+          second.y -= directionY * separation;
+        }
+      }
+    }
+    combatants.forEach((amazon) => {
+      amazon.x = clamp(amazon.x, -24, WIDTH + 24);
+      amazon.y = clamp(amazon.y, FLOOR_MIN, FLOOR_MAX);
+    });
+  }
+
   if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
-    const centerX = clamp(world.heroX, 180, WIDTH - 180);
+    const centerX = clamp(world.heroX, 300, WIDTH - 300);
     world.enemies.forEach((amazon, index) => {
       const offset = GROUP_OFFSETS[index % GROUP_OFFSETS.length];
       const targetX = centerX + offset.dx;

@@ -26,6 +26,7 @@ function App() {
   const isGroupDefeat = snapshot.phase === 'group-defeat';
   const isPlaying = snapshot.phase === 'playing';
   const isDefeatSequence = isSpecialDefeat || isGroupDefeat;
+  const showRetry = isDefeatSequence || snapshot.phase === 'game-over';
   const sequencePercent = Math.max(0, Math.min(100,
     (snapshot.defeatSecondsLeft / (isSpecialDefeat ? 10 : 20)) * 100));
 
@@ -141,6 +142,18 @@ function App() {
                   <div className="sequence-fill" style={{ width: `${sequencePercent}%` }} />
                 </div>
               </div>
+            )}
+
+            {showRetry && (
+              <button
+                className="retry-corner"
+                type="button"
+                onClick={restartGame}
+                aria-label="Tentar novamente"
+                data-testid="button-retry-defeat"
+              >
+                <RotateCcw aria-hidden="true" /> <span>Tentar novamente</span>
+              </button>
             )}
 
             {isPlaying && (

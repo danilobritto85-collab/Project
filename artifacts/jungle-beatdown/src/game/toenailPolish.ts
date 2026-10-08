@@ -55,10 +55,17 @@ export function withRedToenails(image: HTMLCanvasElement | null, kind: AtlasKind
     context.rotate(rotation * Math.PI / 180);
     context.scale(scale, scale);
     for (const [dx, dy, w, h] of pattern === 'front' ? FRONT : SIDE) {
+      const nailWidth = w * 1.45;
+      const nailHeight = h * 1.45;
       context.fillStyle = '#d02130';
-      context.fillRect(dx - w / 2, dy - h / 2, w, h);
+      context.fillRect(dx - nailWidth / 2, dy - nailHeight / 2, nailWidth, nailHeight);
       context.fillStyle = '#fb6370';
-      context.fillRect(dx - w / 2 + 0.4, dy - h / 2 + 0.2, w * 0.35, h * 0.3);
+      context.fillRect(
+        dx - nailWidth / 2 + nailWidth * 0.14,
+        dy - nailHeight / 2 + nailHeight * 0.1,
+        nailWidth * 0.35,
+        nailHeight * 0.3,
+      );
     }
     context.restore();
   }

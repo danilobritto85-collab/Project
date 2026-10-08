@@ -197,6 +197,17 @@ button:focus-visible { outline: 2px solid #f4cc63; outline-offset: 3px; }
   border: 1px solid rgba(222, 221, 176, .35); background: rgba(13, 28, 22, .73);
   font: 9px var(--app-font-mono); letter-spacing: .1em; text-transform: uppercase;
 }
+.retry-corner {
+  position: absolute; z-index: 6; top: 108px; right: 14px;
+  min-height: 34px; padding: 0 10px; display: inline-flex; align-items: center; gap: 7px;
+  color: #d8ceb0; border: 1px solid rgba(229, 202, 112, .32);
+  background: rgba(12, 25, 20, .68); cursor: pointer;
+  font: 9px var(--app-font-mono); letter-spacing: .04em;
+  transition: color .16s ease, border-color .16s ease, background .16s ease;
+}
+.retry-corner:hover { color: #f2d77c; border-color: rgba(229, 202, 112, .65); background: rgba(12, 25, 20, .88); }
+.retry-corner:focus-visible { outline: 2px solid #f2d77c; outline-offset: 2px; }
+.retry-corner svg { width: 13px; height: 13px; }
 .sequence-hud {
   position: absolute; z-index: 5; top: 14px; left: 50%; transform: translateX(-50%);
   width: min(310px, calc(100% - 28px)); padding: 10px 13px 8px;
@@ -308,6 +319,7 @@ kbd {
   .arena { aspect-ratio: 4 / 3; min-height: 410px; max-height: 65vh; background-position: 52% center; }
   .hud { inset: 10px 9px auto; }
   .sequence-hud { top: 90px; width: min(280px, calc(100% - 28px)); padding: 8px 11px; }
+  .retry-corner { top: 162px; right: 9px; }
   .hud-box { min-width: 0; width: min(48%, 190px); padding: 8px 9px; }
   .score-box { width: 92px; }
   .score-number { font-size: 18px; }
