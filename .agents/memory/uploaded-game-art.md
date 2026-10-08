@@ -14,3 +14,9 @@ For single-character sheets, avoid making every neutral-colored pixel transparen
 **Why:** Broad color-keying punched holes in neutral clothing details and left silhouettes anchored to empty margins. Edge-only removal left enclosed checkerboard patches in combined scenes; unrestricted keying then damaged the Amazon's hair and outfit during struggle.
 
 **How to apply:** Preserve gray outfit shading and outlines; inspect both single-character and combined illustrations after cleanup. Keep crop bounds local to their source rectangle, and use the visible bottom edge for ground contact.
+
+Individual poses from irregular sheets need a silhouette mask, not just a tighter bounding rectangle. Keep combined fight scenes exempt from single-character isolation.
+
+**Why:** Neighboring kick frames extended detached feet into the standing pose's rectangular crop. Repeating that pose for five Amazonas repeated the stray limbs too, even when bounds were computed from the largest character.
+
+**How to apply:** Isolate the connected artwork for single-character frames while retaining both participants in paired scenes. Inspect crowded scenes for artifacts repeated from a shared crop.

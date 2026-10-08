@@ -64,6 +64,7 @@ interface Amazon {
   attackCooldown: number;
   respawnAt: number;
   hue: number;
+  pinElapsed?: number;
 }
 
 interface Particle {
@@ -98,7 +99,6 @@ interface World {
   defeatSecondsLeft: number;
   defeatStartHp: number;
   footstepTimer: number;
-  groupShake: number;
   soundEnabled: boolean;
   sound: SoundEngine;
   particles: Particle[];
@@ -113,6 +113,7 @@ type SoundEngine = {
 };
 
 const spriteBoundsCache = new WeakMap<HTMLCanvasElement, Map<string, SpriteRect>>();
+const spriteFrameCache = new WeakMap<HTMLCanvasElement, Map<string, HTMLCanvasElement>>();
 
 const HERO_FRAMES = {
   idle: { x: 28, y: 83, w: 105, h: 178 },
@@ -123,7 +124,7 @@ const HERO_FRAMES = {
   jump: { x: 820, y: 340, w: 108, h: 176 },
   hurt: { x: 25, y: 575, w: 159, h: 180 },
   down: { x: 318, y: 575, w: 172, h: 179 },
-  defeated: { x: 814, y: 648, w: 191, h: 106 },
+  defeated: { x: 780, y: 676, w: 234, h: 80 },
 } satisfies Record<string, SpriteRect>;
 
 const AMAZON_FRAMES = {
@@ -134,17 +135,24 @@ const AMAZON_FRAMES = {
   spin: { x: 343, y: 333, w: 153, h: 186 },
   highKick: { x: 562, y: 331, w: 153, h: 189 },
   pinPose: { x: 691, y: 337, w: 111, h: 182 },
+  pinLift: { x: 800, y: 337, w: 111, h: 182 },
   hurt: { x: 24, y: 571, w: 164, h: 186 },
   down: { x: 385, y: 571, w: 172, h: 181 },
   defeated: { x: 817, y: 650, w: 191, h: 106 },
 } satisfies Record<string, SpriteRect>;
 
+const AMAZON_WALK_FRAMES: SpriteRect[] = [
+  { x: 360, y: 82, w: 112, h: 179 },
+  { x: 460, y: 82, w: 112, h: 179 },
+  { x: 560, y: 82, w: 112, h: 179 },
+];
+
 const GROUP_OFFSETS = [
-  { dx: -25, dy: -8, flipped: false },
-  { dx: 15, dy: 6, flipped: true },
-  { dx: 45, dy: 4, flipped: true },
-  { dx: -50, dy: -12, flipped: false },
-  { dx: 30, dy: -10, flipped: true },
+  { dx: -110, dy: -8, flipped: false },
+  { dx: -55, dy: 8, flipped: false },
+  { dx: 55, dy: 8, flipped: true },
+  { dx: 0, dy: -26, flipped: false },
+  { dx: 110, dy: -8, flipped: true },
 ] as const;
 
 const GRAPPLE_FRAMES: SpriteRect[] = [
@@ -227,7 +235,6 @@ function createWorld(): World {
     defeatSecondsLeft: 0,
     defeatStartHp: 100,
     footstepTimer: 0,
-    groupShake: 0,
     soundEnabled: true,
     sound: { context: null, enabled: true },
     particles: [],
@@ -355,12 +362,14 @@ function getVisibleBounds(image: HTMLCanvasElement, rect: SpriteRect): SpriteRec
 
   const context = image.getContext('2d', { willReadFrequently: true });
   if (!context) return fullFrameBounds;
-  const pixels = context.getImageData(rect.x, rect.y, rect.w, rect.h).data;
+  const frame = context.getImageData(rect.x, rect.y, rect.w, rect.h);
+  const pixels = frame.data;
   const length = rect.w * rect.h;
   const visited = new Uint8Array(length);
   const queue = new Uint32Array(length);
   let largest: SpriteRect = { x: 0, y: 0, w: rect.w, h: rect.h };
   let largestArea = 0;
+  let largestPixels: Uint32Array | null = null;
 
   for (let start = 0; start < length; start += 1) {
     if (visited[start] || pixels[start * 4 + 3] < 32) continue;
@@ -396,12 +405,33 @@ function getVisibleBounds(image: HTMLCanvasElement, rect: SpriteRect): SpriteRec
     if (tail > largestArea) {
       largestArea = tail;
       largest = { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+      largestPixels = queue.slice(0, tail);
     }
   }
 
   if (largestArea === 0) {
     cache.set(key, fullFrameBounds);
     return fullFrameBounds;
+  }
+  // Irregular sheets contain neighboring limbs inside a pose's bounding box.
+  // Keep the actual connected character, not every pixel in that rectangle.
+  const isolated = document.createElement('canvas');
+  isolated.width = rect.w;
+  isolated.height = rect.h;
+  const isolatedContext = isolated.getContext('2d');
+  if (isolatedContext && largestPixels) {
+    const keep = new Uint8Array(length);
+    largestPixels.forEach((pixel) => { keep[pixel] = 1; });
+    for (let pixel = 0; pixel < length; pixel += 1) {
+      if (!keep[pixel]) pixels[pixel * 4 + 3] = 0;
+    }
+    isolatedContext.putImageData(frame, 0, 0);
+    let frames = spriteFrameCache.get(image);
+    if (!frames) {
+      frames = new Map();
+      spriteFrameCache.set(image, frames);
+    }
+    frames.set(key, isolated);
   }
   cache.set(key, largest);
   return largest;
@@ -544,14 +574,15 @@ function drawAtlasSprite(
     context.translate(-x, 0);
   }
   const visible = getVisibleBounds(image, rect);
+  const isolated = spriteFrameCache.get(image)?.get(`${rect.x},${rect.y},${rect.w},${rect.h}`);
   const scaleX = drawW / rect.w;
   const scaleY = drawH / rect.h;
   const visibleW = visible.w * scaleX;
   const visibleH = visible.h * scaleY;
   context.drawImage(
-    image,
-    rect.x + visible.x,
-    rect.y + visible.y,
+    isolated ?? image,
+    (isolated ? 0 : rect.x) + visible.x,
+    (isolated ? 0 : rect.y) + visible.y,
     visible.w,
     visible.h,
     x - drawW / 2 + visible.x * scaleX,
@@ -654,11 +685,7 @@ function drawWorld(
     );
     if (isStruggle) world.particles.forEach((particle) => drawParticle(context, particle));
   } else if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
-    const tremor =
-      world.groupShake > 0
-        ? Math.sin(now / 34) * world.groupShake
-        : 0;
-    const centerX = clamp(world.heroX + tremor, 135, WIDTH - 135);
+    const centerX = clamp(world.heroX, 180, WIDTH - 180);
     const centerY = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
     const elapsed = world.actionTimer > 0
       ? 0.9 - world.actionTimer
@@ -671,24 +698,32 @@ function drawWorld(
       fallenPose,
       centerX,
       elapsed < 0.9 ? centerY : Math.min(FLOOR_MAX, centerY + 24),
-      elapsed < 0.9 ? 150 : 280,
-      elapsed < 0.9 ? 164 : 100,
+      elapsed < 0.9 ? 150 : 230,
+      elapsed < 0.9 ? 164 : 80,
       world.facing < 0,
     );
     GROUP_OFFSETS.map((offset, index) => ({ offset, index }))
-      .sort((a, b) => a.offset.dy - b.offset.dy)
+      .sort((a, b) => world.enemies[a.index].y - world.enemies[b.index].y)
       .forEach(({ offset, index }) => {
       const amazon = world.enemies[index];
       if (!amazon) return;
+      const pinElapsed = amazon.pinElapsed ?? 0;
+      const approaching = pinElapsed === 0;
+      const stepIndex = [0, 1, 2, 1][Math.floor(now / 130 + index) % 4];
+      const pose = approaching ? AMAZON_WALK_FRAMES[stepIndex]
+        : pinElapsed < 0.12 ? AMAZON_FRAMES.idle
+        : pinElapsed < 0.32 ? AMAZON_FRAMES.pinLift : AMAZON_FRAMES.pinPose;
+      // Gentle breathing changes the upper silhouette, never the planted feet.
+      const breathing = pinElapsed > 0.32 ? Math.sin(pinElapsed * 2.5 + index) * 0.7 : 0;
       drawAtlasSprite(
         context,
         atlas.amazon,
-        AMAZON_FRAMES.pinPose,
-        amazon.x + tremor + Math.sin(now / 600 + index) * 2,
+        pose,
+        amazon.x,
         amazon.y,
-        160,
-        188 + Math.sin(now / 450 + index) * 2,
-        offset.flipped,
+        126,
+        180 + breathing,
+        approaching ? amazon.direction < 0 : offset.flipped,
         amazon.hue,
         0,
         7,
@@ -914,7 +949,6 @@ function updateEnemies(world: World, dt: number, now: number) {
           world.phase = 'group-defeat';
           world.defeatKind = 'group';
           world.defeatSecondsLeft = GROUP_DEFEAT_DURATION;
-          world.groupShake = 3;
           world.heroAction = 'hurt';
           world.actionTimer = 0.9;
           continue;
@@ -932,13 +966,27 @@ function updateEnemies(world: World, dt: number, now: number) {
   }
 
   if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
-    const offsets = GROUP_OFFSETS;
+    const centerX = clamp(world.heroX, 180, WIDTH - 180);
     world.enemies.forEach((amazon, index) => {
-      const offset = offsets[index % offsets.length];
-      amazon.x += (world.heroX + offset.dx - amazon.x) * Math.min(1, dt * 1.7);
-      amazon.y += (world.heroY + offset.dy - amazon.y) * Math.min(1, dt * 1.7);
-      amazon.y = clamp(amazon.y, FLOOR_MIN, FLOOR_MAX);
-      amazon.state = 'attack';
+      const offset = GROUP_OFFSETS[index % GROUP_OFFSETS.length];
+      const targetX = centerX + offset.dx;
+      const targetY = clamp(world.heroY + offset.dy, FLOOR_MIN, FLOOR_MAX);
+      const dx = targetX - amazon.x;
+      const dy = targetY - amazon.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance > 2) {
+        const step = Math.min(distance, 110 * dt);
+        amazon.x += (dx / distance) * step;
+        amazon.y += (dy / distance) * step;
+        amazon.direction = dx < 0 ? -1 : 1;
+        amazon.state = 'walk';
+        amazon.pinElapsed = 0;
+      } else {
+        amazon.x = targetX;
+        amazon.y = targetY;
+        amazon.state = 'idle';
+        amazon.pinElapsed = (amazon.pinElapsed ?? 0) + dt;
+      }
     });
   }
 
@@ -1019,7 +1067,6 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
     if (world.phase === 'group-defeat' && world.actionTimer <= 0) {
       world.defeatSecondsLeft = Math.max(0, world.defeatSecondsLeft - dt);
     }
-    world.groupShake = 1.5 + Math.sin(now / 145) * 0.7;
     if (world.phase === 'group-defeat' && world.defeatSecondsLeft <= 0) enterGameOver(world);
   }
 
@@ -1119,6 +1166,15 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
         world.grappleSecondsLeft = scene === 'grapple' ? duration - elapsed : 0;
         world.defeatSecondsLeft = scene === 'grapple' ? 0 : duration - elapsed;
         world.actionTimer = scene === 'group-defeat' && elapsed < 0.9 ? 0.9 - elapsed : 0;
+        if (scene === 'group-defeat' && elapsed > 4) {
+          world.enemies.forEach((amazon, index) => {
+            const offset = GROUP_OFFSETS[index];
+            amazon.x = clamp(world.heroX, 180, WIDTH - 180) + offset.dx;
+            amazon.y = clamp(world.heroY + offset.dy, FLOOR_MIN, FLOOR_MAX);
+            amazon.pinElapsed = elapsed - 3;
+            amazon.state = 'idle';
+          });
+        }
         world.soundEnabled = false;
         world.sound.enabled = false;
         setSnapshot(publishSnapshot(world));
