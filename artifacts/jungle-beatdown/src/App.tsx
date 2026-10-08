@@ -1,0 +1,201 @@
+import { useRef } from 'react';
+import {
+  AudioLines,
+  AudioOff,
+  Compass,
+  Heart,
+  Play,
+  RotateCcw,
+  Swords,
+} from 'lucide-react';
+import jungleBackground from '@assets/background_1791470375690.png';
+import heroSprites from '@assets/hero_1791470375690.png';
+import amazonSprites from '@assets/amazon_1791470375689.png';
+import pinAttackSprites from '@assets/pin_attack_1791470375691.png';
+import pinExtendedSprites from '@assets/pin_extended_1791470375691.png';
+import { useJungleGame } from './game/useJungleGame';
+
+function formatScore(score: number) {
+  return Math.max(0, score).toString().padStart(6, '0');
+}
+
+function App() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const { snapshot, startGame, restartGame, toggleSound } = useJungleGame(canvasRef);
+  const hpPercent = Math.max(0, Math.min(100, (snapshot.heroHp / snapshot.maxHeroHp) * 100));
+  const escapePercent = Math.max(0, Math.min(100, snapshot.escapeProgress));
+  const isTitle = snapshot.phase === 'title';
+  const isGrapple = snapshot.phase === 'grapple';
+  const isSpecialDefeat = snapshot.phase === 'special-defeat';
+  const isGroupDefeat = snapshot.phase === 'group-defeat';
+  const isGameOver = snapshot.phase === 'game-over';
+  const isPlaying = snapshot.phase === 'playing';
+
+  return (
+    <main className="game-shell">
+      <div className="game-wrap">
+        <header className="topline">
+          <div className="brand-lockup">
+            <div className="brand-mark" aria-hidden="true"><Compass /></div>
+            <div>
+              <div className="brand-name">ARQUIVO SELVAGEM</div>
+              <div className="brand-sub">Uma aventura arcade na Amazônia</div>
+            </div>
+          </div>
+          <div className="top-actions">
+            {!isTitle && (
+              <button className="restart-small" type="button" onClick={restartGame} data-testid="button-restart">
+                <RotateCcw /> <span>Reiniciar</span>
+              </button>
+            )}
+            <button
+              className="sound-button"
+              type="button"
+              onClick={toggleSound}
+              aria-label={snapshot.soundEnabled ? 'Desativar som' : 'Ativar som'}
+              aria-pressed={snapshot.soundEnabled}
+              data-testid="button-sound"
+            >
+              {snapshot.soundEnabled ? <AudioLines /> : <AudioOff />}
+              <span className="sound-label">{snapshot.soundEnabled ? 'Som ligado' : 'Som desligado'}</span>
+            </button>
+          </div>
+        </header>
+
+        <section className="game-frame" aria-label="Jungle Beatdown">
+          <div className="frame-topline">
+            <span className="live-label"><i className="live-dot" /> Setor 01 <span>/</span> Ruínas da mata</span>
+            <span>Modo arcade <span aria-hidden="true">·</span> 1 jogadora</span>
+          </div>
+
+          <div className="arena" style={{ backgroundImage: `url("${jungleBackground}")` }}>
+            <canvas
+              ref={canvasRef}
+              className="game-canvas"
+              aria-label="Arena de combate na floresta"
+              data-testid="game-canvas"
+            />
+
+            {!isTitle && (
+              <div className="hud" aria-live="polite">
+                <div className="hud-box">
+                  <div className="hud-heading"><span><Heart size={12} /> Exploradora</span><strong>{snapshot.heroHp} / {snapshot.maxHeroHp}</strong></div>
+                  <div className="hp-track"><div className="hp-fill" style={{ width: `${hpPercent}%` }} /></div>
+                  <div className="enemy-track" aria-label={`${snapshot.activeEnemies} guerreiras ativas, ${snapshot.defeatedEnemies} derrotadas`}>
+                    {Array.from({ length: 5 }, (_, index) => (
+                      <i key={index} className={`enemy-pip ${index >= snapshot.activeEnemies ? 'down' : ''}`} />
+                    ))}
+                  </div>
+                </div>
+                <div className="hud-box score-box">
+                  <div className="hud-heading"><span>Pontuação</span></div>
+                  <div className="score-number" data-testid="text-score">{formatScore(snapshot.score)}</div>
+                </div>
+              </div>
+            )}
+
+            {isTitle && (
+              <div className="state-overlay">
+                <div className="title-content">
+                  <div className="title-copy">
+                    <div className="eyebrow">Briga de rua, trilha de selva</div>
+                    <h1 className="game-title">Jungle <span>Beatdown</span></h1>
+                    <p className="title-description">
+                      Um mapa perdido. Cinco guerreiras no caminho. Abra espaço na base do punho e encontre a saída.
+                    </p>
+                    <button className="start-button" type="button" onClick={startGame} data-testid="button-start">
+                      <Play fill="currentColor" /> Iniciar partida
+                    </button>
+                  </div>
+                  <div className="title-art" aria-hidden="true">
+                    <img className="hero-art" src={heroSprites} alt="" />
+                    <div className="art-tag">Expedição em andamento · 01</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {isGrapple && (
+              <div className="state-overlay">
+                <div className="grapple-card" role="status" data-testid="status-grapple">
+                  <img className="grapple-art" src={pinAttackSprites} alt="" />
+                  <div>
+                    <p className="card-kicker">Agarrão! · sequência de fuga</p>
+                    <h2 className="overlay-title">Saia dessa!</h2>
+                    <p className="overlay-text">Aperte J sem parar para se soltar antes que o tempo acabe.</p>
+                    <div className="countdown">{Math.max(0, snapshot.grappleSecondsLeft).toFixed(1)}s</div>
+                    <div className="escape-track"><div className="escape-fill" style={{ width: `${escapePercent}%` }} /></div>
+                    <div className="mash-hint"><kbd>J</kbd> Aperte repetidamente</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {isSpecialDefeat && (
+              <div className="state-overlay">
+                <div className="end-card" role="status" data-testid="status-special-defeat">
+                  <p className="card-kicker">Sem forças para escapar</p>
+                  <h2 className="overlay-title">A mata silencia</h2>
+                  <p className="overlay-text">A expedição chegou ao fim. Tente outra vez e não deixe o cerco fechar.</p>
+                  <div className="defeat-timer">{Math.max(0, snapshot.defeatSecondsLeft).toFixed(1)}<small>s</small></div>
+                  <button className="primary-button" type="button" onClick={restartGame} data-testid="button-restart-special">
+                    <RotateCcw /> Tentar de novo
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {isGroupDefeat && (
+              <div className="state-overlay">
+                <div className="end-card" role="status" data-testid="status-group-defeat">
+                  <p className="card-kicker">Fim de combate</p>
+                  <h2 className="overlay-title">O grupo cercou você</h2>
+                  <p className="overlay-text">Uma nova tentativa pode mudar o rumo desta expedição.</p>
+                  <div className="defeat-timer">{Math.max(0, snapshot.defeatSecondsLeft).toFixed(1)}<small>s</small></div>
+                  <button className="primary-button" type="button" onClick={restartGame} data-testid="button-restart-group">
+                    <RotateCcw /> Recomeçar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {isGameOver && (
+              <div className="state-overlay">
+                <div className="end-card" role="status" data-testid="status-game-over">
+                  <p className="card-kicker">Expedição encerrada</p>
+                  <h2 className="overlay-title">Fim de jogo</h2>
+                  <p className="overlay-text">Pontuação final <strong>{formatScore(snapshot.score)}</strong></p>
+                  <button className="primary-button" type="button" onClick={restartGame} data-testid="button-restart-game-over">
+                    <RotateCcw /> Jogar novamente
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {(isPlaying || isGrapple) && (
+              <div className="phase-chip">
+                {isGrapple ? 'Use J para escapar do agarrão' : `${snapshot.activeEnemies} ${snapshot.activeEnemies === 1 ? 'guerreira ativa' : 'guerreiras ativas'} · ${snapshot.defeatedEnemies} derrotadas`}
+              </div>
+            )}
+          </div>
+
+          <div className="controls-strip">
+            <div className="control-title">Comandos de combate</div>
+            <div className="control-list">
+              <div className="control-item"><kbd>WASD</kbd><span>/</span><kbd>↑↓←→</kbd> Mover</div>
+              <div className="control-item"><kbd>Shift</kbd> Correr</div>
+              <div className="control-item"><kbd>J</kbd> Soco / escapar</div>
+              <div className="control-item"><kbd>K</kbd> Chute</div>
+              <div className="control-item"><kbd>Espaço</kbd> Pular</div>
+            </div>
+          </div>
+        </section>
+        <div className="footer-note"><Swords size={12} /> <span>5 guerreiras</span> · arena de combate 2.5D · feita para jogar</div>
+      </div>
+      <img src={amazonSprites} alt="" hidden />
+      <img src={pinExtendedSprites} alt="" hidden />
+    </main>
+  );
+}
+
+export default App;

@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Jungle Beatdown"
+description = "A playable 2.5D pixel-art beat ’em up set in a jungle arena, featuring an explorer hero, five Amazon opponents, combat, special grapples, and timed defeat sequences."
+version = "1.0.0"
+id = "artifacts/jungle-beatdown"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25103
+
+[services.development]
+run = "pnpm --filter @workspace/jungle-beatdown run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/jungle-beatdown", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/jungle-beatdown/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25103"
+BASE_PATH = "/"
