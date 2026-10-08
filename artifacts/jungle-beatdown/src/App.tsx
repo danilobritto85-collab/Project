@@ -26,6 +26,9 @@ function App() {
   const isGroupDefeat = snapshot.phase === 'group-defeat';
   const isGameOver = snapshot.phase === 'game-over';
   const isPlaying = snapshot.phase === 'playing';
+  const isDefeatSequence = isSpecialDefeat || isGroupDefeat;
+  const sequencePercent = Math.max(0, Math.min(100,
+    (snapshot.defeatSecondsLeft / (isSpecialDefeat ? 10 : 20)) * 100));
 
   return (
     <main className="game-shell">
@@ -115,45 +118,28 @@ function App() {
             )}
 
             {isGrapple && (
-              <div className="state-overlay">
-                <div className="grapple-card" role="status" data-testid="status-grapple">
-                   <kbd className="grapple-art">J</kbd>
-                  <div>
-                    <p className="card-kicker">Agarrão! · sequência de fuga</p>
-                    <h2 className="overlay-title">Saia dessa!</h2>
-                    <p className="overlay-text">Aperte J sem parar para se soltar antes que o tempo acabe.</p>
-                    <div className="countdown">{Math.max(0, snapshot.grappleSecondsLeft).toFixed(1)}s</div>
-                    <div className="escape-track"><div className="escape-fill" style={{ width: `${escapePercent}%` }} /></div>
-                    <div className="mash-hint"><kbd>J</kbd> Aperte repetidamente</div>
-                  </div>
+              <div className="sequence-hud grapple-hud" role="status" data-testid="status-grapple">
+                <div className="sequence-info">
+                  <span className="sequence-label">Agarrão</span>
+                  <span className="sequence-hint"><kbd>J</kbd> Aperte para escapar</span>
+                </div>
+                <strong className="sequence-time">{Math.max(0, snapshot.grappleSecondsLeft).toFixed(1)}<small>s</small></strong>
+                <div className="sequence-track" aria-label={`Fuga ${Math.round(escapePercent)}%`}>
+                  <div className="sequence-fill" style={{ width: `${escapePercent}%` }} />
                 </div>
               </div>
             )}
 
-            {isSpecialDefeat && (
-              <div className="state-overlay">
-                <div className="end-card" role="status" data-testid="status-special-defeat">
-                  <p className="card-kicker">Sem forças para escapar</p>
-                  <h2 className="overlay-title">A mata silencia</h2>
-                  <p className="overlay-text">A expedição chegou ao fim. Tente outra vez e não deixe o cerco fechar.</p>
-                  <div className="defeat-timer">{Math.max(0, snapshot.defeatSecondsLeft).toFixed(1)}<small>s</small></div>
-                  <button className="primary-button" type="button" onClick={restartGame} data-testid="button-restart-special">
-                    <RotateCcw /> Tentar de novo
-                  </button>
+            {isDefeatSequence && (
+              <div className="sequence-hud defeat-hud" role="status"
+                data-testid={isSpecialDefeat ? 'status-special-defeat' : 'status-group-defeat'}>
+                <div className="sequence-info">
+                  <span className="sequence-label">{isSpecialDefeat ? 'Luta para se soltar' : 'Cerco das guerreiras'}</span>
+                  <span className="sequence-hint">Sequência de derrota</span>
                 </div>
-              </div>
-            )}
-
-            {isGroupDefeat && (
-              <div className="state-overlay">
-                <div className="end-card" role="status" data-testid="status-group-defeat">
-                  <p className="card-kicker">Fim de combate</p>
-                  <h2 className="overlay-title">O grupo cercou você</h2>
-                  <p className="overlay-text">Uma nova tentativa pode mudar o rumo desta expedição.</p>
-                  <div className="defeat-timer">{Math.max(0, snapshot.defeatSecondsLeft).toFixed(1)}<small>s</small></div>
-                  <button className="primary-button" type="button" onClick={restartGame} data-testid="button-restart-group">
-                    <RotateCcw /> Recomeçar
-                  </button>
+                <strong className="sequence-time">{Math.max(0, snapshot.defeatSecondsLeft).toFixed(1)}<small>s</small></strong>
+                <div className="sequence-track" aria-hidden="true">
+                  <div className="sequence-fill" style={{ width: `${sequencePercent}%` }} />
                 </div>
               </div>
             )}
@@ -171,9 +157,9 @@ function App() {
               </div>
             )}
 
-            {(isPlaying || isGrapple) && (
+            {isPlaying && (
               <div className="phase-chip">
-                {isGrapple ? 'Use J para escapar do agarrão' : `${snapshot.activeEnemies} ${snapshot.activeEnemies === 1 ? 'guerreira ativa' : 'guerreiras ativas'} · ${snapshot.defeatedEnemies} derrotadas`}
+                {`${snapshot.activeEnemies} ${snapshot.activeEnemies === 1 ? 'guerreira ativa' : 'guerreiras ativas'} · ${snapshot.defeatedEnemies} derrotadas`}
               </div>
             )}
           </div>

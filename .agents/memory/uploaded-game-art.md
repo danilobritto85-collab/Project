@@ -9,8 +9,8 @@ Inspect the actual format and dimensions of uploaded art before assigning sprite
 
 **How to apply:** For replacement or additional sprite sheets, check image metadata first, and keep the crop coordinate grid consistent with the preprocessed canvas dimensions.
 
-For baked checkerboards, avoid making every neutral-colored pixel transparent. Remove only checker-colored pixels connected to the sheet's outer background, then find each pose's visible bounds and anchor its feet to the ground plane.
+For single-character sheets, avoid making every neutral-colored pixel transparent. Use edge-connected background removal, then find each pose's visible bounds and anchor its feet to the ground plane. Combined fight illustrations need separate treatment for checkerboard islands enclosed between the two bodies.
 
-**Why:** Broad color-keying punched holes in neutral clothing details and left character silhouettes anchored to empty margins, making sprites look broken and float above the floor.
+**Why:** Broad color-keying punched holes in neutral clothing details and left silhouettes anchored to empty margins. Conversely, edge-only removal left enclosed checkerboard patches in combined fight scenes.
 
-**How to apply:** Preserve gray outfit shading and outlines during cleanup; calculate the draw bounds after transparency processing and use the visible bottom edge for ground contact.
+**How to apply:** Preserve gray outfit shading and outlines; inspect both single-character and combined illustrations after cleanup. Keep crop bounds local to their source rectangle, and use the visible bottom edge for ground contact.

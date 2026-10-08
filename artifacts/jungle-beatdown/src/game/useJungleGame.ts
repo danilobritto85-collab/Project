@@ -270,7 +270,7 @@ function loadImage(src: string) {
   });
 }
 
-function removeCheckerboard(image: HTMLImageElement) {
+function removeCheckerboard(image: HTMLImageElement, combinedPose = false) {
   const canvas = document.createElement('canvas');
   // Frame coordinates use the reference sheet's 1024×768 logical grid.
   // Uploaded originals are higher-resolution JPEGs despite their .png names.
@@ -294,9 +294,16 @@ function removeCheckerboard(image: HTMLImageElement) {
     const channelRange = Math.max(r, g, b) - Math.min(r, g, b);
     // Only consider neutral checker tones; flood-fill below protects gray
     // details inside sprites unless they connect to the sheet's outer edge.
-    if (channelRange < 9 && Math.max(r, g, b) > 18) {
-      checkerCandidate[pixel] = 1;
+    if (channelRange < (combinedPose ? 24 : 9) && Math.max(r, g, b) > 18) {
+      if (combinedPose) pixels[i + 3] = 0;
+      else checkerCandidate[pixel] = 1;
     }
+  }
+  // The combined illustrations enclose patches of checkerboard between the
+  // two bodies, so their background cannot be reached from the sheet edge.
+  if (combinedPose) {
+    context.putImageData(frame, 0, 0);
+    return canvas;
   }
 
   let tail = 0;
@@ -336,9 +343,16 @@ function getVisibleBounds(image: HTMLCanvasElement, rect: SpriteRect): SpriteRec
   const key = `${rect.x},${rect.y},${rect.w},${rect.h}`;
   const cached = cache.get(key);
   if (cached) return cached;
+  const fullFrameBounds = { x: 0, y: 0, w: rect.w, h: rect.h };
+  // Bounds are local to the crop, never absolute atlas coordinates.
+  // Combined grapple frames must retain both characters.
+  if (rect.w * rect.h > 50000) {
+    cache.set(key, fullFrameBounds);
+    return fullFrameBounds;
+  }
 
   const context = image.getContext('2d', { willReadFrequently: true });
-  if (!context) return rect;
+  if (!context) return fullFrameBounds;
   const pixels = context.getImageData(rect.x, rect.y, rect.w, rect.h).data;
   const length = rect.w * rect.h;
   const visited = new Uint8Array(length);
@@ -383,10 +397,9 @@ function getVisibleBounds(image: HTMLCanvasElement, rect: SpriteRect): SpriteRec
     }
   }
 
-  // Grapple sheets intentionally contain two interlocked characters.
-  if (largestArea === 0 || rect.w * rect.h > 50000) {
-    cache.set(key, rect);
-    return rect;
+  if (largestArea === 0) {
+    cache.set(key, fullFrameBounds);
+    return fullFrameBounds;
   }
   cache.set(key, largest);
   return largest;
@@ -608,36 +621,76 @@ function drawWorld(
   context.fillStyle = floorTint;
   context.fillRect(0, 408, WIDTH, HEIGHT - 408);
 
-  if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
+  const specialSequence = world.phase === 'special-defeat' ||
+    (world.phase === 'game-over' && world.defeatKind === 'special');
+  if (specialSequence || world.phase === 'grapple') {
+    const isStruggle = specialSequence;
+    // The pair is already drawn together in these sheets. Do not render a
+    // second standalone heroine or grappler underneath the combined pose.
+    const bystanders = world.enemies
+      .filter((amazon) => amazon.hp > 0 && amazon.active && amazon.id !== world.currentGrappler)
+      .sort((a, b) => a.y - b.y);
+    for (const amazon of bystanders) {
+      drawAtlasSprite(context, atlas.amazon, AMAZON_FRAMES.idle,
+        amazon.x, amazon.y, 126, 180, amazon.direction < 0, amazon.hue);
+    }
+    const remaining = isStruggle ? world.defeatSecondsLeft : world.grappleSecondsLeft;
+    const duration = isStruggle ? SPECIAL_DEFEAT_DURATION : GRAPPLE_DURATION;
+    const frame = sequenceFrame(
+      isStruggle ? STRUGGLE_FRAMES : GRAPPLE_FRAMES,
+      duration - remaining,
+      duration,
+    );
+    const struggleMotion = isStruggle && world.phase !== 'game-over'
+      ? Math.sin(now / 85) * 1.8 : 0;
+    drawAtlasSprite(
+      context,
+      isStruggle ? atlas.pinExtended : atlas.pinAttack,
+      frame,
+      clamp(world.heroX + struggleMotion, 180, WIDTH - 180),
+      world.heroY,
+      352,
+      318,
+      world.facing < 0,
+    );
+    if (isStruggle) world.particles.forEach((particle) => drawParticle(context, particle));
+  } else if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
     const tremor =
       world.phase === 'group-defeat' && world.groupShake > 0
         ? Math.sin(now / 34) * world.groupShake
         : 0;
     const centerX = clamp(world.heroX + tremor, 135, WIDTH - 135);
     const centerY = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
+    const elapsed = world.actionTimer > 0
+      ? 0.9 - world.actionTimer
+      : 0.9 + GROUP_DEFEAT_DURATION - world.defeatSecondsLeft;
+    const fallenPose = elapsed < 0.3 ? HERO_FRAMES.hurt
+      : elapsed < 0.9 ? HERO_FRAMES.down : HERO_FRAMES.defeated;
     drawAtlasSprite(
       context,
       atlas.hero,
-      HERO_FRAMES.defeated,
+      fallenPose,
       centerX,
-      centerY,
-      226,
-      132,
+      elapsed < 0.9 ? centerY : Math.min(FLOOR_MAX, centerY + 24),
+      elapsed < 0.9 ? 150 : 280,
+      elapsed < 0.9 ? 164 : 100,
       world.facing < 0,
     );
     GROUP_OFFSETS.map((offset, index) => ({ offset, index }))
       .sort((a, b) => a.offset.dy - b.offset.dy)
       .forEach(({ offset, index }) => {
+      const amazon = world.enemies[index];
+      if (!amazon) return;
       drawAtlasSprite(
         context,
         atlas.amazon,
         AMAZON_FRAMES.pinPose,
-        centerX + offset.dx,
-        clamp(centerY + offset.dy, FLOOR_MIN, FLOOR_MAX),
+        amazon.x + tremor,
+        amazon.y,
         160,
         188,
         offset.flipped,
-        world.enemies[index]?.hue ?? 0,
+        amazon.hue,
         0,
         7,
       );
@@ -691,43 +744,6 @@ function drawWorld(
     });
     actors.sort((a, b) => a.y - b.y);
     actors.forEach((actor) => actor.draw());
-
-    if (world.phase === 'grapple' && world.currentGrappler !== null) {
-      const grappler = activeEnemies.find((amazon) => amazon.id === world.currentGrappler);
-      const overlayX = grappler ? (world.heroX + grappler.x) / 2 : world.heroX;
-      drawAtlasSprite(
-        context,
-        atlas.pinAttack,
-        { x: 5, y: 45, w: 348, h: 320 },
-        overlayX,
-        clamp(Math.max(world.heroY, grappler?.y ?? world.heroY), FLOOR_MIN, FLOOR_MAX),
-        340,
-        300,
-        false,
-      );
-    }
-
-    if (world.phase === 'special-defeat' || (world.phase === 'game-over' && world.defeatKind === 'special')) {
-      drawAtlasSprite(
-        context,
-        atlas.pinExtended,
-        { x: 687, y: 61, w: 326, h: 316 },
-        world.heroX,
-        clamp(world.heroY, FLOOR_MIN, FLOOR_MAX),
-        352,
-        318,
-        world.facing < 0,
-      );
-    }
-  }
-
-  if (world.phase === 'special-defeat' || (world.phase === 'game-over' && world.defeatKind === 'special')) {
-    world.particles.forEach((particle) => drawParticle(context, particle));
-  }
-
-  if (world.phase === 'grapple') {
-    context.fillStyle = 'rgba(9, 13, 13, .34)';
-    context.fillRect(0, 0, WIDTH, HEIGHT);
   }
 }
 
@@ -741,7 +757,7 @@ function enterGameOver(world: World) {
 function beginSpecialGrapple(world: World, amazon: Amazon) {
   world.phase = 'grapple';
   world.currentGrappler = amazon.id;
-  world.grappleSecondsLeft = 5;
+  world.grappleSecondsLeft = GRAPPLE_DURATION;
   world.escapeProgress = 0;
   world.heroAction = 'hurt';
   amazon.state = 'attack';
@@ -860,11 +876,13 @@ function updateEnemies(world: World, dt: number, now: number) {
 
     if (world.phase === 'grapple' || world.phase === 'special-defeat') {
       if (amazon.id !== world.currentGrappler) {
-        const orbit = Math.atan2(amazon.y - world.heroY, amazon.x - world.heroX);
-        amazon.x += Math.cos(orbit + 0.18) * 22 * dt;
-        amazon.y += Math.sin(orbit + 0.18) * 16 * dt;
-        amazon.y = clamp(amazon.y, FLOOR_MIN, FLOOR_MAX);
-        amazon.state = 'walk';
+        const bystanders = activeEnemies.filter((enemy) => enemy.id !== world.currentGrappler);
+        const index = bystanders.findIndex((enemy) => enemy.id === amazon.id);
+        const perimeterX = clamp(world.heroX + [-350, -235, 235, 350][index], 48, WIDTH - 48);
+        const perimeterY = clamp(world.heroY - 12 + (index % 2) * 24, FLOOR_MIN, FLOOR_MAX);
+        amazon.x += (perimeterX - amazon.x) * Math.min(1, dt * 4);
+        amazon.y += (perimeterY - amazon.y) * Math.min(1, dt * 4);
+        amazon.state = Math.abs(perimeterX - amazon.x) > 3 ? 'walk' : 'idle';
       }
       continue;
     }
@@ -893,9 +911,10 @@ function updateEnemies(world: World, dt: number, now: number) {
         if (world.heroHp <= 0) {
           world.phase = 'group-defeat';
           world.defeatKind = 'group';
-          world.defeatSecondsLeft = 20;
+          world.defeatSecondsLeft = GROUP_DEFEAT_DURATION;
           world.groupShake = 3;
           world.heroAction = 'hurt';
+          world.actionTimer = 0.9;
           continue;
         }
         if (world.heroHp <= 42 && random(world) < 0.1) {
@@ -949,14 +968,15 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
       world.heroHp = 0;
       world.phase = 'group-defeat';
       world.defeatKind = 'group';
-      world.defeatSecondsLeft = 20;
+      world.defeatSecondsLeft = GROUP_DEFEAT_DURATION;
+      world.actionTimer = 0.9;
     }
   } else if (world.phase === 'grapple') {
     world.grappleSecondsLeft = Math.max(0, world.grappleSecondsLeft - dt);
     if (world.grappleSecondsLeft <= 0) {
       world.phase = 'special-defeat';
       world.defeatKind = 'special';
-      world.defeatSecondsLeft = 10;
+      world.defeatSecondsLeft = SPECIAL_DEFEAT_DURATION;
       world.defeatStartHp = world.heroHp;
       world.particles = [];
       world.smokeTimer = 0;
@@ -965,7 +985,7 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
     }
   } else if (world.phase === 'special-defeat') {
     world.defeatSecondsLeft = Math.max(0, world.defeatSecondsLeft - dt);
-    world.heroHp = Math.max(0, (world.defeatSecondsLeft / 10) * world.defeatStartHp);
+    world.heroHp = Math.max(0, (world.defeatSecondsLeft / SPECIAL_DEFEAT_DURATION) * world.defeatStartHp);
     world.smokeTimer -= dt;
     world.heartTimer -= dt;
     if (world.smokeTimer <= 0) {
@@ -989,7 +1009,10 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
       enterGameOver(world);
     }
   } else if (world.phase === 'group-defeat') {
-    world.defeatSecondsLeft = Math.max(0, world.defeatSecondsLeft - dt);
+    // Complete the fall first, then keep the group pin for the full 20 seconds.
+    if (world.actionTimer <= 0) {
+      world.defeatSecondsLeft = Math.max(0, world.defeatSecondsLeft - dt);
+    }
     world.groupShake = 1.5 + Math.sin(now / 145) * 0.7;
     if (world.defeatSecondsLeft <= 0) enterGameOver(world);
   }
@@ -1067,6 +1090,35 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       pinExtended: null,
     };
 
+    // Development-only scene previews make timed animation states inspectable
+    // without changing normal gameplay or exposing shortcuts in production.
+    if (import.meta.env.DEV) {
+      const params = new URLSearchParams(window.location.search);
+      const scene = params.get('_scene');
+      if (scene === 'grapple' || scene === 'special-defeat' || scene === 'group-defeat') {
+        const world = worldRef.current;
+        const duration = scene === 'grapple' ? GRAPPLE_DURATION
+          : scene === 'special-defeat' ? SPECIAL_DEFEAT_DURATION : GROUP_DEFEAT_DURATION;
+        const requestedElapsed = Number(params.get('_elapsed') ?? 0);
+        const elapsed = Number.isFinite(requestedElapsed)
+          ? clamp(requestedElapsed, 0, duration - 0.1) : 0;
+        world.phase = scene;
+        world.heroX = WIDTH / 2;
+        world.heroY = 508;
+        world.heroHp = scene === 'group-defeat' ? 0 : 35;
+        world.defeatStartHp = 35;
+        world.currentGrappler = scene === 'group-defeat' ? null : world.enemies[0].id;
+        world.defeatKind = scene === 'group-defeat' ? 'group'
+          : scene === 'special-defeat' ? 'special' : null;
+        world.grappleSecondsLeft = scene === 'grapple' ? duration - elapsed : 0;
+        world.defeatSecondsLeft = scene === 'grapple' ? 0 : duration - elapsed;
+        world.actionTimer = scene === 'group-defeat' && elapsed < 0.9 ? 0.9 - elapsed : 0;
+        world.soundEnabled = false;
+        world.sound.enabled = false;
+        setSnapshot(publishSnapshot(world));
+      }
+    }
+
     const assetsReady = Promise.all([
       loadImage(backgroundUrl),
       loadImage(heroSheetUrl),
@@ -1079,8 +1131,8 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
         background,
         hero: removeCheckerboard(hero),
         amazon: removeCheckerboard(amazon),
-        pinAttack: removeCheckerboard(pinAttack),
-        pinExtended: removeCheckerboard(pinExtended),
+        pinAttack: removeCheckerboard(pinAttack, true),
+        pinExtended: removeCheckerboard(pinExtended, true),
       };
       if (atlas.hero) {
         const portrait = document.createElement('canvas');

@@ -1,1 +1,2 @@
 - [Uploaded game art](uploaded-game-art.md) — inspect real image dimensions and format before assigning sprite crop coordinates.
+- [Sequence visibility](sequence-visibility.md) — defeat and struggle animations must stay visible; countdowns should not cover the arena.

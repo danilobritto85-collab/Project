@@ -197,6 +197,21 @@ button:focus-visible { outline: 2px solid #f4cc63; outline-offset: 3px; }
   border: 1px solid rgba(222, 221, 176, .35); background: rgba(13, 28, 22, .73);
   font: 9px var(--app-font-mono); letter-spacing: .1em; text-transform: uppercase;
 }
+.sequence-hud {
+  position: absolute; z-index: 5; top: 14px; left: 50%; transform: translateX(-50%);
+  width: min(310px, calc(100% - 28px)); padding: 10px 13px 8px;
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px 14px;
+  color: #eee7d3; border: 1px solid rgba(229, 202, 112, .35);
+  background: rgba(12, 25, 20, .78); pointer-events: none;
+}
+.sequence-info { display: grid; gap: 5px; }
+.sequence-label { color: #f0d677; font: 10px var(--app-font-mono); text-transform: uppercase; letter-spacing: .08em; }
+.sequence-hint { color: #c6d0bd; font: 10px var(--app-font-mono); display: flex; align-items: center; gap: 6px; }
+.sequence-time { font: 600 22px var(--app-font-mono); font-variant-numeric: tabular-nums; }
+.sequence-time small { color: #a8b69d; font-size: 10px; margin-left: 3px; }
+.sequence-track { height: 3px; grid-column: 1 / -1; background: rgba(242, 229, 182, .13); }
+.sequence-fill { height: 100%; background: #e6c666; transition: width .1s linear; }
+.defeat-hud .sequence-fill { background: #d59b85; }
 .state-overlay {
   position: absolute; z-index: 5; inset: 0;
   display: flex; align-items: center; justify-content: center;
@@ -292,6 +307,7 @@ kbd {
   .sound-button { width: 39px; padding: 0; }
   .arena { aspect-ratio: 4 / 3; min-height: 410px; max-height: 65vh; background-position: 52% center; }
   .hud { inset: 10px 9px auto; }
+  .sequence-hud { top: 90px; width: min(280px, calc(100% - 28px)); padding: 8px 11px; }
   .hud-box { min-width: 0; width: min(48%, 190px); padding: 8px 9px; }
   .score-box { width: 92px; }
   .score-number { font-size: 18px; }
