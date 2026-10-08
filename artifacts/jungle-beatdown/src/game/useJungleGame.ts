@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { repairForegroundMask } from './spriteMask';
+import { getRedToenailFrame, withRedToenails } from './toenailPolish';
 
 import amazonSheetUrl from '@assets/amazon_1791470375689.png';
 import backgroundUrl from '@assets/background_1791470375690.png';
@@ -579,17 +580,26 @@ function drawAtlasSprite(
   const scaleY = drawH / rect.h;
   const visibleW = visible.w * scaleX;
   const visibleH = visible.h * scaleY;
+  const destinationX = x - drawW / 2 + visible.x * scaleX;
+  const destinationY = groundY - lift - visibleH + groundOffset;
   context.drawImage(
     isolated ?? image,
     (isolated ? 0 : rect.x) + visible.x,
     (isolated ? 0 : rect.y) + visible.y,
     visible.w,
     visible.h,
-    x - drawW / 2 + visible.x * scaleX,
-    groundY - lift - visibleH + groundOffset,
+    destinationX,
+    destinationY,
     visibleW,
     visibleH,
   );
+  const polish = getRedToenailFrame(image, rect, isolated);
+  if (polish) {
+    // Outfit palette variations must never shift the requested red polish.
+    context.filter = 'none';
+    context.drawImage(polish, visible.x, visible.y, visible.w, visible.h,
+      destinationX, destinationY, visibleW, visibleH);
+  }
   context.restore();
 }
 
@@ -1192,9 +1202,9 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       atlas = {
         background,
         hero: removeCheckerboard(hero),
-        amazon: removeCheckerboard(amazon),
-        pinAttack: removeCheckerboard(pinAttack, true),
-        pinExtended: removeCheckerboard(pinExtended, true),
+        amazon: withRedToenails(removeCheckerboard(amazon), 'amazon'),
+        pinAttack: withRedToenails(removeCheckerboard(pinAttack, true), 'pinAttack'),
+        pinExtended: withRedToenails(removeCheckerboard(pinExtended, true), 'pinExtended'),
       };
       if (atlas.hero) {
         const portrait = document.createElement('canvas');

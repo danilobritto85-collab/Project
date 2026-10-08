@@ -1,2 +1,3 @@
 - [Uploaded game art](uploaded-game-art.md) — inspect real image dimensions and format before assigning sprite crop coordinates.
 - [Sequence visibility](sequence-visibility.md) — countdowns never cover combat; no Game Over screen, and defeat animations keep moving.
+- [Amazon styling](amazon-styling.md) — Amazon toenails are red, including paired scenes and palette variants.
