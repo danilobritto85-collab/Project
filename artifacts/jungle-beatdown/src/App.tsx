@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import {
   AudioLines,
-  AudioOff,
+  VolumeX,
   Compass,
   Heart,
   Play,
@@ -9,10 +9,6 @@ import {
   Swords,
 } from 'lucide-react';
 import jungleBackground from '@assets/background_1791470375690.png';
-import heroSprites from '@assets/hero_1791470375690.png';
-import amazonSprites from '@assets/amazon_1791470375689.png';
-import pinAttackSprites from '@assets/pin_attack_1791470375691.png';
-import pinExtendedSprites from '@assets/pin_extended_1791470375691.png';
 import { useJungleGame } from './game/useJungleGame';
 
 function formatScore(score: number) {
@@ -21,9 +17,9 @@ function formatScore(score: number) {
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const { snapshot, startGame, restartGame, toggleSound } = useJungleGame(canvasRef);
+  const { snapshot, startGame, restartGame, toggleSound, heroPortrait } = useJungleGame(canvasRef);
   const hpPercent = Math.max(0, Math.min(100, (snapshot.heroHp / snapshot.maxHeroHp) * 100));
-  const escapePercent = Math.max(0, Math.min(100, snapshot.escapeProgress));
+  const escapePercent = Math.max(0, Math.min(100, snapshot.escapeProgress * 100));
   const isTitle = snapshot.phase === 'title';
   const isGrapple = snapshot.phase === 'grapple';
   const isSpecialDefeat = snapshot.phase === 'special-defeat';
@@ -56,7 +52,7 @@ function App() {
               aria-pressed={snapshot.soundEnabled}
               data-testid="button-sound"
             >
-              {snapshot.soundEnabled ? <AudioLines /> : <AudioOff />}
+               {snapshot.soundEnabled ? <AudioLines /> : <VolumeX />}
               <span className="sound-label">{snapshot.soundEnabled ? 'Som ligado' : 'Som desligado'}</span>
             </button>
           </div>
@@ -71,6 +67,9 @@ function App() {
           <div className="arena" style={{ backgroundImage: `url("${jungleBackground}")` }}>
             <canvas
               ref={canvasRef}
+              width={1024}
+              height={576}
+              style={{ width: '100%', height: '100%' }}
               className="game-canvas"
               aria-label="Arena de combate na floresta"
               data-testid="game-canvas"
@@ -101,14 +100,14 @@ function App() {
                     <div className="eyebrow">Briga de rua, trilha de selva</div>
                     <h1 className="game-title">Jungle <span>Beatdown</span></h1>
                     <p className="title-description">
-                      Um mapa perdido. Cinco guerreiras no caminho. Abra espaço na base do punho e encontre a saída.
+                       Cinco guerreiras. Uma arena na selva. Mova-se, lute e sobreviva ao cerco por quanto tempo conseguir.
                     </p>
                     <button className="start-button" type="button" onClick={startGame} data-testid="button-start">
                       <Play fill="currentColor" /> Iniciar partida
                     </button>
                   </div>
                   <div className="title-art" aria-hidden="true">
-                    <img className="hero-art" src={heroSprites} alt="" />
+                     {heroPortrait && <img className="hero-art" src={heroPortrait} alt="" />}
                     <div className="art-tag">Expedição em andamento · 01</div>
                   </div>
                 </div>
@@ -118,7 +117,7 @@ function App() {
             {isGrapple && (
               <div className="state-overlay">
                 <div className="grapple-card" role="status" data-testid="status-grapple">
-                  <img className="grapple-art" src={pinAttackSprites} alt="" />
+                   <kbd className="grapple-art">J</kbd>
                   <div>
                     <p className="card-kicker">Agarrão! · sequência de fuga</p>
                     <h2 className="overlay-title">Saia dessa!</h2>
@@ -192,8 +191,6 @@ function App() {
         </section>
         <div className="footer-note"><Swords size={12} /> <span>5 guerreiras</span> · arena de combate 2.5D · feita para jogar</div>
       </div>
-      <img src={amazonSprites} alt="" hidden />
-      <img src={pinExtendedSprites} alt="" hidden />
     </main>
   );
 }

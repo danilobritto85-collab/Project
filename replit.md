@@ -1,8 +1,10 @@
-# [Project name]
+# Jungle Beatdown
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A browser-based 2.5D jungle beat ’em up using the user-supplied pixel-art sprites and game specification.
 
 ## Run & Operate
+- `pnpm --filter @workspace/jungle-beatdown run dev` — run the playable game via its managed workflow
+- `pnpm --filter @workspace/jungle-beatdown run typecheck` — check the game frontend
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
 - `pnpm run typecheck` — full typecheck across all packages
@@ -30,7 +32,7 @@ _Populate as you build — non-obvious choices a reader couldn't infer from the 
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+The game is frontend-only and uses Canvas 2D and synthesized Web Audio. It supports keyboard movement, running, punches, kicks, jumps, five respawning opponents, grapple escape challenges, and timed defeat sequences. Interface copy is in Brazilian Portuguese.
 
 ## User preferences
 

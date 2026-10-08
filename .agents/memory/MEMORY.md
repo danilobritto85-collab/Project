@@ -1,0 +1,1 @@
+- [Uploaded game art](uploaded-game-art.md) — inspect real image dimensions and format before assigning sprite crop coordinates.

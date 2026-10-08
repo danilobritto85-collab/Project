@@ -78,6 +78,7 @@ interface Particle {
 
 interface World {
   phase: GamePhase;
+  defeatKind: 'special' | 'group' | null;
   heroX: number;
   heroY: number;
   heroHp: number;
@@ -94,6 +95,8 @@ interface World {
   grappleSecondsLeft: number;
   escapeProgress: number;
   defeatSecondsLeft: number;
+  defeatStartHp: number;
+  footstepTimer: number;
   groupShake: number;
   soundEnabled: boolean;
   sound: SoundEngine;
@@ -113,8 +116,8 @@ const HERO_FRAMES = {
   walk: { x: 348, y: 83, w: 110, h: 178 },
   run: { x: 710, y: 84, w: 145, h: 177 },
   punch: { x: 113, y: 337, w: 142, h: 181 },
-  kick: { x: 347, y: 337, w: 153, h: 182 },
-  jump: { x: 739, y: 337, w: 147, h: 182 },
+  kick: { x: 430, y: 337, w: 153, h: 182 },
+  jump: { x: 820, y: 317, w: 108, h: 179 },
   hurt: { x: 25, y: 575, w: 159, h: 180 },
   down: { x: 318, y: 575, w: 172, h: 179 },
   defeated: { x: 814, y: 648, w: 191, h: 106 },
@@ -127,6 +130,7 @@ const AMAZON_FRAMES = {
   kick: { x: 124, y: 333, w: 136, h: 186 },
   spin: { x: 343, y: 333, w: 153, h: 186 },
   highKick: { x: 562, y: 331, w: 153, h: 189 },
+  pinPose: { x: 691, y: 337, w: 111, h: 182 },
   hurt: { x: 24, y: 571, w: 164, h: 186 },
   down: { x: 385, y: 571, w: 172, h: 181 },
   defeated: { x: 817, y: 650, w: 191, h: 106 },
@@ -172,6 +176,7 @@ function createEnemy(id: number, index: number): Amazon {
 function createWorld(): World {
   return {
     phase: 'title',
+    defeatKind: null,
     heroX: 175,
     heroY: 479,
     heroHp: 100,
@@ -190,6 +195,8 @@ function createWorld(): World {
     grappleSecondsLeft: 0,
     escapeProgress: 0,
     defeatSecondsLeft: 0,
+    defeatStartHp: 100,
+    footstepTimer: 0,
     groupShake: 0,
     soundEnabled: true,
     sound: { context: null, enabled: true },
@@ -236,19 +243,23 @@ function loadImage(src: string) {
 
 function removeCheckerboard(image: HTMLImageElement) {
   const canvas = document.createElement('canvas');
-  canvas.width = image.naturalWidth;
-  canvas.height = image.naturalHeight;
+  // Frame coordinates use the reference sheet's 1024×768 logical grid.
+  // Uploaded originals are higher-resolution JPEGs despite their .png names.
+  canvas.width = 1024;
+  canvas.height = 768;
   const context = canvas.getContext('2d', { willReadFrequently: true });
   if (!context) return null;
 
-  context.drawImage(image, 0, 0);
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
   const frame = context.getImageData(0, 0, canvas.width, canvas.height);
   const pixels = frame.data;
   for (let i = 0; i < pixels.length; i += 4) {
     const r = pixels[i];
     const g = pixels[i + 1];
     const b = pixels[i + 2];
-    if (Math.abs(r - g) < 15 && Math.abs(g - b) < 15 && r > 70) {
+    // These supplied sheets also contain dark gray checker tiles.
+    // Keep near-black outlines, while keying both checkerboard shades.
+    if (Math.abs(r - g) < 15 && Math.abs(g - b) < 15 && r > 20) {
       pixels[i + 3] = 0;
     }
   }
@@ -313,7 +324,7 @@ function playHit(world: World) {
   const buffer = context.createBuffer(1, length, context.sampleRate);
   const samples = buffer.getChannelData(0);
   for (let i = 0; i < samples.length; i += 1) {
-    samples[i] = (Math.random() * 2 - 1) * (1 - i / samples.length);
+    samples[i] = (random(world) * 2 - 1) * (1 - i / samples.length);
   }
   const noise = context.createBufferSource();
   const filter = context.createBiquadFilter();
@@ -430,10 +441,10 @@ function drawParticle(context: CanvasRenderingContext2D, particle: Particle) {
 }
 
 function heroRect(world: World) {
-  if (world.phase === 'group-defeat' || world.phase === 'game-over') {
+  if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
     return HERO_FRAMES.defeated;
   }
-  if (world.phase === 'special-defeat') return HERO_FRAMES.down;
+  if (world.phase === 'special-defeat' || (world.phase === 'game-over' && world.defeatKind === 'special')) return HERO_FRAMES.down;
   if (world.phase === 'grapple') return HERO_FRAMES.hurt;
   if (world.heroAction === 'hurt') return HERO_FRAMES.hurt;
   if (world.heroAction === 'punch') return HERO_FRAMES.punch;
@@ -450,6 +461,7 @@ function drawWorld(
   atlas: SpriteAtlas,
   now: number,
 ) {
+  context.setTransform(context.canvas.width / WIDTH, 0, 0, context.canvas.height / HEIGHT, 0, 0);
   context.clearRect(0, 0, WIDTH, HEIGHT);
   context.imageSmoothingEnabled = false;
   if (atlas.background) {
@@ -465,7 +477,7 @@ function drawWorld(
   context.fillStyle = floorTint;
   context.fillRect(0, 408, WIDTH, HEIGHT - 408);
 
-  if (world.phase === 'group-defeat' || world.phase === 'game-over') {
+  if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
     const tremor =
       world.phase === 'group-defeat' && world.groupShake > 0
         ? Math.sin(now / 34) * world.groupShake
@@ -482,11 +494,13 @@ function drawWorld(
       132,
       world.facing < 0,
     );
-    GROUP_OFFSETS.forEach((offset, index) => {
+    GROUP_OFFSETS.map((offset, index) => ({ offset, index }))
+      .sort((a, b) => a.offset.dy - b.offset.dy)
+      .forEach(({ offset, index }) => {
       drawAtlasSprite(
         context,
         atlas.amazon,
-        AMAZON_FRAMES.kick,
+        AMAZON_FRAMES.pinPose,
         centerX + offset.dx,
         clamp(centerY + offset.dy, FLOOR_MIN, FLOOR_MAX),
         160,
@@ -537,7 +551,7 @@ function drawWorld(
           world.heroAction === 'jump' ? 171 : 164,
           world.facing < 0,
           0,
-          world.jumpOffset,
+          Math.min(world.jumpOffset, world.heroY - FLOOR_MIN),
         ),
     });
     actors.sort((a, b) => a.y - b.y);
@@ -558,7 +572,7 @@ function drawWorld(
       );
     }
 
-    if (world.phase === 'special-defeat') {
+    if (world.phase === 'special-defeat' || (world.phase === 'game-over' && world.defeatKind === 'special')) {
       drawAtlasSprite(
         context,
         atlas.pinExtended,
@@ -572,7 +586,7 @@ function drawWorld(
     }
   }
 
-  if (world.phase === 'special-defeat') {
+  if (world.phase === 'special-defeat' || (world.phase === 'game-over' && world.defeatKind === 'special')) {
     world.particles.forEach((particle) => drawParticle(context, particle));
   }
 
@@ -615,6 +629,7 @@ function escapeGrapple(world: World) {
 
 function doHeroAttack(world: World, action: 'punch' | 'kick') {
   if (world.phase !== 'playing') return;
+  if (world.actionTimer > 0) return;
   world.heroAction = action;
   world.actionTimer = action === 'punch' ? 0.25 : 0.38;
   const range = action === 'punch' ? 112 : 148;
@@ -667,6 +682,11 @@ function handleMovement(world: World, pressed: Set<string>, dt: number) {
 
   if (moving && world.jumpOffset <= 0 && world.actionTimer <= 0) {
     world.heroAction = running ? 'run' : 'walk';
+    world.footstepTimer -= dt;
+    if (world.footstepTimer <= 0) {
+      playSweep(world, 100, 25, 0.13, 0.025);
+      world.footstepTimer = running ? 0.22 : 0.38;
+    }
   } else if (!moving && world.actionTimer <= 0 && world.jumpOffset <= 0) {
     world.heroAction = 'idle';
   }
@@ -737,6 +757,7 @@ function updateEnemies(world: World, dt: number, now: number) {
         playStomp(world);
         if (world.heroHp <= 0) {
           world.phase = 'group-defeat';
+          world.defeatKind = 'group';
           world.defeatSecondsLeft = 20;
           world.groupShake = 3;
           world.heroAction = 'hurt';
@@ -776,8 +797,8 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
 
   if (world.phase === 'playing') {
     handleMovement(world, pressed, dt);
-    if (world.jumpOffset < 0 || world.jumpVelocity > 0) {
-      world.jumpOffset -= world.jumpVelocity * dt;
+    if (world.jumpOffset > 0 || world.jumpVelocity > 0) {
+      world.jumpOffset += world.jumpVelocity * dt;
       world.jumpVelocity -= 490 * dt;
       if (world.jumpOffset <= 0) {
         world.jumpOffset = 0;
@@ -792,14 +813,16 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
     if (world.heroHp <= 0) {
       world.heroHp = 0;
       world.phase = 'group-defeat';
+      world.defeatKind = 'group';
       world.defeatSecondsLeft = 20;
     }
   } else if (world.phase === 'grapple') {
     world.grappleSecondsLeft = Math.max(0, world.grappleSecondsLeft - dt);
     if (world.grappleSecondsLeft <= 0) {
       world.phase = 'special-defeat';
+      world.defeatKind = 'special';
       world.defeatSecondsLeft = 10;
-      world.heroHp = 100;
+      world.defeatStartHp = world.heroHp;
       world.particles = [];
       world.smokeTimer = 0;
       world.heartTimer = 0.12;
@@ -807,7 +830,7 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
     }
   } else if (world.phase === 'special-defeat') {
     world.defeatSecondsLeft = Math.max(0, world.defeatSecondsLeft - dt);
-    world.heroHp = Math.max(0, (world.defeatSecondsLeft / 10) * 100);
+    world.heroHp = Math.max(0, (world.defeatSecondsLeft / 10) * world.defeatStartHp);
     world.smokeTimer -= dt;
     world.heartTimer -= dt;
     if (world.smokeTimer <= 0) {
@@ -848,6 +871,7 @@ function canvasContext(canvas: HTMLCanvasElement) {
 export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
   const worldRef = useRef<World>(createWorld());
   const [snapshot, setSnapshot] = useState<GameSnapshot>(initialSnapshot);
+  const [heroPortrait, setHeroPortrait] = useState<string | null>(null);
   const pressedRef = useRef<Set<string>>(new Set());
 
   const startGame = useCallback(() => {
@@ -923,10 +947,22 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
         pinAttack: removeCheckerboard(pinAttack),
         pinExtended: removeCheckerboard(pinExtended),
       };
+      if (atlas.hero) {
+        const portrait = document.createElement('canvas');
+        portrait.width = 105;
+        portrait.height = 178;
+        const portraitContext = portrait.getContext('2d');
+        portraitContext?.drawImage(atlas.hero, 28, 83, 105, 178, 0, 0, 105, 178);
+        setHeroPortrait(portrait.toDataURL());
+      }
     });
 
     const loop = (time: number) => {
       if (disposed) return;
+      if (canvas.width !== WIDTH || canvas.height !== HEIGHT) {
+        canvas.width = WIDTH;
+        canvas.height = HEIGHT;
+      }
       const world = worldRef.current;
       const dt = lastTime === 0 ? 0 : Math.min(0.045, (time - lastTime) / 1000);
       lastTime = time;
@@ -942,7 +978,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
     const onKeyDown = (event: KeyboardEvent) => {
       if (
         event.target instanceof HTMLElement &&
-        ['INPUT', 'TEXTAREA', 'BUTTON'].includes(event.target.tagName)
+        ['INPUT', 'TEXTAREA'].includes(event.target.tagName)
       ) {
         return;
       }
@@ -1010,5 +1046,5 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
     };
   }, [canvasRef, restartGame, startGame]);
 
-  return { snapshot, startGame, restartGame, toggleSound };
+  return { snapshot, startGame, restartGame, toggleSound, heroPortrait };
 }
