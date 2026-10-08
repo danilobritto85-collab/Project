@@ -146,6 +146,33 @@ const GROUP_OFFSETS = [
   { dx: 30, dy: -10, flipped: true },
 ] as const;
 
+const GRAPPLE_FRAMES: SpriteRect[] = [
+  { x: 8, y: 58, w: 322, h: 318 },
+  { x: 351, y: 58, w: 322, h: 318 },
+  { x: 692, y: 58, w: 324, h: 318 },
+  { x: 8, y: 444, w: 322, h: 322 },
+  { x: 351, y: 444, w: 322, h: 322 },
+  { x: 692, y: 444, w: 324, h: 322 },
+];
+
+const STRUGGLE_FRAMES: SpriteRect[] = [
+  { x: 8, y: 58, w: 322, h: 318 },
+  { x: 351, y: 58, w: 322, h: 318 },
+  { x: 692, y: 58, w: 324, h: 318 },
+  { x: 8, y: 444, w: 322, h: 322 },
+  { x: 351, y: 444, w: 322, h: 322 },
+  { x: 692, y: 444, w: 324, h: 322 },
+];
+
+const GRAPPLE_DURATION = 5;
+const SPECIAL_DEFEAT_DURATION = 10;
+const GROUP_DEFEAT_DURATION = 20;
+
+function sequenceFrame(frames: SpriteRect[], elapsed: number, duration: number) {
+  const index = Math.min(frames.length - 1, Math.floor((elapsed / duration) * frames.length));
+  return frames[Math.max(0, index)];
+}
+
 const initialSnapshot: GameSnapshot = {
   phase: 'title',
   heroHp: 100,
