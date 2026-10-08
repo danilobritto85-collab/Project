@@ -20,3 +20,9 @@ Individual poses from irregular sheets need a silhouette mask, not just a tighte
 **Why:** Neighboring kick frames extended detached feet into the standing pose's rectangular crop. Repeating that pose for five Amazonas repeated the stray limbs too, even when bounds were computed from the largest character.
 
 **How to apply:** Isolate the connected artwork for single-character frames while retaining both participants in paired scenes. Inspect crowded scenes for artifacts repeated from a shared crop.
+
+For warm-tinted checkerboards behind dark costumes, calibrate the two background tones from a clean margin and protect nearby cool/dark foreground pixels before clearing matches.
+
+**Why:** A warm brown checkerboard is not removed by neutral-gray keys, while a broad color key breaks black clothing and hair.
+
+**How to apply:** Compare against the sampled palette across RGB channels, preserve silhouette-color seeds, and inspect both idle and combat poses after removal.

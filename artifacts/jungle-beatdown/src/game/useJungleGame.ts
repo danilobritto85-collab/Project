@@ -13,7 +13,9 @@ import pinExtendedUrl from '@assets/pin_extended_1791470375691.png';
 const WIDTH = 1024;
 const HEIGHT = 576;
 const TARGET_ENEMIES = 5;
-const STARTING_ENEMY_KINDS: readonly EnemyKind[] = ['amazon', 'amazon', 'ninja', 'ninja', 'ninja'];
+const STARTING_ENEMY_KINDS: readonly EnemyKind[] = [
+  'amazon', 'ninja', 'amazon', 'ninja', 'amazon', 'ninja', 'amazon', 'amazon',
+];
 const FLOOR_MIN = HEIGHT * 0.75;
 const FLOOR_MAX = HEIGHT * 0.95;
 
@@ -130,8 +132,8 @@ const HERO_FRAMES = {
   idle: { x: 28, y: 83, w: 105, h: 178 },
   walk: { x: 348, y: 83, w: 110, h: 178 },
   run: { x: 710, y: 84, w: 145, h: 177 },
-  punch: { x: 113, y: 337, w: 142, h: 181 },
-  kick: { x: 430, y: 337, w: 153, h: 182 },
+  punch: { x: 113, y: 340, w: 142, h: 178 },
+  kick: { x: 430, y: 340, w: 153, h: 179 },
   jump: { x: 820, y: 340, w: 108, h: 176 },
   hurt: { x: 25, y: 575, w: 159, h: 180 },
   down: { x: 318, y: 575, w: 172, h: 179 },
@@ -142,11 +144,11 @@ const AMAZON_FRAMES = {
   idle: { x: 27, y: 82, w: 110, h: 179 },
   walk: { x: 367, y: 83, w: 112, h: 178 },
   run: { x: 704, y: 83, w: 150, h: 178 },
-  kick: { x: 124, y: 333, w: 136, h: 186 },
-  spin: { x: 343, y: 333, w: 153, h: 186 },
-  highKick: { x: 562, y: 331, w: 153, h: 189 },
-  pinPose: { x: 691, y: 337, w: 111, h: 182 },
-  pinLift: { x: 800, y: 337, w: 111, h: 182 },
+  kick: { x: 124, y: 340, w: 136, h: 179 },
+  spin: { x: 343, y: 340, w: 153, h: 179 },
+  highKick: { x: 562, y: 340, w: 153, h: 180 },
+  pinPose: { x: 691, y: 340, w: 111, h: 179 },
+  pinLift: { x: 800, y: 340, w: 111, h: 179 },
   hurt: { x: 24, y: 571, w: 164, h: 186 },
   down: { x: 385, y: 571, w: 172, h: 181 },
   defeated: { x: 817, y: 650, w: 191, h: 106 },
@@ -158,17 +160,18 @@ const AMAZON_WALK_FRAMES: SpriteRect[] = [
   { x: 560, y: 82, w: 112, h: 179 },
 ];
 
-const NINJA_SPECIAL_POSE: SpriteRect = { x: 902, y: 385, w: 120, h: 133 };
+const NINJA_KICK_FRAME: SpriteRect = { x: 136, y: 340, w: 132, h: 179 };
+const NINJA_HIGH_KICK_FRAME: SpriteRect = { x: 548, y: 340, w: 151, h: 180 };
 const NINJA_FRAMES = {
   idle: { x: 20, y: 82, w: 112, h: 179 },
   walk: { x: 363, y: 82, w: 111, h: 179 },
   run: { x: 704, y: 82, w: 120, h: 179 },
-  kick: { x: 136, y: 333, w: 132, h: 186 },
-  spin: { x: 347, y: 333, w: 155, h: 186 },
-  highKick: { x: 548, y: 331, w: 151, h: 189 },
-  special: NINJA_SPECIAL_POSE,
-  pinPose: NINJA_SPECIAL_POSE,
-  pinLift: NINJA_SPECIAL_POSE,
+  kick: NINJA_KICK_FRAME,
+  spin: { x: 347, y: 340, w: 155, h: 179 },
+  highKick: NINJA_HIGH_KICK_FRAME,
+  special: NINJA_KICK_FRAME,
+  pinPose: NINJA_KICK_FRAME,
+  pinLift: NINJA_HIGH_KICK_FRAME,
   hurt: { x: 24, y: 571, w: 150, h: 186 },
   down: { x: 550, y: 571, w: 174, h: 185 },
   defeated: { x: 762, y: 636, w: 254, h: 121 },
@@ -192,11 +195,14 @@ const ATTACK_FRAMES: Record<EnemyKind, SpriteRect[]> = {
 const ENEMY_FRAMES = { amazon: AMAZON_FRAMES, ninja: NINJA_FRAMES };
 
 const GROUP_OFFSETS = [
-  { dx: -260, dy: -8, flipped: false },
-  { dx: -130, dy: 4, flipped: false },
-  { dx: 0, dy: -20, flipped: true },
-  { dx: 130, dy: 4, flipped: true },
-  { dx: 260, dy: -8, flipped: true },
+  { dx: -300, dy: -12, flipped: false },
+  { dx: -215, dy: 6, flipped: false },
+  { dx: -130, dy: -20, flipped: false },
+  { dx: -45, dy: 8, flipped: false },
+  { dx: 45, dy: -12, flipped: true },
+  { dx: 130, dy: 6, flipped: true },
+  { dx: 215, dy: -20, flipped: true },
+  { dx: 300, dy: -8, flipped: true },
 ] as const;
 
 const GRAPPLE_FRAMES: SpriteRect[] = [
@@ -243,7 +249,7 @@ function createEnemy(id: number, index: number, kind: EnemyKind): Enemy {
   return {
     id,
     kind,
-    x: 460 + index * 112,
+    x: 92 + index * ((WIDTH - 184) / Math.max(1, STARTING_ENEMY_KINDS.length - 1)),
     y: 475 + ((index * 29) % 55),
     vx: 0,
     vy: 0,
@@ -916,9 +922,7 @@ function drawWorld(
         80,
         world.facing < 0,
       );
-      const ninjaLift = isStruggle ? Math.abs(Math.sin(now / 88)) * 2.6 : 0;
-      drawEnemySprite(context, atlas, grappler, NINJA_FRAMES.special,
-        180 + ninjaLift, 0, 7);
+      drawEnemySprite(context, atlas, grappler, NINJA_FRAMES.special, 180, 0, 7);
     } else {
       // Amazon grapples use the paired pose sheets; they already contain both fighters.
       drawAtlasSprite(
@@ -934,7 +938,7 @@ function drawWorld(
     }
     if (isStruggle) world.particles.forEach((particle) => drawParticle(context, particle));
   } else if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
-    const centerX = clamp(world.heroX, 260, WIDTH - 260);
+    const centerX = clamp(world.heroX, 80, WIDTH - 80);
     const centerY = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
     const elapsed = world.actionTimer > 0
       ? 0.9 - world.actionTimer
@@ -1284,10 +1288,10 @@ function updateEnemies(world: World, dt: number, now: number) {
   }
 
   if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
-    const centerX = clamp(world.heroX, 260, WIDTH - 260);
+    const centerX = clamp(world.heroX, 80, WIDTH - 80);
     world.enemies.forEach((enemy, index) => {
       const offset = GROUP_OFFSETS[index % GROUP_OFFSETS.length];
-      const targetX = centerX + offset.dx;
+      const targetX = clamp(centerX + offset.dx, 64, WIDTH - 64);
       const targetY = clamp(world.heroY + offset.dy, FLOOR_MIN, FLOOR_MAX);
       const dx = targetX - enemy.x;
       const dy = targetY - enemy.y;
@@ -1356,17 +1360,15 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
     world.smokeTimer -= dt;
     world.heartTimer -= dt;
     if (world.smokeTimer <= 0) {
-      const grappler = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
-      const effectX = world.facing * (grappler?.kind === 'ninja' ? 50 : 65);
-      const effectY = grappler?.kind === 'ninja' ? -58 : -39;
+      const effectX = world.facing * 65;
+      const effectY = -39;
       spawnParticle(world, 'smoke', effectX, effectY);
       world.smokeTimer = 0.12;
       if (world.phase === 'special-defeat') playSweep(world, 350, 245, 0.3, 0.014, 'sine');
     }
     if (world.heartTimer <= 0) {
-      const grappler = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
-      const effectX = world.facing * (grappler?.kind === 'ninja' ? 50 : 65);
-      const effectY = grappler?.kind === 'ninja' ? -58 : -39;
+      const effectX = world.facing * 65;
+      const effectY = -39;
       spawnParticle(world, 'heart', effectX, effectY);
       world.heartTimer = 0.28;
     }
@@ -1553,7 +1555,8 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
         if (scene === 'group-defeat' && elapsed > 4) {
           world.enemies.forEach((enemy, index) => {
             const offset = GROUP_OFFSETS[index];
-            enemy.x = clamp(world.heroX, 260, WIDTH - 260) + offset.dx;
+            const groupCenterX = clamp(world.heroX, 80, WIDTH - 80);
+            enemy.x = clamp(groupCenterX + offset.dx, 64, WIDTH - 64);
             enemy.y = clamp(world.heroY + offset.dy, FLOOR_MIN, FLOOR_MAX);
             enemy.pinElapsed = elapsed - 3;
             enemy.state = 'idle';

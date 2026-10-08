@@ -157,7 +157,7 @@ function App() {
                     <div className="eyebrow">Briga de rua, trilha de selva</div>
                     <h1 className="game-title">Jungle <span>Beatdown</span></h1>
                     <p className="title-description">
-                       Duas amazonas e três kunoichis. Mova-se, lute e sobreviva ao cerco na selva.
+                       Cinco amazonas e três kunoichis. Mova-se, lute e sobreviva ao cerco na selva.
                     </p>
                     <button className="start-button" type="button" onClick={startGame} data-testid="button-start">
                       <Play fill="currentColor" /> Iniciar partida
@@ -246,7 +246,7 @@ function App() {
             <div className="touch-control-note">No celular, use os botões sobre a arena.</div>
           </div>
         </section>
-        <div className="footer-note"><Swords size={12} /> <span>2 Amazonas · 3 Kunoichis</span> · arena de combate 2.5D · feita para jogar</div>
+        <div className="footer-note"><Swords size={12} /> <span>5 Amazonas · 3 Kunoichis</span> · arena de combate 2.5D · feita para jogar</div>
       </div>
     </main>
   );
