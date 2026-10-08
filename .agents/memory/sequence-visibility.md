@@ -11,8 +11,8 @@ Do not show a Game Over screen at the end; keep the characters moving.
 
 **How to apply:** Put countdown and escape instructions outside the main fight area. Ending the timed combat outcome must not freeze the visual simulation or replace it with an end-screen modal.
 
-For the five-Amazon defeat, prioritize a readable staggered formation over the original specification's tightly packed offsets. Use normal character scale, separate approach and foot-planting motions, and keep planted feet stationary.
+For the five-Amazon defeat, use a close cluster around the fallen heroine, with the Amazons' feet planted on her in a held victory pose. This formation is specific to the group-defeat sequence; normal combat keeps the Amazons spread out.
 
-**Why:** The original dense positions merged the five full-size sprites into a pile, and the user reported that the five-Amazon defeat animation looked strange. Shared continuous trembling made the scene harder to read.
+**Why:** The user clarified that the group defeat should show all five Amazons together, standing over the heroine in victory.
 
-**How to apply:** Keep five distinct silhouettes and the fallen heroine visible. Do not restore the original narrow formation or use a synchronized whole-group shake as the ongoing animation.
+**How to apply:** Bring all five full-size sprites in close, orient the outer Amazons toward the heroine, and keep their feet planted while allowing subtle body movement. Do not apply normal-combat spacing during this sequence.

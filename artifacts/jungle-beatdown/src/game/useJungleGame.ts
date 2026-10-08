@@ -150,11 +150,11 @@ const AMAZON_WALK_FRAMES: SpriteRect[] = [
 const AMAZON_WALK_CYCLE = [0, 1, 2, 1] as const;
 
 const GROUP_OFFSETS = [
-  { dx: -240, dy: -12, flipped: false },
-  { dx: -120, dy: 18, flipped: false },
-  { dx: 120, dy: 18, flipped: true },
-  { dx: 0, dy: -44, flipped: false },
-  { dx: 240, dy: -12, flipped: true },
+  { dx: -82, dy: -8, flipped: false },
+  { dx: -41, dy: 4, flipped: false },
+  { dx: 41, dy: 4, flipped: true },
+  { dx: 0, dy: -20, flipped: true },
+  { dx: 82, dy: -8, flipped: true },
 ] as const;
 
 const GRAPPLE_FRAMES: SpriteRect[] = [
@@ -700,7 +700,7 @@ function drawWorld(
     );
     if (isStruggle) world.particles.forEach((particle) => drawParticle(context, particle));
   } else if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
-    const centerX = clamp(world.heroX, 300, WIDTH - 300);
+    const centerX = clamp(world.heroX, 160, WIDTH - 160);
     const centerY = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
     const elapsed = world.actionTimer > 0
       ? 0.9 - world.actionTimer
@@ -1016,7 +1016,7 @@ function updateEnemies(world: World, dt: number, now: number) {
   }
 
   if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
-    const centerX = clamp(world.heroX, 300, WIDTH - 300);
+    const centerX = clamp(world.heroX, 160, WIDTH - 160);
     world.enemies.forEach((amazon, index) => {
       const offset = GROUP_OFFSETS[index % GROUP_OFFSETS.length];
       const targetX = centerX + offset.dx;
@@ -1219,7 +1219,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
         if (scene === 'group-defeat' && elapsed > 4) {
           world.enemies.forEach((amazon, index) => {
             const offset = GROUP_OFFSETS[index];
-            amazon.x = clamp(world.heroX, 180, WIDTH - 180) + offset.dx;
+            amazon.x = clamp(world.heroX, 160, WIDTH - 160) + offset.dx;
             amazon.y = clamp(world.heroY + offset.dy, FLOOR_MIN, FLOOR_MAX);
             amazon.pinElapsed = elapsed - 3;
             amazon.state = 'idle';
