@@ -1115,9 +1115,7 @@ function drawWorld(
       );
     } else {
       const endingFrameIndex = elapsed >= NINJA_FOOTSMOTHER_DURATION
-        ? 1 + (Math.floor(
-          (elapsed - NINJA_FOOTSMOTHER_DURATION) * NINJA_FOOTSMOTHER_FRAME_RATE,
-        ) % (NINJA_FOOTSMOTHER_ENDING_FRAMES.length - 1))
+        ? NINJA_FOOTSMOTHER_ENDING_FRAMES.length - 1
         : Math.min(
           NINJA_FOOTSMOTHER_ENDING_FRAMES.length - 1,
           Math.floor(
