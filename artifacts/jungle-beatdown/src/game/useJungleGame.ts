@@ -210,15 +210,17 @@ const ATTACK_FRAMES: Record<EnemyKind, SpriteRect[]> = {
 };
 const ENEMY_FRAMES = { amazon: AMAZON_FRAMES, ninja: NINJA_FRAMES };
 
-const GROUP_OFFSETS = [
-  { dx: -300, dy: -12, flipped: false },
-  { dx: -215, dy: 6, flipped: false },
-  { dx: -130, dy: -20, flipped: false },
-  { dx: -45, dy: 8, flipped: false },
-  { dx: 45, dy: -12, flipped: true },
-  { dx: 130, dy: 6, flipped: true },
-  { dx: 215, dy: -20, flipped: true },
-  { dx: 300, dy: -8, flipped: true },
+const GROUP_AMAZON_OFFSETS = [
+  { dx: -180, dy: -4, flipped: false },
+  { dx: -90, dy: 4, flipped: false },
+  { dx: 0, dy: -12, flipped: false },
+  { dx: 90, dy: 4, flipped: true },
+  { dx: 180, dy: -4, flipped: true },
+] as const;
+const GROUP_NINJA_OFFSETS = [
+  { dx: -320, dy: -78 },
+  { dx: 0, dy: -84 },
+  { dx: 320, dy: -78 },
 ] as const;
 
 const GRAPPLE_FRAMES: SpriteRect[] = [
@@ -1158,24 +1160,34 @@ function drawWorld(
       elapsed < 0.9 ? 164 : 80,
       world.facing < 0,
     );
-    GROUP_OFFSETS.map((offset, index) => ({ offset, index }))
-      .sort((a, b) => world.enemies[a.index].y - world.enemies[b.index].y)
-      .forEach(({ offset, index }) => {
-      const enemy = world.enemies[index];
-      if (!enemy) return;
+
+    const groupActors: Array<{ y: number; draw: () => void }> = [];
+    world.enemies.filter((enemy) => enemy.kind === 'ninja').forEach((enemy) => {
+      groupActors.push({
+        y: enemy.y,
+        draw: () => drawEnemySprite(context, atlas, enemy, NINJA_FRAMES.idle),
+      });
+    });
+    world.enemies.filter((enemy) => enemy.kind === 'amazon').forEach((enemy, index) => {
+      const offset = GROUP_AMAZON_OFFSETS[index];
+      if (!offset) return;
       const pinElapsed = enemy.pinElapsed ?? 0;
       const approaching = pinElapsed === 0;
-      const frames = ENEMY_FRAMES[enemy.kind];
+      const frames = AMAZON_FRAMES;
       const pose = approaching ? enemyAnimationFrame(enemy, now)
         : pinElapsed < 0.12 ? frames.idle
         : pinElapsed < 0.32 ? frames.pinLift : frames.pinPose;
       // Gentle breathing changes the upper silhouette, never the planted feet.
       const breathing = pinElapsed > 0.32 ? Math.sin(pinElapsed * 2.5 + index) * 0.7 : 0;
       const width = Math.max(126, ((180 + breathing) * pose.w) / pose.h);
-      drawAtlasSprite(context, atlas[enemy.kind], pose, enemy.x, enemy.y,
-        width, 180 + breathing, approaching ? enemy.direction < 0 : offset.flipped,
-        enemy.kind === 'amazon' ? enemy.hue : 0, 0, 7);
+      groupActors.push({
+        y: enemy.y,
+        draw: () => drawAtlasSprite(context, atlas.amazon, pose, enemy.x, enemy.y,
+          width, 180 + breathing, approaching ? enemy.direction < 0 : offset.flipped,
+          enemy.hue, 0, 7),
+      });
     });
+    groupActors.sort((a, b) => a.y - b.y).forEach((actor) => actor.draw());
   } else {
     const actors: Array<{ y: number; draw: () => void }> = [];
     const visibleEnemies = world.enemies.filter(
@@ -1498,8 +1510,16 @@ function updateEnemies(world: World, dt: number, now: number) {
 
   if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
     const centerX = clamp(world.heroX, 80, WIDTH - 80);
+    const amazons = world.enemies.filter((enemy) => enemy.kind === 'amazon');
+    const ninjas = world.enemies.filter((enemy) => enemy.kind === 'ninja');
     world.enemies.forEach((enemy, index) => {
-      const offset = GROUP_OFFSETS[index % GROUP_OFFSETS.length];
+      const groupIndex = enemy.kind === 'amazon'
+        ? amazons.indexOf(enemy)
+        : ninjas.indexOf(enemy);
+      const offset = enemy.kind === 'amazon'
+        ? GROUP_AMAZON_OFFSETS[groupIndex]
+        : GROUP_NINJA_OFFSETS[groupIndex];
+      if (!offset) return;
       const targetX = clamp(centerX + offset.dx, 64, WIDTH - 64);
       const targetY = clamp(world.heroY + offset.dy, FLOOR_MIN, FLOOR_MAX);
       const dx = targetX - enemy.x;
@@ -1515,8 +1535,11 @@ function updateEnemies(world: World, dt: number, now: number) {
       } else {
         enemy.x = targetX;
         enemy.y = targetY;
+        enemy.direction = offset.dx < 0 ? 1 : offset.dx > 0 ? -1 : 1;
         enemy.state = 'idle';
-        enemy.pinElapsed = (enemy.pinElapsed ?? 0) + dt;
+        enemy.pinElapsed = enemy.kind === 'amazon'
+          ? (enemy.pinElapsed ?? 0) + dt
+          : 0;
       }
     });
   }
@@ -1820,13 +1843,22 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
         world.actionTimer = activePhase === 'group-defeat' && elapsed < 0.9 ? 0.9 - elapsed : 0;
         world.particles = [];
         if (activePhase === 'group-defeat' && elapsed > 4) {
-          world.enemies.forEach((enemy, index) => {
-            const offset = GROUP_OFFSETS[index];
+          const groupAmazons = world.enemies.filter((enemy) => enemy.kind === 'amazon');
+          const groupNinjas = world.enemies.filter((enemy) => enemy.kind === 'ninja');
+          world.enemies.forEach((enemy) => {
+            const index = enemy.kind === 'amazon'
+              ? groupAmazons.indexOf(enemy)
+              : groupNinjas.indexOf(enemy);
+            const offset = enemy.kind === 'amazon'
+              ? GROUP_AMAZON_OFFSETS[index]
+              : GROUP_NINJA_OFFSETS[index];
+            if (!offset) return;
             const groupCenterX = clamp(world.heroX, 80, WIDTH - 80);
             enemy.x = clamp(groupCenterX + offset.dx, 64, WIDTH - 64);
             enemy.y = clamp(world.heroY + offset.dy, FLOOR_MIN, FLOOR_MAX);
-            enemy.pinElapsed = elapsed - 3;
+            enemy.pinElapsed = enemy.kind === 'amazon' ? elapsed - 3 : 0;
             enemy.state = 'idle';
+            enemy.direction = offset.dx < 0 ? 1 : offset.dx > 0 ? -1 : 1;
           });
         }
         }
