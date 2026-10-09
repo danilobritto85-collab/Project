@@ -11,6 +11,9 @@ import pinAttackUrl from '@assets/pin_attack_1791470375691.png';
 import pinExtendedUrl from '@assets/pin_extended_1791470375691.png';
 import ninjaFootsmotherUrl from '@assets/ninja_footsmother.png';
 import ninjaFootsmotherEndingUrl from '@assets/ninja_footsmother_ending.png';
+import roxySheetUrl from '@assets/roxy_1791553456528.png';
+import roxyHypnoUrl from '@assets/roxy_hypno_1791553456528.png';
+import roxySmotherUrl from '@assets/roxy_smother_1791553456529.png';
 import amazonKickAudioUrl from '@assets/generated_audio/amazon_kick.mp3';
 import ninjaKickAudioUrl from '@assets/generated_audio/ninja_kick.mp3';
 import heroineHurtAudioUrl from '@assets/generated_audio/heroine_hurt.mp3';
@@ -18,17 +21,21 @@ import heroineStruggleAudioUrl from '@assets/generated_audio/heroine_struggle_so
 import heroineBreathingAudioUrl from '@assets/generated_audio/heroine_deep_breath.mp3';
 import enemyLaughAudioUrl from '@assets/generated_audio/enemy_laugh.mp3';
 import heroineFaintSighAudioUrl from '@assets/generated_audio/heroine_faint_sigh.mp3';
+import roxyKickAudioUrl from '@assets/generated_audio/roxy_kick.mp3';
+import roxyHypnosisAudioUrl from '@assets/generated_audio/roxy_hypnosis.mp3';
 
 const WIDTH = 1024;
 const HEIGHT = 576;
-const TARGET_ENEMIES = 8;
+const TARGET_ENEMIES = 9;
 const STARTING_ENEMY_KINDS: readonly EnemyKind[] = [
-  'amazon', 'ninja', 'amazon', 'ninja', 'amazon', 'ninja', 'amazon', 'amazon',
+  'amazon', 'ninja', 'amazon', 'ninja', 'roxy', 'amazon', 'ninja', 'amazon', 'amazon',
 ];
 const FLOOR_MIN = HEIGHT * 0.75;
 const FLOOR_MAX = HEIGHT * 0.95;
 
 export const STATE_NINJA_FOOTSMOTHER = 'ninja-footsmother' as const;
+export const STATE_ROXY_HYPNO = 'roxy-hypno' as const;
+export const STATE_ROXY_SMOTHER = 'roxy-smother' as const;
 
 export type GamePhase =
   | 'title'
@@ -36,6 +43,8 @@ export type GamePhase =
   | 'grapple'
   | 'special-defeat'
   | typeof STATE_NINJA_FOOTSMOTHER
+  | typeof STATE_ROXY_HYPNO
+  | typeof STATE_ROXY_SMOTHER
   | 'group-defeat'
   | 'game-over';
 
@@ -66,11 +75,14 @@ interface SpriteAtlas {
   ninja: HTMLCanvasElement | null;
   ninjaFootsmother: HTMLCanvasElement | null;
   ninjaFootsmotherEnding: HTMLCanvasElement | null;
+  roxy: HTMLCanvasElement | null;
+  roxyHypno: HTMLCanvasElement | null;
+  roxySmother: HTMLCanvasElement | null;
   pinAttack: HTMLCanvasElement | null;
   pinExtended: HTMLCanvasElement | null;
 }
 
-type EnemyKind = 'amazon' | 'ninja';
+type EnemyKind = 'amazon' | 'ninja' | 'roxy';
 type EnemyState = 'idle' | 'walk' | 'run' | 'attack' | 'hurt' | 'down';
 
 interface Enemy {
@@ -105,7 +117,7 @@ interface Particle {
 
 interface World {
   phase: GamePhase;
-  defeatKind: 'special' | 'group' | 'ninja-footsmother' | null;
+  defeatKind: 'special' | 'group' | 'ninja-footsmother' | 'roxy-hypno' | 'roxy-smother' | null;
   isGrappleActive: boolean;
   heroX: number;
   heroY: number;
@@ -127,6 +139,7 @@ interface World {
   defeatSecondsLeft: number;
   defeatStartHp: number;
   ninjaFootsmotherElapsed: number;
+  roxyDefeatElapsed: number;
   footstepTimer: number;
   soundEnabled: boolean;
   sound: SoundEngine;
@@ -145,7 +158,9 @@ type SoundCue =
   | 'heroineStruggle'
   | 'heroineBreathing'
   | 'enemyLaugh'
-  | 'heroineFaintSigh';
+  | 'heroineFaintSigh'
+  | 'roxyKick'
+  | 'roxyHypnosis';
 
 type SoundEngine = {
   context: AudioContext | null;
@@ -218,6 +233,31 @@ const NINJA_RUN_FRAMES: SpriteRect[] = [
   { x: 808, y: 82, w: 112, h: 179 },
   { x: 910, y: 82, w: 112, h: 179 },
 ];
+const ROXY_FRAMES = {
+  idle: { x: 0, y: 0, w: 600, h: 597 },
+  walk: { x: 600, y: 0, w: 600, h: 597 },
+  run: { x: 600, y: 0, w: 600, h: 597 },
+  kick: { x: 600, y: 597, w: 600, h: 597 },
+  spin: { x: 600, y: 597, w: 600, h: 597 },
+  highKick: { x: 600, y: 597, w: 600, h: 597 },
+  pinPose: { x: 1200, y: 1194, w: 600, h: 598 },
+  pinLift: { x: 1800, y: 1194, w: 600, h: 598 },
+  hurt: { x: 1200, y: 0, w: 600, h: 597 },
+  down: { x: 0, y: 1194, w: 600, h: 598 },
+  defeated: { x: 1800, y: 1194, w: 600, h: 598 },
+} satisfies Record<string, SpriteRect>;
+const ROXY_HYPNO_FRAMES: SpriteRect[] = [
+  { x: 0, y: 0, w: 688, h: 384 },
+  { x: 688, y: 0, w: 688, h: 384 },
+  { x: 0, y: 384, w: 688, h: 384 },
+  { x: 688, y: 384, w: 688, h: 384 },
+];
+const ROXY_SMOTHER_FRAMES: SpriteRect[] = [
+  { x: 0, y: 0, w: 1200, h: 896 },
+  { x: 1200, y: 0, w: 1200, h: 896 },
+  { x: 0, y: 896, w: 1200, h: 896 },
+  { x: 1200, y: 896, w: 1200, h: 896 },
+];
 const NINJA_FOOTSMOTHER_FRAMES: SpriteRect[] = [
   { x: 0, y: 0, w: 341, h: 286 },
   { x: 341, y: 0, w: 341, h: 286 },
@@ -235,8 +275,9 @@ const WALK_CYCLE = [0, 1, 2, 1] as const;
 const ATTACK_FRAMES: Record<EnemyKind, SpriteRect[]> = {
   amazon: [AMAZON_FRAMES.kick, AMAZON_FRAMES.spin, AMAZON_FRAMES.highKick],
   ninja: [NINJA_FRAMES.kick, NINJA_FRAMES.spin, NINJA_FRAMES.highKick],
+  roxy: [ROXY_FRAMES.kick, ROXY_FRAMES.spin, ROXY_FRAMES.highKick],
 };
-const ENEMY_FRAMES = { amazon: AMAZON_FRAMES, ninja: NINJA_FRAMES };
+const ENEMY_FRAMES = { amazon: AMAZON_FRAMES, ninja: NINJA_FRAMES, roxy: ROXY_FRAMES };
 
 const GROUP_AMAZON_OFFSETS = [
   { dx: -180, dy: -4, flipped: false },
@@ -272,6 +313,7 @@ const STRUGGLE_FRAMES: SpriteRect[] = [
 const GRAPPLE_DURATION = 5;
 const SPECIAL_DEFEAT_DURATION = 10;
 export const NINJA_FOOTSMOTHER_DURATION = 10;
+const ROXY_DEFEAT_DURATION = 10;
 const NINJA_FOOTSMOTHER_ENDING_DURATION = 1.5;
 const NINJA_FOOTSMOTHER_FRAME_RATE = 6;
 const GROUP_DEFEAT_DURATION = 20;
@@ -339,6 +381,7 @@ function createWorld(): World {
     defeatSecondsLeft: 0,
     defeatStartHp: 100,
     ninjaFootsmotherElapsed: 0,
+    roxyDefeatElapsed: 0,
     footstepTimer: 0,
     soundEnabled: true,
     sound: {
@@ -453,6 +496,40 @@ function removeCheckerboard(image: HTMLImageElement, combinedPose = false) {
     pixels[pixel * 4 + 3] = 0;
   }
   context.putImageData(frame, 0, 0);
+  return canvas;
+}
+
+function removeRoxyCheckerboard(image: HTMLImageElement, frames: SpriteRect[]) {
+  const canvas = document.createElement('canvas');
+  canvas.width = image.naturalWidth || image.width;
+  canvas.height = image.naturalHeight || image.height;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) return canvas;
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const full = context.getImageData(0, 0, canvas.width, canvas.height);
+  const pixels = full.data;
+  for (let index = 0; index < canvas.width * canvas.height; index += 1) {
+    const pixel = index * 4;
+    const red = pixels[pixel];
+    const green = pixels[pixel + 1];
+    const blue = pixels[pixel + 2];
+    const range = Math.max(red, green, blue) - Math.min(red, green, blue);
+    // Roxy's sheets use a teal-black and desaturated green-gray checker.
+    // Keep purple hair, white clothing, skin and brown trousers outside this key.
+    const darkTile = red < 42 && green > red + 3 && blue > red + 3 &&
+      green < 52 && blue < 52;
+    const lightTile = range < 25 &&
+      (red + green + blue) / 3 > 45 && (red + green + blue) / 3 < 112;
+    if (darkTile || lightTile) pixels[pixel + 3] = 0;
+  }
+  context.putImageData(full, 0, 0);
+  for (const rect of frames) {
+    const crop = context.getImageData(rect.x, rect.y, rect.w, rect.h);
+    removeCheckerFragments(crop.data, rect.w, rect.h);
+    repairForegroundMask(crop.data, rect.w, rect.h, 700);
+    context.putImageData(crop, rect.x, rect.y);
+  }
   return canvas;
 }
 
@@ -1040,6 +1117,42 @@ function drawFootsmotherFrame(
   context.restore();
 }
 
+function drawRoxyDefeatFrame(
+  context: CanvasRenderingContext2D,
+  image: HTMLCanvasElement | null,
+  frame: SpriteRect,
+  centerX: number,
+  groundY: number,
+  targetHeight: number,
+  flipped: boolean,
+) {
+  if (!image) return;
+  const visible = getCompositeVisibleBounds(image, frame);
+  const scale = targetHeight / frame.h;
+  context.save();
+  if (flipped) {
+    context.translate(centerX, 0);
+    context.scale(-1, 1);
+    context.translate(-centerX, 0);
+  }
+  context.fillStyle = 'rgba(7, 13, 8, 0.25)';
+  context.beginPath();
+  context.ellipse(centerX, groundY + 7, targetHeight * 0.48, 6, 0, 0, Math.PI * 2);
+  context.fill();
+  context.drawImage(
+    image,
+    frame.x + visible.x,
+    frame.y + visible.y,
+    visible.w,
+    visible.h,
+    centerX - frame.w * scale / 2 + visible.x * scale,
+    groundY + 7 - visible.h * scale,
+    visible.w * scale,
+    visible.h * scale,
+  );
+  context.restore();
+}
+
 function enemyAnimationFrame(enemy: Enemy, now: number): SpriteRect {
   const frames = ENEMY_FRAMES[enemy.kind];
   if (enemy.state === 'walk') {
@@ -1047,7 +1160,7 @@ function enemyAnimationFrame(enemy: Enemy, now: number): SpriteRect {
     const frameIndex = WALK_CYCLE[cycleIndex];
     return enemy.kind === 'ninja'
       ? NINJA_WALK_FRAMES[frameIndex]
-      : AMAZON_WALK_FRAMES[frameIndex];
+      : enemy.kind === 'amazon' ? AMAZON_WALK_FRAMES[frameIndex] : ROXY_FRAMES.walk;
   }
   if (enemy.state === 'run') {
     return enemy.kind === 'ninja'
@@ -1119,6 +1232,11 @@ function heroRect(world: World) {
       (world.phase === 'game-over' && world.defeatKind === 'ninja-footsmother')) {
     return HERO_FRAMES.defeated;
   }
+  if (world.phase === STATE_ROXY_HYPNO || world.phase === STATE_ROXY_SMOTHER ||
+      (world.phase === 'game-over' &&
+        (world.defeatKind === 'roxy-hypno' || world.defeatKind === 'roxy-smother'))) {
+    return HERO_FRAMES.defeated;
+  }
   if (world.phase === 'special-defeat' || (world.phase === 'game-over' && world.defeatKind === 'special')) return HERO_FRAMES.down;
   if (world.phase === 'grapple') return HERO_FRAMES.hurt;
   if (world.heroAction === 'hurt') return HERO_FRAMES.hurt;
@@ -1154,6 +1272,11 @@ function drawWorld(
 
   const ninjaFootsmotherSequence = world.phase === STATE_NINJA_FOOTSMOTHER ||
     (world.phase === 'game-over' && world.defeatKind === 'ninja-footsmother');
+  const roxyHypnoSequence = world.phase === STATE_ROXY_HYPNO ||
+    (world.phase === 'game-over' && world.defeatKind === 'roxy-hypno');
+  const roxySmotherSequence = world.phase === STATE_ROXY_SMOTHER ||
+    (world.phase === 'game-over' && world.defeatKind === 'roxy-smother');
+  const roxyDefeatSequence = roxyHypnoSequence || roxySmotherSequence;
   if (ninjaFootsmotherSequence) {
     const grappler = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
     const bystanders = world.enemies
@@ -1201,10 +1324,39 @@ function drawWorld(
       );
     }
   }
+  if (roxyDefeatSequence) {
+    const grappler = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
+    const bystanders = world.enemies
+      .filter((enemy) => enemy.hp > 0 && enemy.active && enemy.id !== world.currentGrappler)
+      .sort((a, b) => a.y - b.y);
+    for (const enemy of bystanders) {
+      drawEnemySprite(context, atlas, enemy, enemyAnimationFrame(enemy, now));
+    }
+    const frames = roxyHypnoSequence ? ROXY_HYPNO_FRAMES : ROXY_SMOTHER_FRAMES;
+    const sheet = roxyHypnoSequence ? atlas.roxyHypno : atlas.roxySmother;
+    const elapsed = Math.max(0, world.roxyDefeatElapsed);
+    const introDuration = roxyHypnoSequence ? 4.8 : 3.6;
+    const introIndex = Math.min(
+      frames.length - 1,
+      Math.floor((elapsed / introDuration) * frames.length),
+    );
+    const loopIndex = roxyHypnoSequence
+      ? frames.length - 1
+      : elapsed < introDuration ? introIndex : [2, 3][Math.floor(now / 420) % 2];
+    drawRoxyDefeatFrame(
+      context,
+      sheet,
+      frames[Math.max(0, loopIndex)],
+      clamp(world.heroX, 190, WIDTH - 190),
+      clamp(world.heroY, FLOOR_MIN, FLOOR_MAX),
+      roxyHypnoSequence ? 220 : 225,
+      grappler?.direction === -1,
+    );
+  }
 
   const specialSequence = world.phase === 'special-defeat' ||
     (world.phase === 'game-over' && world.defeatKind === 'special');
-  if (ninjaFootsmotherSequence) {
+  if (ninjaFootsmotherSequence || roxyDefeatSequence) {
     // The paired sprite sheet already contains both fighters; skip the regular actor pass.
   } else if (specialSequence || world.phase === 'grapple') {
     const isStruggle = specialSequence;
@@ -1326,7 +1478,8 @@ function drawWorld(
 
 function enterGameOver(world: World) {
   if (world.phase === 'game-over') return;
-  if (world.defeatKind === 'special' || world.defeatKind === 'ninja-footsmother') {
+  if (world.defeatKind === 'special' || world.defeatKind === 'ninja-footsmother' ||
+      world.defeatKind === 'roxy-hypno' || world.defeatKind === 'roxy-smother') {
     stopClips(world);
     playClip(world, 'heroineFaintSigh', 0.68, 3500);
   }
@@ -1533,7 +1686,8 @@ function updateEnemies(world: World, dt: number, now: number) {
     enemy.direction = dx < 0 ? -1 : 1;
 
     if (distance > 78) {
-      const pace = (distance > 250 ? 92 : 68) * (enemy.kind === 'ninja' ? 1.14 : 1);
+      const pace = (distance > 250 ? 92 : 68) *
+        (enemy.kind === 'ninja' ? 1.14 : enemy.kind === 'roxy' ? 1.06 : 1);
       const velocityResponse = Math.min(1, dt * 7.5);
       const targetVelocityX = (dx / Math.max(distance, 1)) * pace;
       const targetVelocityY = (dy / Math.max(distance, 1)) * pace * 0.56;
@@ -1551,11 +1705,14 @@ function updateEnemies(world: World, dt: number, now: number) {
       enemy.state = 'attack';
       enemy.stateTimer = 0.48;
       enemy.attackPoseIndex = (enemy.attackPoseIndex + 1) % ATTACK_FRAMES[enemy.kind].length;
-      enemy.attackCooldown = (enemy.kind === 'ninja' ? 1.08 : 1.3) + random(world) * 0.75;
+      enemy.attackCooldown =
+        (enemy.kind === 'ninja' ? 1.08 : enemy.kind === 'roxy' ? 1.18 : 1.3) +
+        random(world) * 0.75;
       playClip(
         world,
-        enemy.kind === 'ninja' ? 'ninjaKick' : 'amazonKick',
-        enemy.kind === 'ninja' ? 0.48 : 0.56,
+        enemy.kind === 'ninja' ? 'ninjaKick'
+          : enemy.kind === 'roxy' ? 'roxyKick' : 'amazonKick',
+        enemy.kind === 'ninja' ? 0.48 : enemy.kind === 'roxy' ? 0.52 : 0.56,
         120,
       );
       if (distance < 106 && world.heroHitCooldown <= 0) {
@@ -1677,6 +1834,13 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
         grappler.vy = 0;
         world.heroVelocityX = 0;
         world.heroVelocityY = 0;
+      } else if (grappler?.kind === 'roxy') {
+        const hypnosis = random(world) < 0.5;
+        world.phase = hypnosis ? STATE_ROXY_HYPNO : STATE_ROXY_SMOTHER;
+        world.defeatKind = hypnosis ? 'roxy-hypno' : 'roxy-smother';
+        world.defeatSecondsLeft = ROXY_DEFEAT_DURATION;
+        world.roxyDefeatElapsed = 0;
+        if (hypnosis) playClip(world, 'roxyHypnosis', 0.56, 4000);
       } else {
         world.phase = 'special-defeat';
         world.defeatKind = 'special';
@@ -1697,6 +1861,16 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
         world.heroHp = 0;
         enterGameOver(world);
       }
+    }
+  } else if (world.phase === STATE_ROXY_HYPNO || world.phase === STATE_ROXY_SMOTHER ||
+    (world.phase === 'game-over' &&
+      (world.defeatKind === 'roxy-hypno' || world.defeatKind === 'roxy-smother'))) {
+    world.roxyDefeatElapsed += dt;
+    if (world.phase === STATE_ROXY_HYPNO || world.phase === STATE_ROXY_SMOTHER) {
+      world.defeatSecondsLeft = Math.max(0, world.defeatSecondsLeft - dt);
+      const progress = 1 - world.defeatSecondsLeft / ROXY_DEFEAT_DURATION;
+      world.heroHp = Math.max(0, world.defeatStartHp * (1 - progress));
+      if (world.defeatSecondsLeft <= 0) enterGameOver(world);
     }
   } else if (world.phase === 'special-defeat' ||
     (world.phase === 'game-over' && world.defeatKind === 'special')) {
@@ -1739,7 +1913,8 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
     if (world.phase === 'group-defeat' && world.defeatSecondsLeft <= 0) enterGameOver(world);
   }
 
-  if (world.phase === STATE_NINJA_FOOTSMOTHER || world.phase === 'special-defeat') {
+  if (world.phase === STATE_NINJA_FOOTSMOTHER || world.phase === 'special-defeat' ||
+      world.phase === STATE_ROXY_SMOTHER) {
     world.struggleVoiceTimer -= dt;
     if (world.struggleVoiceTimer <= 0 && world.defeatSecondsLeft > 1.5) {
       // Smoke is present throughout these custom scenes. Alternate breaths and
@@ -1862,6 +2037,9 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       ninja: null,
       ninjaFootsmother: null,
       ninjaFootsmotherEnding: null,
+      roxy: null,
+      roxyHypno: null,
+      roxySmother: null,
       pinAttack: null,
       pinExtended: null,
     };
@@ -1873,6 +2051,8 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       heroineBreathing: heroineBreathingAudioUrl,
       enemyLaugh: enemyLaughAudioUrl,
       heroineFaintSigh: heroineFaintSighAudioUrl,
+      roxyKick: roxyKickAudioUrl,
+      roxyHypnosis: roxyHypnosisAudioUrl,
     };
     const worldSound = worldRef.current.sound;
     for (const [cue, url] of Object.entries(soundUrls) as [SoundCue, string][]) {
@@ -1888,6 +2068,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       const scene = params.get('_scene');
       if (scene === 'playing' || scene === 'grapple' ||
           scene === 'special-defeat' || scene === STATE_NINJA_FOOTSMOTHER ||
+          scene === STATE_ROXY_HYPNO || scene === STATE_ROXY_SMOTHER ||
           scene === 'group-defeat') {
         const world = worldRef.current;
         if (scene === 'playing') {
@@ -1909,18 +2090,25 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
           });
         } else {
         const requestedKind = params.get('_grappler');
-        const preferredKind = requestedKind === 'amazon' ? 'amazon'
-          : requestedKind === 'ninja' || scene === STATE_NINJA_FOOTSMOTHER
-            ? 'ninja' : 'amazon';
+        const preferredKind: EnemyKind = requestedKind === 'roxy' ||
+          scene === STATE_ROXY_HYPNO || scene === STATE_ROXY_SMOTHER ? 'roxy'
+          : requestedKind === 'amazon' ? 'amazon'
+            : requestedKind === 'ninja' || scene === STATE_NINJA_FOOTSMOTHER
+              ? 'ninja' : 'amazon';
         const ninjaFootsmotherScene = scene === STATE_NINJA_FOOTSMOTHER ||
           (scene === 'special-defeat' && preferredKind === 'ninja');
+        const roxyHypnoScene = scene === STATE_ROXY_HYPNO;
+        const roxySmotherScene = scene === STATE_ROXY_SMOTHER;
         const activePhase: GamePhase = ninjaFootsmotherScene
           ? STATE_NINJA_FOOTSMOTHER
-          : scene;
+          : roxyHypnoScene ? STATE_ROXY_HYPNO
+            : roxySmotherScene ? STATE_ROXY_SMOTHER : scene;
         const duration = activePhase === 'grapple' ? GRAPPLE_DURATION
           : activePhase === 'group-defeat' ? GROUP_DEFEAT_DURATION
           : activePhase === STATE_NINJA_FOOTSMOTHER
-            ? NINJA_FOOTSMOTHER_DURATION : SPECIAL_DEFEAT_DURATION;
+            ? NINJA_FOOTSMOTHER_DURATION
+            : activePhase === STATE_ROXY_HYPNO || activePhase === STATE_ROXY_SMOTHER
+              ? ROXY_DEFEAT_DURATION : SPECIAL_DEFEAT_DURATION;
         const requestedElapsed = Number(params.get('_elapsed') ?? 0);
         const elapsed = Number.isFinite(requestedElapsed)
           ? clamp(requestedElapsed, 0, duration - 0.1) : 0;
@@ -1930,6 +2118,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
         world.heroHp = activePhase === 'group-defeat' ? 0 : 35;
         world.defeatStartHp = 35;
         world.ninjaFootsmotherElapsed = ninjaFootsmotherScene ? elapsed : 0;
+        world.roxyDefeatElapsed = roxyHypnoScene || roxySmotherScene ? elapsed : 0;
         world.enemies.forEach((enemy) => {
           enemy.hp = 3;
           enemy.active = true;
@@ -1948,9 +2137,12 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
         world.currentGrappler = activePhase === 'group-defeat' ? null : selectedGrappler.id;
         world.defeatKind = activePhase === 'group-defeat' ? 'group'
           : activePhase === STATE_NINJA_FOOTSMOTHER ? 'ninja-footsmother'
+          : activePhase === STATE_ROXY_HYPNO ? 'roxy-hypno'
+          : activePhase === STATE_ROXY_SMOTHER ? 'roxy-smother'
           : activePhase === 'special-defeat' ? 'special' : null;
         world.isGrappleActive = activePhase === 'grapple' ||
-          activePhase === 'special-defeat' || activePhase === STATE_NINJA_FOOTSMOTHER;
+          activePhase === 'special-defeat' || activePhase === STATE_NINJA_FOOTSMOTHER ||
+          activePhase === STATE_ROXY_HYPNO || activePhase === STATE_ROXY_SMOTHER;
         world.grappleSecondsLeft = activePhase === 'grapple' ? duration - elapsed : 0;
         world.defeatSecondsLeft = activePhase === 'grapple' ? 0 : duration - elapsed;
         world.actionTimer = activePhase === 'group-defeat' && elapsed < 0.9 ? 0.9 - elapsed : 0;
@@ -1988,6 +2180,9 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       loadImage(ninjaSheetUrl),
       loadImage(ninjaFootsmotherUrl),
       loadImage(ninjaFootsmotherEndingUrl),
+      loadImage(roxySheetUrl),
+      loadImage(roxyHypnoUrl),
+      loadImage(roxySmotherUrl),
       loadImage(pinAttackUrl),
       loadImage(pinExtendedUrl),
     ]).then(([
@@ -1997,6 +2192,9 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       ninja,
       ninjaFootsmother,
       ninjaFootsmotherEnding,
+      roxy,
+      roxyHypno,
+      roxySmother,
       pinAttack,
       pinExtended,
     ]) => {
@@ -2011,6 +2209,9 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
           ninjaFootsmotherEnding,
           false,
         ),
+        roxy: removeRoxyCheckerboard(roxy, Object.values(ROXY_FRAMES)),
+        roxyHypno: removeRoxyCheckerboard(roxyHypno, ROXY_HYPNO_FRAMES),
+        roxySmother: removeRoxyCheckerboard(roxySmother, ROXY_SMOTHER_FRAMES),
         pinAttack: withRedToenails(removeCheckerboard(pinAttack, true), 'pinAttack'),
         pinExtended: withRedToenails(removeCheckerboard(pinExtended, true), 'pinExtended'),
       };

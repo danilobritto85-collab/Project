@@ -1,3 +1,4 @@
 - [Uploaded game art](uploaded-game-art.md) — verify dimensions, preserve paired silhouettes, and anchor scale to bodies rather than smoke bounds.
 - [Defeat sequences](sequence-visibility.md) — generic defeats have no timer card and static enemies; Ninja and Amazon custom struggles use audio.
 - [Amazon styling](amazon-styling.md) — Amazon toenails are red, including paired scenes and palette variants.
+- [Roxy sequences](roxy-sequences.md) — ninth opponent with distinct kick, Hypnosis, and Smother behavior.

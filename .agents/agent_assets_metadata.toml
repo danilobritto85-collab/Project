@@ -56,3 +56,17 @@ uri = "file://attached_assets/generated_audio/heroine_deep_breath.mp3"
 type = "audio"
 title = "heroine_deep_breath"
 description = "Generated sound effect: Isolated neutral breathing sound for an adult female fantasy-game character, one slow deep audible inhale followed by a gentle controlled exhale. Calm, low intensity, natural …"
+
+[[outputs]]
+id = "PgLvi2nB7qzqSjxw-mu_i"
+uri = "file://attached_assets/generated_audio/roxy_kick.mp3"
+type = "audio"
+title = "roxy kick voice"
+description = "Generated sound effect: Adult female martial artist gives one short sharp confident attack shout, 'yah!', during a kick in a retro arcade fighting game. Focused and athletic, nonsexual, dry voice onl…"
+
+[[outputs]]
+id = "VTr6gi8ExG-RtFFd8obzZ"
+uri = "file://attached_assets/generated_audio/roxy_hypnosis.mp3"
+type = "audio"
+title = "roxy hypnosis cue"
+description = "Generated sound effect: Subtle magical hypnosis activation in a retro arcade game: airy shimmer, gently rising crystalline twinkle, soft resolving chime. No voices, no breaths, no music, no kiss soun…"
