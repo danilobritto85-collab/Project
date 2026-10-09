@@ -17,6 +17,12 @@ In generic defeats, keep active enemies visible in neutral idle poses at their c
 
 **How to apply:** Freeze enemies in idle poses, keep the heroine's fall/faint progression, and omit only the generic defeat HUD; preserve the timer that advances the game state.
 
+The “Reiniciar” control returns to the opponent-selection menu.
+
+**Why:** The user requested “ao clicar no reiniciar volta para o menu de escolha de adversárias.”
+
+**How to apply:** Stop the current scene and its audio before returning to the menu, without clearing the selected opponent quantities.
+
 Both Ninja Footsmother and Amazon custom struggle defeats use sound, respecting the player's global sound switch.
 
 **Why:** The user requested sound for both custom defeats, then asked for a softer heroine struggle voice and deep breathing during the smoke.

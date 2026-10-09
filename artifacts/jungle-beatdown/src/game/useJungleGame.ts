@@ -5,7 +5,7 @@ import { getRedToenailFrame, withRedToenails } from './toenailPolish';
 import {
   EBONY_FRAMES, EBONY_WALK, EBONY_RUN, EBONY_ATTACKS, EBONY_BASE_CROPS,
   EBONY_STOMP, EBONY_VICTORY, EBONY_DUO_VICTORY, EBONY_STOMP_DURATION, EBONY_VICTORY_DURATION,
-  prepareEbonySheet, drawEbonyFrame, type EbonyFrame,
+  prepareEbonySheet, drawEbonyFrame, ebonyVictoryPose, type EbonyFrame,
 } from './ebonySprites';
 
 import amazonSheetUrl from '@assets/amazon_1791470375689.png';
@@ -1528,9 +1528,9 @@ function drawWorld(
     } else {
       const frames = world.ebonyPartnerId ? EBONY_DUO_VICTORY : EBONY_VICTORY;
       const sheet = world.ebonyPartnerId ? atlas.ebonyDuoVictory : atlas.ebonyVictory;
-      const index = Math.min(frames.length - 1,
-        Math.floor(world.ebonyElapsed / (EBONY_VICTORY_DURATION / frames.length)));
-      drawEbonyFrame(context, sheet, frames[index], world.heroX, world.heroY, flipped);
+      const index = ebonyVictoryPose(world.ebonyElapsed, world.phase === 'game-over');
+      drawEbonyFrame(context, sheet, frames[index], world.heroX, world.heroY, flipped,
+        0, now / 1000);
     }
   } else if (ninjaFootsmotherSequence || roxyDefeatSequence) {
     // The paired sprite sheet already contains both fighters; skip the regular actor pass.
@@ -1674,6 +1674,7 @@ function beginGenericDefeat(world: World, attacker?: Enemy) {
     world.isGrappleActive = true;
     world.currentGrappler = attacker.id;
     world.ebonyElapsed = 0;
+    world.struggleVoiceTimer = .5;
     world.ebonyHitFrame = -1;
     world.ebonyPartnerId = world.enemies.find((enemy) =>
       enemy.ebony && enemy.id !== attacker.id && enemy.active && enemy.hp > 0)?.id ?? null;
@@ -2141,6 +2142,13 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
   } else if (world.phase === 'ebony-victory') {
     world.ebonyElapsed = Math.min(EBONY_VICTORY_DURATION, world.ebonyElapsed + dt);
     world.defeatSecondsLeft = Math.max(0, EBONY_VICTORY_DURATION - world.ebonyElapsed);
+    world.struggleVoiceTimer -= dt;
+    // The existing neutral deep-breath clip lasts 3.03 seconds. Leave space
+    // for it to finish and never overlap two heroine breaths.
+    if (world.struggleVoiceTimer <= 0 && world.defeatSecondsLeft > 3.05) {
+      playClip(world, 'heroineBreathing', .44, 3100);
+      world.struggleVoiceTimer = 3.2;
+    }
     if (world.ebonyElapsed >= 2.5 && world.ebonyHitFrame < 1) {
       world.ebonyHitFrame = 1;
       playClip(world, 'enemyLaugh', .4, 1600);
@@ -2321,21 +2329,23 @@ export function useJungleGame(
     }
   }, []);
 
-  const restartGame = useCallback(() => {
+  const resetGame = useCallback((phase: 'title' | 'playing') => {
     const world = worldRef.current;
     const lineup = [...world.enemyLineup];
     const soundEnabled = world.soundEnabled;
     const previousSound = world.sound;
     stopClips(world);
     Object.assign(world, createWorld(lineup, world.fightConfig), {
-      phase: 'playing',
+      phase,
       soundEnabled,
       sound: { ...previousSound, enabled: soundEnabled },
     });
     pressedRef.current.clear();
     setSnapshot(publishSnapshot(world));
-    if (soundEnabled) playStomp(world);
+    if (phase === 'playing' && soundEnabled) playStomp(world);
   }, []);
+  const restartGame = useCallback(() => resetGame('title'), [resetGame]);
+  const retryGame = useCallback(() => resetGame('playing'), [resetGame]);
 
   const exitEbonyVictory = useCallback(() => {
     stopEbonyVictory(worldRef.current);
@@ -2486,7 +2496,7 @@ export function useJungleGame(
           world.ebonyHitFrame = pose;
         } else if (scene === 'ebony-victory') {
           beginGenericDefeat(world, enemy);
-          world.ebonyElapsed = Math.min(3, pose) * EBONY_VICTORY_DURATION / 4 + .05;
+          world.ebonyElapsed = [.1, 1, 1.6, 8][Math.min(3, pose)];
         } else {
           enemy.state = params.get('_action') === 'walk' ? 'walk'
             : params.get('_action') === 'run' ? 'run'
@@ -2781,6 +2791,7 @@ export function useJungleGame(
     snapshot,
     startGame,
     restartGame,
+    retryGame,
     exitEbonyVictory,
     toggleSound,
     chooseRoxyChallenge,

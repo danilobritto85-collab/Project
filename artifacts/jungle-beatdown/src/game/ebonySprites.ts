@@ -58,6 +58,12 @@ export const EBONY_DUO_VICTORY: EbonyFrame[] = [
 export const EBONY_STOMP_DURATION = 2.4;
 export const EBONY_VICTORY_DURATION = 10;
 
+export function ebonyVictoryPose(elapsed: number, finished = false) {
+  if (finished || elapsed >= 7.8) return 3;
+  if (elapsed < .8) return 0;
+  return 1 + Math.floor((elapsed - .8) / .65) % 2;
+}
+
 export function prepareEbonySheet(
   image: HTMLImageElement, frames: readonly EbonyFrame[], normalizedHeight = 768,
 ) {
@@ -79,6 +85,7 @@ export function prepareEbonySheet(
 export function drawEbonyFrame(
   context: CanvasRenderingContext2D, image: HTMLCanvasElement | null,
   frame: EbonyFrame, x: number, groundY: number, flipped: boolean, lift = 0,
+  motionTime?: number,
 ) {
   if (!image) return;
   const scale = frame.scale ?? 1;
@@ -86,9 +93,26 @@ export function drawEbonyFrame(
   if (flipped) { context.translate(x * 2, 0); context.scale(-1, 1); }
   const dx = x - frame.anchorX * scale;
   const dy = groundY + 7 - frame.baseline * scale - lift;
-  context.drawImage(image, frame.x, frame.y, frame.w, frame.h,
-    dx, dy, frame.w * scale, frame.h * scale);
   const polish = getRedToenailFrame(image, frame);
-  if (polish) context.drawImage(polish, dx, dy, frame.w * scale, frame.h * scale);
+  if (motionTime === undefined) {
+    context.drawImage(image, frame.x, frame.y, frame.w, frame.h,
+      dx, dy, frame.w * scale, frame.h * scale);
+    if (polish) context.drawImage(polish, dx, dy, frame.w * scale, frame.h * scale);
+  } else {
+    // Animate the upper silhouette without lifting the feet or resizing the
+    // whole pair to smoke bounds. Narrow bands preserve the pixel-art detail.
+    const sway = Math.sin(motionTime * 4.4) * 3.5;
+    const breath = Math.sin(motionTime * Math.PI * 2 / 3.2) * .012;
+    for (let row = 0; row < frame.h; row += 4) {
+      const h = Math.min(4, frame.h - row);
+      const weight = Math.pow(Math.max(0, 1 - (row + h) / frame.baseline), 1.5);
+      const widthScale = 1 + breath * weight;
+      const left = dx + sway * weight + frame.anchorX * scale * (1 - widthScale);
+      context.drawImage(image, frame.x, frame.y + row, frame.w, h,
+        left, dy + row * scale, frame.w * scale * widthScale, h * scale);
+      if (polish) context.drawImage(polish, 0, row, frame.w, h,
+        left, dy + row * scale, frame.w * scale * widthScale, h * scale);
+    }
+  }
   context.restore();
 }

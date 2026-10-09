@@ -112,6 +112,7 @@ function App() {
     snapshot,
     startGame,
     restartGame,
+    retryGame,
     toggleSound,
     pressVirtualControl,
     releaseVirtualControl,
@@ -315,7 +316,7 @@ function App() {
               <button
                 className="retry-corner"
                 type="button"
-                onClick={restartGame}
+                onClick={retryGame}
                 aria-label="Tentar novamente"
                 data-testid="button-retry-defeat"
               >
