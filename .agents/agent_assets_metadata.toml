@@ -35,3 +35,10 @@ uri = "file://attached_assets/generated_audio/heroine_hurt.mp3"
 type = "audio"
 title = "heroine_hurt"
 description = "Generated sound effect: A brief nonverbal pain grunt from an adult female action-game hero taking a hit. Determined fighter, mild surprise and effort, clearly non-erotic, no words, no music, clean is…"
+
+[[outputs]]
+id = "cHTif-W4h9cMMbQwOT9rZ"
+uri = "file://attached_assets/generated_audio/heroine_faint_sigh.mp3"
+type = "audio"
+title = "heroine_faint_sigh"
+description = "Generated sound effect: A single approximately 4-second nonverbal audio cue for an adult female fantasy beat-em-up heroine fainting after combat: start with two soft, strained, breathy gasps, then gr…"

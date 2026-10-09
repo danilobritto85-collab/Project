@@ -197,7 +197,7 @@ function App() {
                 <div className="sequence-info">
                   <span className="sequence-label">
                     {isNinjaFootsmother ? 'Footsmother da kunoichi'
-                      : isSpecialDefeat ? 'Luta para se soltar' : 'Cerco das inimigas'}
+                      : isSpecialDefeat ? 'Luta para se soltar' : 'Heroína desmaiada'}
                   </span>
                   <span className="sequence-hint">
                     {isNinjaFootsmother ? 'Imobilização · 10 segundos' : 'Sequência de derrota'}

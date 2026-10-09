@@ -5,23 +5,17 @@ description: User's requirement that defeat and struggle action remain visible w
 
 Keep defeat and struggle scenes visible. Use small countdown indicators rather than a modal or full-screen dimming layer during the sequence.
 
-Do not show a Game Over screen at the end; keep the characters moving.
+Do not show a Game Over screen at the end. Generic defeats may hold the heroine's final fainted pose; custom struggle sequences keep their specified motion.
 
 **Why:** The user reported that “aparece uma janela com contagem que não deixa ver mais nada,” requested “deixe mais clean,” and then explicitly said “Tire a tela da game over, e deixe elas se movimentando.”
 
-**How to apply:** Put countdown and escape instructions outside the main fight area. Ending the timed combat outcome must not freeze the visual simulation or replace it with an end-screen modal.
+**How to apply:** Put countdown and escape instructions outside the main fight area and never replace the scene with an end-screen modal.
 
-For the five-Amazon defeat, use a close cluster around the fallen heroine, with the Amazons' feet planted on her in a held victory pose. This formation is specific to the group-defeat sequence; normal combat keeps the Amazons spread out.
+Generic defeats show only the heroine falling and fainting. Do not render or animate Amazonas or Ninjas in this state; for now, enemy defeat choreography is limited to the personalized struggle sequences.
 
-**Why:** The user clarified that the group defeat should show all five Amazons together, standing over the heroine in victory.
+**Why:** The user explicitly removed generic Amazon/Ninja defeat animations and asked to keep only personalized struggle animations for now.
 
-**How to apply:** Bring all five full-size sprites in close, orient the outer Amazons toward the heroine, and keep their feet planted while allowing subtle body movement. Do not apply normal-combat spacing during this sequence.
-
-During group defeat, only the five Amazonas use the planted-foot victory pose; Ninjas stay neutral in the back row and do not use kick or pin poses.
-
-**Why:** Reusing Ninja kick frames as group pin poses made the Ninjas appear to stomp the fallen heroine alongside the Amazons.
-
-**How to apply:** Keep standard Ninja attacks in normal combat, but render their walk/idle poses in the back row during group defeat while the five Amazons hold the foreground formation.
+**How to apply:** Keep the heroine's short hurt/down/defeated progression, hide all enemies for the generic defeat branch, and leave custom grapple/struggle branches unchanged.
 
 For the Kunoichi's ten-second defeat, use the original six-frame sheet for the opening 8.5 seconds and the new three-frame sheet for the final 1.5 seconds. Once HP reaches zero, hold the last frame of the new sheet.
 

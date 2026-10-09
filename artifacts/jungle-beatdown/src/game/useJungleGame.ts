@@ -16,6 +16,7 @@ import ninjaKickAudioUrl from '@assets/generated_audio/ninja_kick.mp3';
 import heroineHurtAudioUrl from '@assets/generated_audio/heroine_hurt.mp3';
 import heroineStruggleAudioUrl from '@assets/generated_audio/heroine_struggle.mp3';
 import enemyLaughAudioUrl from '@assets/generated_audio/enemy_laugh.mp3';
+import heroineFaintSighAudioUrl from '@assets/generated_audio/heroine_faint_sigh.mp3';
 
 const WIDTH = 1024;
 const HEIGHT = 576;
@@ -140,7 +141,8 @@ type SoundCue =
   | 'ninjaKick'
   | 'heroineHurt'
   | 'heroineStruggle'
-  | 'enemyLaugh';
+  | 'enemyLaugh'
+  | 'heroineFaintSigh';
 
 type SoundEngine = {
   context: AudioContext | null;
@@ -888,16 +890,6 @@ function playStomp(world: World) {
   playSweep(world, 100, 25, 0.23, 0.18, 'sine');
 }
 
-function playGameOver(world: World) {
-  const notes = [392, 349, 311, 261, 196];
-  notes.forEach((note, index) => {
-    window.setTimeout(
-      () => playSweep(world, note, note * 0.96, 0.17, 0.1, 'square'),
-      index * 155,
-    );
-  });
-}
-
 function spawnParticle(
   world: World,
   kind: Particle['kind'],
@@ -1128,12 +1120,6 @@ function drawWorld(
   context.fillStyle = floorTint;
   context.fillRect(0, 408, WIDTH, HEIGHT - 408);
 
-  const groupSequence = world.phase === 'group-defeat' ||
-    (world.phase === 'game-over' && world.defeatKind === 'group');
-  if (groupSequence) {
-    context.translate(Math.sin(now / 48) * 1.35, Math.cos(now / 57) * 0.8);
-  }
-
   const ninjaFootsmotherSequence = world.phase === STATE_NINJA_FOOTSMOTHER ||
     (world.phase === 'game-over' && world.defeatKind === 'ninja-footsmother');
   if (ninjaFootsmotherSequence) {
@@ -1255,36 +1241,6 @@ function drawWorld(
       world.facing < 0,
     );
 
-    const groupActors: Array<{ y: number; draw: () => void }> = [];
-    world.enemies.filter((enemy) => enemy.kind === 'ninja').forEach((enemy) => {
-      const pose = enemy.state === 'walk'
-        ? enemyAnimationFrame(enemy, now)
-        : NINJA_FRAMES.idle;
-      groupActors.push({
-        y: enemy.y,
-        draw: () => drawEnemySprite(context, atlas, enemy, pose),
-      });
-    });
-    world.enemies.filter((enemy) => enemy.kind === 'amazon').forEach((enemy, index) => {
-      const offset = GROUP_AMAZON_OFFSETS[index];
-      if (!offset) return;
-      const pinElapsed = enemy.pinElapsed ?? 0;
-      const approaching = pinElapsed === 0;
-      const frames = AMAZON_FRAMES;
-      const pose = approaching ? enemyAnimationFrame(enemy, now)
-        : pinElapsed < 0.12 ? frames.idle
-        : pinElapsed < 0.32 ? frames.pinLift : frames.pinPose;
-      // Gentle breathing changes the upper silhouette, never the planted feet.
-      const breathing = pinElapsed > 0.32 ? Math.sin(pinElapsed * 2.5 + index) * 0.7 : 0;
-      const width = Math.max(126, ((180 + breathing) * pose.w) / pose.h);
-      groupActors.push({
-        y: enemy.y,
-        draw: () => drawAtlasSprite(context, atlas.amazon, pose, enemy.x, enemy.y,
-          width, 180 + breathing, approaching ? enemy.direction < 0 : offset.flipped,
-          enemy.hue, 0, 7),
-      });
-    });
-    groupActors.sort((a, b) => a.y - b.y).forEach((actor) => actor.draw());
   } else {
     const actors: Array<{ y: number; draw: () => void }> = [];
     const visibleEnemies = world.enemies.filter(
@@ -1326,9 +1282,24 @@ function drawWorld(
 
 function enterGameOver(world: World) {
   if (world.phase === 'game-over') return;
+  if (world.defeatKind !== 'group') {
+    playClip(world, 'heroineFaintSigh', 0.68, 3500);
+  }
   world.phase = 'game-over';
   world.defeatSecondsLeft = 0;
-  playGameOver(world);
+}
+
+function beginGenericDefeat(world: World) {
+  world.heroHp = 0;
+  world.phase = 'group-defeat';
+  world.defeatKind = 'group';
+  world.isGrappleActive = false;
+  world.defeatSecondsLeft = GROUP_DEFEAT_DURATION;
+  world.heroAction = 'hurt';
+  world.actionTimer = 0.9;
+  world.heroVelocityX = 0;
+  world.heroVelocityY = 0;
+  playClip(world, 'heroineFaintSigh', 0.68, 3500);
 }
 
 function beginSpecialGrapple(world: World, enemy: Enemy) {
@@ -1550,15 +1521,7 @@ function updateEnemies(world: World, dt: number, now: number) {
         playStomp(world);
         playClip(world, 'heroineHurt', 0.64, 430);
         if (world.heroHp <= 0) {
-          world.phase = 'group-defeat';
-          world.defeatKind = 'group';
-          world.isGrappleActive = false;
-          world.defeatSecondsLeft = GROUP_DEFEAT_DURATION;
-          world.heroAction = 'hurt';
-          world.actionTimer = 0.9;
-          world.heroVelocityX = 0;
-          world.heroVelocityY = 0;
-          playClip(world, 'enemyLaugh', 0.52, 1600);
+          beginGenericDefeat(world);
           continue;
         }
         if (world.heroHp <= 42 && random(world) < 0.1) {
@@ -1615,41 +1578,6 @@ function updateEnemies(world: World, dt: number, now: number) {
     });
   }
 
-  if (world.phase === 'group-defeat' || (world.phase === 'game-over' && world.defeatKind === 'group')) {
-    const centerX = clamp(world.heroX, 80, WIDTH - 80);
-    const amazons = world.enemies.filter((enemy) => enemy.kind === 'amazon');
-    const ninjas = world.enemies.filter((enemy) => enemy.kind === 'ninja');
-    world.enemies.forEach((enemy, index) => {
-      const groupIndex = enemy.kind === 'amazon'
-        ? amazons.indexOf(enemy)
-        : ninjas.indexOf(enemy);
-      const offset = enemy.kind === 'amazon'
-        ? GROUP_AMAZON_OFFSETS[groupIndex]
-        : GROUP_NINJA_OFFSETS[groupIndex];
-      if (!offset) return;
-      const targetX = clamp(centerX + offset.dx, 64, WIDTH - 64);
-      const targetY = clamp(world.heroY + offset.dy, FLOOR_MIN, FLOOR_MAX);
-      const dx = targetX - enemy.x;
-      const dy = targetY - enemy.y;
-      const distance = Math.hypot(dx, dy);
-      if (distance > 2) {
-        const step = Math.min(distance, 110 * dt);
-        enemy.x += (dx / distance) * step;
-        enemy.y += (dy / distance) * step;
-        enemy.direction = dx < 0 ? -1 : 1;
-        enemy.state = 'walk';
-        enemy.pinElapsed = 0;
-      } else {
-        enemy.x = targetX;
-        enemy.y = targetY;
-        enemy.direction = offset.dx < 0 ? 1 : offset.dx > 0 ? -1 : 1;
-        enemy.state = 'idle';
-        enemy.pinElapsed = enemy.kind === 'amazon'
-          ? (enemy.pinElapsed ?? 0) + dt
-          : 0;
-      }
-    });
-  }
 }
 
 function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) {
@@ -1672,12 +1600,7 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
     }
 
     if (world.heroHp <= 0) {
-      world.heroHp = 0;
-      world.phase = 'group-defeat';
-      world.defeatKind = 'group';
-      world.isGrappleActive = false;
-      world.defeatSecondsLeft = GROUP_DEFEAT_DURATION;
-      world.actionTimer = 0.9;
+      beginGenericDefeat(world);
     }
   } else if (world.phase === 'grapple') {
     world.grappleSecondsLeft = Math.max(0, world.grappleSecondsLeft - dt);
@@ -1889,6 +1812,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       heroineHurt: heroineHurtAudioUrl,
       heroineStruggle: heroineStruggleAudioUrl,
       enemyLaugh: enemyLaughAudioUrl,
+      heroineFaintSigh: heroineFaintSighAudioUrl,
     };
     const worldSound = worldRef.current.sound;
     for (const [cue, url] of Object.entries(soundUrls) as [SoundCue, string][]) {
