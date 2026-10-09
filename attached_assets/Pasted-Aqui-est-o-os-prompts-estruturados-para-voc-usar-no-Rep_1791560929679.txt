@@ -1,0 +1,82 @@
+Aqui estão os prompts estruturados para você usar no Replit, organizados por sprite sheet e com descrições detalhadas para facilitar a integração no seu motor de jogo 2D.
+
+**Recomendações para o Replit:**
+
+* **Fundo:** Como todas as imagens têm um fundo quadriculado (xadrez), assumirei que você vai remover a cor do fundo (tornar transparente) ou usar a grade como parte da estética (menos provável). Os prompts abaixo pedem a renderização *com* fundo transparente para facilitar a vida no código.
+* **Nomes:** Mantenha os nomes dos arquivos exatamente como você forneceu para que o código funcione.
+
+---
+
+### 1. Prompt para `amazon_ebony.png` (Personagem Principal - Idle, Walk, Run, Kicks Básicos)
+
+Este prompt gera a folha de sprites com 10 poses de ação e movimento, baseada na imagem `image_17.png`.
+
+**Prompt:**
+
+> "A 2D pixel art sprite sheet, in a detailed 16-bit fighting game style (similar to King of Fighters), featuring the character 'Amazon Ebony'. The sprites are arranged in a 5x2 grid against a solid, clean white background (for easy transparency masking in Replit).
+> The character, Amazon Ebony, is a very muscular dark-skinned woman with long dark dreadlocks, wearing a brown leather bikini top and loincloth, and beaded necklaces.
+> Row 1 (Basic Movement):
+> 1. Idle Stance (breathing, fists raised).
+> 2. Walking Forward Cycle.
+> 3. Running Forward Cycle.
+> 4. Crouching.
+> 5. Jump (upward arc).
+> 
+> 
+> Row 2 (Kicks & Combat):
+> 6. Standing Front Kick (low).
+> 7. Standing Spin Kick (mid).
+> 8. Standing High Kick (high, fully extended leg showing sole).
+> 9. Special (Pin Down, crouching ready pose).
+> 10. Get Hit (flinching pose).
+> The pixel art is clean, with consistent proportions and shading across all frames. The feet are bare and detailed."
+
+---
+
+### 2. Prompt para `amazon_ebony_2.png` (Chute Especial de Borda de Tela)
+
+Este prompt gera a sequência de 3 imagens que compõem o ataque de canto de tela, com a oponente, baseada em `image_18.png` (Cenas 7, 8, 9, 10).
+
+**Prompt:**
+
+> "A 2D pixel art sprite sheet, in a detailed 16-bit fighting game style (similar to King of Fighters), detailing a 3-frame special attack sequence ('Final Blow & Defeat') featuring Amazon Ebony and a prone blonde soldier opponent. The sprites are arranged in a horizontal strip against a solid, clean white background.
+> Frame 1 (Preparation): Amazon Ebony stands over a defeated, prone blonde soldier, lifting her foot high.
+> Frame 2 (Victory Stance): Amazon Ebony strikes a triumphant pose over the downed opponent, hands on hips, smiling.
+> Frame 3 (Ultimate Humiliation): Amazon Ebony sits on the kneeling blonde opponent's back, forcing her own large, bare foot into the opponent's face, with multiple pink heart particle effects floating from the opponent's head.
+> Amazon Ebony is consistent with the description from image_17.png. The prone opponent is consistent across all frames. The art is high-quality, classic 16-bit pixel art."
+
+---
+
+### 3. Prompt para `amazon_ebony_stomp.png` (Combo de Pisa/Ataque Aéreo)
+
+Este prompt gera a sequência de 6 imagens do combo de pisa, com a oponente no chão, baseada em `image_19.png` (Cenas 1, 2, 3, 4, 5, 6).
+
+**Prompt:**
+
+> "A 2D pixel art sprite sheet, in a detailed 16-bit fighting game style (similar to King of Fighters), detailing a 6-frame aerial stomp and ground combo sequence ('Stomp Attack - Standing Over Victim') featuring Amazon Ebony and a prone blonde soldier opponent. The sprites are arranged in a 2x3 grid against a solid, clean white background.
+> Top Row (Leap):
+> 1. Preparation (standing over victim).
+> 2. Leap / Jump (airborne).
+> 3. Aerial Descent (feet first).
+> 
+> 
+> Bottom Row (Impact):
+> 4. Descending Press (impact on victim's torso).
+> 5. Two-Footed Impact (crushing force, showing detailed bare soles).
+> 6. Repeated Strike (re-stamping).
+> Amazon Ebony is consistent with the description from image_17.png. The prone opponent reacts to each impact. The art is high-quality, classic 16-bit pixel art."
+
+---
+
+### 4. Prompt para `amazon_ebony_victory.png` (Pisa e Humilhação de Vitória)
+
+Este prompt gera a sequência de 4 imagens da cena final de vitória e humilhação, com a oponente, baseada em `image_20.png` (Cenas 7, 8, 9, 10). Notei que a imagem que você forneceu para este arquivo é idêntica à do `amazon_ebony_2.png`, mas vou gerar a versão *exata* de 4 quadros para evitar confusão.
+
+**Prompt:**
+
+> "A 2D pixel art sprite sheet, in a detailed 16-bit fighting game style (similar to King of Fighters), detailing a 4-frame victory and humiliation sequence ('Amazon's Victory') featuring Amazon Ebony and a prone blonde soldier opponent. The sprites are arranged in a 2x2 grid against a solid, clean white background.
+> Top Left (Final Blow & Defeat): Amazon Ebony delivers the final strike to the fallen opponent.
+> Top Right (Victory Stance): Triumphant stance over the defeated opponent.
+> Bottom Left (Submission): Stomping on the defeated opponent's chest.
+> Bottom Right (Ultimate Humiliation): Sitting on the opponent's chest/face, forcing her bare foot into the opponent's mouth/face, with floating pink heart effects.
+> Amazon Ebony is consistent with the description from image_17.png. The blonde opponent is consistent. The art is high-quality, classic 16-bit pixel art."
