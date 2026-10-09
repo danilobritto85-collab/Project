@@ -117,7 +117,8 @@ function App() {
     releaseVirtualControl,
     chooseRoxyChallenge,
     exitRoxyChallenge,
-  } = useJungleGame(canvasRef);
+    exitEbonyVictory,
+  } = useJungleGame(canvasRef, fightConfig);
   const hpPercent = Math.max(0, Math.min(100, (snapshot.heroHp / snapshot.maxHeroHp) * 100));
   const escapePercent = Math.max(0, Math.min(100, snapshot.escapeProgress * 100));
   const isTitle = snapshot.phase === 'title';
@@ -254,10 +255,11 @@ function App() {
                             onChange={(event) => setFightConfig((current) => ({
                               ...current, ebonyVictory: event.target.checked,
                             }))} />
-                          Poses especiais de vitória Ebony
+                          Incluir cenas consentidas de vitória Ebony
                         </label>
                         <p>Stomp automático: com 42 HP ou menos, ataques próximos têm 25% de chance
-                          de iniciar o combo de 6 quadros. A pose final de combate é opcional.</p>
+                          de iniciar o combo de 6 quadros. As cenas finais são opcionais
+                          e podem ser encerradas a qualquer momento.</p>
                       </div>
                     )}
                     {fightConfig.roxy > 0 ? (
@@ -295,7 +297,7 @@ function App() {
               </div>
             )}
 
-            {isDefeatSequence && !isGroupDefeat && (
+            {isDefeatSequence && !isGroupDefeat && !snapshot.ebonyVictoryActive && (
               <div className="sequence-hud defeat-hud" role="status"
                 data-testid={isNinjaFootsmother ? 'status-ninja-footsmother'
                   : isRoxySmother ? 'status-roxy-smother'
@@ -327,6 +329,12 @@ function App() {
                 data-testid="button-retry-defeat"
               >
                 <RotateCcw aria-hidden="true" /> <span>Tentar novamente</span>
+              </button>
+            )}
+            {snapshot.ebonyVictoryActive && (
+              <button className="end-ebony-scene" type="button"
+                onClick={exitEbonyVictory} data-testid="button-end-ebony-scene">
+                Encerrar cena
               </button>
             )}
 

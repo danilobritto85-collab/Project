@@ -2,3 +2,4 @@
 - [Defeat sequences](sequence-visibility.md) — generic defeats have no timer card and static enemies; Ninja and Amazon custom struggles use audio.
 - [Amazon styling](amazon-styling.md) — Amazon toenails are red, including paired scenes and palette variants.
 - [Roxy sequences](roxy-sequences.md) — ninth opponent; foot-kiss scene requires explicit opt-in, no hypnosis or HP drain, and an option to stop.
+- [Amazon Ebony](amazon-ebony.md) — selectable Amazon variant; the user defines her optional victory scenes as consensual.

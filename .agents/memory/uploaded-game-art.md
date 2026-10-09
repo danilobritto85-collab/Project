@@ -27,6 +27,12 @@ For warm-tinted checkerboards behind dark costumes, sample both tones from clean
 
 **How to apply:** Compare full RGB against the sampled warm tones, keep cool dark outline colors outside the key, and inspect both idle and paired combat poses for leftover tiles or holes.
 
+Color-keying is not sufficient when a checker palette overlaps dark skin or costume shadows. Use a subject-aware alpha mask rather than widening the key or matching the entire ramp between checker tones.
+
+**Why:** The Ebony illustrations had foreground colors overlapping their differently tinted checkers. Both broader grayscale keys and palette-ramp keys erased real bodies; narrower keys left tiles.
+
+**How to apply:** Treat already-masked transparent assets as final alpha data. Preserve that mask during normalization instead of keying it again.
+
 For paired Ninja artwork, remove disconnected checker fragments before repairing the alpha mask, and repair each cell independently.
 
 **Why:** Warm checker colors also occurred in the heroine's boots and Ninja facial/clothing shadows. Color keying alone removed real artwork; simply narrowing the key left a visible checker grid.

@@ -4,8 +4,8 @@ import { removeCheckerFragments, repairForegroundMask } from './spriteMask';
 import { getRedToenailFrame, withRedToenails } from './toenailPolish';
 import {
   EBONY_FRAMES, EBONY_WALK, EBONY_RUN, EBONY_ATTACKS, EBONY_BASE_CROPS,
-  EBONY_STOMP, EBONY_FINAL_STRIKE, EBONY_STOMP_DURATION, EBONY_VICTORY_DURATION,
-  cleanEbonySheet, drawEbonyFrame, type EbonyFrame,
+  EBONY_STOMP, EBONY_VICTORY, EBONY_DUO_VICTORY, EBONY_STOMP_DURATION, EBONY_VICTORY_DURATION,
+  prepareEbonySheet, drawEbonyFrame, type EbonyFrame,
 } from './ebonySprites';
 
 import amazonSheetUrl from '@assets/amazon_1791470375689.png';
@@ -28,9 +28,10 @@ import enemyLaughAudioUrl from '@assets/generated_audio/enemy_laugh.mp3';
 import heroineFaintSighAudioUrl from '@assets/generated_audio/heroine_faint_sigh.mp3';
 import roxyKickAudioUrl from '@assets/generated_audio/roxy_kick.mp3';
 import roxyDialogueAudioUrl from '@assets/generated_audio/roxy_voluntary_dialogue.mp3';
-import ebonySheetUrl from '@assets/amazon_ebony_1791560944520.png';
-import ebonyStompUrl from '@assets/amazon_ebony_stomp_1791560944521.png';
-import ebonyVictoryUrl from '@assets/amazon_ebony_victory_1791560944521.png';
+import ebonySheetUrl from '@assets/amazon_ebony_clean.png';
+import ebonyStompUrl from '@assets/amazon_ebony_stomp_clean.png';
+import ebonyVictoryUrl from '@assets/amazon_ebony_victory_clean.png';
+import ebonyDuoVictoryUrl from '@assets/amazon_ebony_duo_clean.png';
 
 const WIDTH = 1024;
 const HEIGHT = 576;
@@ -88,6 +89,7 @@ export interface GameSnapshot {
   defeatSecondsLeft: number;
   soundEnabled: boolean;
   roxyChallengeElapsed: number;
+  ebonyVictoryActive: boolean;
 }
 
 interface SpriteRect {
@@ -104,6 +106,7 @@ interface SpriteAtlas {
   ebony: HTMLCanvasElement | null;
   ebonyStomp: HTMLCanvasElement | null;
   ebonyVictory: HTMLCanvasElement | null;
+  ebonyDuoVictory: HTMLCanvasElement | null;
   ninja: HTMLCanvasElement | null;
   ninjaFootsmother: HTMLCanvasElement | null;
   ninjaFootsmotherEnding: HTMLCanvasElement | null;
@@ -154,6 +157,7 @@ interface World {
   fightConfig: FightConfig;
   ebonyElapsed: number;
   ebonyHitFrame: number;
+  ebonyPartnerId: number | null;
   isGrappleActive: boolean;
   heroX: number;
   heroY: number;
@@ -376,6 +380,7 @@ const initialSnapshot: GameSnapshot = {
   defeatSecondsLeft: 0,
   soundEnabled: true,
   roxyChallengeElapsed: 0,
+  ebonyVictoryActive: false,
 };
 
 function createFightLineup(config: FightConfig): EnemyKind[] {
@@ -432,6 +437,7 @@ function createWorld(
     fightConfig: { ...fightConfig },
     ebonyElapsed: 0,
     ebonyHitFrame: -1,
+    ebonyPartnerId: null,
     isGrappleActive: false,
     heroX: 175,
     heroY: 479,
@@ -502,6 +508,7 @@ function publishSnapshot(world: World): GameSnapshot {
     defeatSecondsLeft: Math.max(0, world.defeatSecondsLeft),
     soundEnabled: world.soundEnabled,
     roxyChallengeElapsed: world.phase === STATE_ROXY_CHALLENGE ? world.roxyDefeatElapsed : 0,
+    ebonyVictoryActive: world.defeatKind === 'ebony-victory',
   };
 }
 
@@ -1513,7 +1520,28 @@ function drawWorld(
 
   const specialSequence = world.phase === 'special-defeat' ||
     (world.phase === 'game-over' && world.defeatKind === 'special');
-  if (ninjaFootsmotherSequence || roxyDefeatSequence) {
+  const ebonyScene = world.phase === 'ebony-stomp' || world.phase === 'ebony-victory' ||
+    (world.phase === 'game-over' && world.defeatKind === 'ebony-victory');
+  if (ebonyScene) {
+    const attacker = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
+    for (const enemy of world.enemies.filter((e) => e.active && e.hp > 0 && e !== attacker &&
+      (world.phase === 'ebony-stomp' || e.id !== world.ebonyPartnerId))
+      .sort((a, b) => a.y - b.y)) {
+      drawEnemySprite(context, atlas, enemy, enemy.ebony ? EBONY_FRAMES.idle : ENEMY_FRAMES[enemy.kind].idle);
+    }
+    const flipped = attacker?.direction === -1;
+    if (world.phase === 'ebony-stomp') {
+      const index = Math.min(5, Math.floor(world.ebonyElapsed / (EBONY_STOMP_DURATION / 6)));
+      drawEbonyFrame(context, atlas.ebonyStomp, EBONY_STOMP[index],
+        world.heroX, world.heroY, flipped);
+    } else {
+      const frames = world.ebonyPartnerId ? EBONY_DUO_VICTORY : EBONY_VICTORY;
+      const sheet = world.ebonyPartnerId ? atlas.ebonyDuoVictory : atlas.ebonyVictory;
+      const index = Math.min(frames.length - 1,
+        Math.floor(world.ebonyElapsed / (EBONY_VICTORY_DURATION / frames.length)));
+      drawEbonyFrame(context, sheet, frames[index], world.heroX, world.heroY, flipped);
+    }
+  } else if (ninjaFootsmotherSequence || roxyDefeatSequence) {
     // The paired sprite sheet already contains both fighters; skip the regular actor pass.
   } else if (specialSequence || world.phase === 'grapple') {
     const isStruggle = specialSequence;
@@ -1587,7 +1615,7 @@ function drawWorld(
     world.enemies
       .filter((enemy) => enemy.hp > 0 && enemy.active)
       .forEach((enemy) => {
-        const idlePose = ENEMY_FRAMES[enemy.kind].idle;
+        const idlePose = enemy.ebony ? EBONY_FRAMES.idle : ENEMY_FRAMES[enemy.kind].idle;
         defeatActors.push({
           y: enemy.y,
           draw: () => drawEnemySprite(context, atlas, enemy, idlePose),
@@ -1602,8 +1630,9 @@ function drawWorld(
 
     for (const enemy of visibleEnemies) {
       const defeated = !enemy.active;
+      const enemyFrames = enemy.ebony ? EBONY_FRAMES : ENEMY_FRAMES[enemy.kind];
       const rect = defeated
-        ? enemy.stateTimer > 0 ? ENEMY_FRAMES[enemy.kind].down : ENEMY_FRAMES[enemy.kind].defeated
+        ? enemy.stateTimer > 0 ? enemyFrames.down : enemyFrames.defeated
         : enemyAnimationFrame(enemy, now);
       const extendedRoxyKick = enemy.kind === 'roxy' && enemy.state === 'attack' &&
         enemy.attackPoseIndex % ATTACK_FRAMES.roxy.length === 1;
@@ -1654,7 +1683,29 @@ function enterGameOver(world: World) {
   world.defeatSecondsLeft = 0;
 }
 
-function beginGenericDefeat(world: World) {
+function beginGenericDefeat(world: World, attacker?: Enemy) {
+  if (attacker?.ebony && world.fightConfig.ebonyVictory) {
+    world.heroHp = 0;
+    world.phase = 'ebony-victory';
+    world.defeatKind = 'ebony-victory';
+    world.isGrappleActive = true;
+    world.currentGrappler = attacker.id;
+    world.ebonyElapsed = 0;
+    world.ebonyHitFrame = -1;
+    world.ebonyPartnerId = world.enemies.find((enemy) =>
+      enemy.ebony && enemy.id !== attacker.id && enemy.active && enemy.hp > 0)?.id ?? null;
+    world.defeatSecondsLeft = EBONY_VICTORY_DURATION;
+    world.heroX = clamp(world.heroX, 240, WIDTH - 240);
+    world.heroY = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
+    world.jumpOffset = 0;
+    world.jumpVelocity = 0;
+    world.heroVelocityX = 0;
+    world.heroVelocityY = 0;
+    world.particles = [];
+    stopClips(world);
+    playStomp(world);
+    return;
+  }
   world.heroHp = 0;
   world.phase = 'group-defeat';
   world.defeatKind = 'group';
@@ -1665,6 +1716,14 @@ function beginGenericDefeat(world: World) {
   world.heroVelocityX = 0;
   world.heroVelocityY = 0;
   playClip(world, 'heroineFaintSigh', 0.68, 3500);
+}
+
+function stopEbonyVictory(world: World) {
+  if (world.defeatKind !== 'ebony-victory') return;
+  stopClips(world);
+  world.ebonyPartnerId = null;
+  world.currentGrappler = null;
+  beginGenericDefeat(world);
 }
 
 function beginRoxyOffer(world: World, enemy: Enemy) {
@@ -1731,6 +1790,25 @@ function endRoxyChallenge(world: World) {
 }
 
 function beginSpecialGrapple(world: World, enemy: Enemy) {
+  if (enemy.ebony) {
+    world.phase = 'ebony-stomp';
+    world.isGrappleActive = true;
+    world.currentGrappler = enemy.id;
+    world.ebonyElapsed = 0;
+    world.ebonyHitFrame = -1;
+    world.heroX = clamp(world.heroX, 240, WIDTH - 240);
+    world.heroY = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
+    world.heroVelocityX = 0;
+    world.heroVelocityY = 0;
+    world.jumpOffset = 0;
+    world.jumpVelocity = 0;
+    enemy.direction = enemy.x < world.heroX ? 1 : -1;
+    enemy.x = world.heroX - enemy.direction * 100;
+    enemy.y = world.heroY;
+    enemy.vx = 0;
+    enemy.vy = 0;
+    return;
+  }
   world.phase = 'grapple';
   world.isGrappleActive = true;
   world.currentGrappler = enemy.id;
@@ -1955,7 +2033,7 @@ function updateEnemies(world: World, dt: number, now: number) {
         playStomp(world);
         playClip(world, 'heroineHurt', 0.64, 430);
         if (world.heroHp <= 0) {
-          beginGenericDefeat(world);
+          beginGenericDefeat(world, enemy);
           continue;
         }
         if (world.heroHp <= 42 && random(world) < 0.25) {
@@ -2035,6 +2113,46 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
 
     if (world.heroHp <= 0) {
       beginGenericDefeat(world);
+    }
+  } else if (world.phase === 'ebony-stomp') {
+    const attacker = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
+    world.ebonyElapsed = Math.min(EBONY_STOMP_DURATION, world.ebonyElapsed + dt);
+    // Process each impact once, including slow frames that cross a boundary.
+    for (const index of [3, 4, 5]) {
+      if (world.ebonyElapsed >= index * EBONY_STOMP_DURATION / 6 && world.ebonyHitFrame < index) {
+        world.ebonyHitFrame = index;
+        world.heroHp = Math.max(0, world.heroHp - 6);
+        playStomp(world);
+        playClip(world, 'amazonKick', .56, 120);
+        playClip(world, 'heroineHurt', .48, 300);
+      }
+    }
+    if (world.ebonyElapsed >= EBONY_STOMP_DURATION) {
+      if (world.heroHp <= 0) beginGenericDefeat(world, attacker);
+      else {
+        world.phase = 'playing';
+        world.isGrappleActive = false;
+        world.currentGrappler = null;
+        world.heroHitCooldown = 2;
+        world.heroAction = 'idle';
+        world.enemies.forEach((enemy) => {
+          enemy.state = 'idle';
+          enemy.attackCooldown = Math.max(enemy.attackCooldown, 2);
+          enemy.vx = 0;
+          enemy.vy = 0;
+        });
+      }
+    }
+  } else if (world.phase === 'ebony-victory') {
+    world.ebonyElapsed = Math.min(EBONY_VICTORY_DURATION, world.ebonyElapsed + dt);
+    world.defeatSecondsLeft = Math.max(0, EBONY_VICTORY_DURATION - world.ebonyElapsed);
+    if (world.ebonyElapsed >= 2.5 && world.ebonyHitFrame < 1) {
+      world.ebonyHitFrame = 1;
+      playClip(world, 'enemyLaugh', .4, 1600);
+    }
+    if (world.defeatSecondsLeft <= 0) {
+      stopClips(world);
+      enterGameOver(world);
     }
   } else if (world.phase === 'grapple') {
     world.grappleSecondsLeft = Math.max(0, world.grappleSecondsLeft - dt);
@@ -2178,13 +2296,18 @@ function canvasContext(canvas: HTMLCanvasElement) {
   return context;
 }
 
-export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
+export function useJungleGame(
+  canvasRef: RefObject<HTMLCanvasElement | null>,
+  selectedConfig: FightConfig = DEFAULT_FIGHT_CONFIG,
+) {
   const worldRef = useRef<World>(createWorld());
+  const selectedConfigRef = useRef(selectedConfig);
+  selectedConfigRef.current = selectedConfig;
   const [snapshot, setSnapshot] = useState<GameSnapshot>(initialSnapshot);
   const [heroPortrait, setHeroPortrait] = useState<string | null>(null);
   const pressedRef = useRef<Set<string>>(new Set());
 
-  const startGame = useCallback((config: FightConfig = DEFAULT_FIGHT_CONFIG) => {
+  const startGame = useCallback((config: FightConfig = selectedConfigRef.current) => {
     const world = worldRef.current;
     if (world.phase === 'title' || world.phase === 'game-over') {
       const lineup = createFightLineup(config);
@@ -2192,7 +2315,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       const soundEnabled = world.soundEnabled;
       const previousSound = world.sound;
       stopClips(world);
-      Object.assign(world, createWorld(lineup), {
+      Object.assign(world, createWorld(lineup, config), {
         phase: 'playing',
         soundEnabled,
         sound: { ...previousSound, enabled: soundEnabled },
@@ -2209,7 +2332,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
     const soundEnabled = world.soundEnabled;
     const previousSound = world.sound;
     stopClips(world);
-    Object.assign(world, createWorld(lineup), {
+    Object.assign(world, createWorld(lineup, world.fightConfig), {
       phase: 'playing',
       soundEnabled,
       sound: { ...previousSound, enabled: soundEnabled },
@@ -2217,6 +2340,11 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
     pressedRef.current.clear();
     setSnapshot(publishSnapshot(world));
     if (soundEnabled) playStomp(world);
+  }, []);
+
+  const exitEbonyVictory = useCallback(() => {
+    stopEbonyVictory(worldRef.current);
+    setSnapshot(publishSnapshot(worldRef.current));
   }, []);
 
   const chooseRoxyChallenge = useCallback((accepted: boolean) => {
@@ -2233,6 +2361,10 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
 
   const pressVirtualControl = useCallback((code: string) => {
     const world = worldRef.current;
+    if (code === 'Escape' && world.defeatKind === 'ebony-victory') {
+      exitEbonyVictory();
+      return;
+    }
     const wasPressed = pressedRef.current.has(code);
     pressedRef.current.add(code);
 
@@ -2293,10 +2425,15 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
     let frameId = 0;
     let lastTime = 0;
     let lastPublish = 0;
+    let freezePreview = false;
     let atlas: SpriteAtlas = {
       background: null,
       hero: null,
       amazon: null,
+      ebony: null,
+      ebonyStomp: null,
+      ebonyVictory: null,
+      ebonyDuoVictory: null,
       ninja: null,
       ninjaFootsmother: null,
       ninjaFootsmotherEnding: null,
@@ -2329,6 +2466,40 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
     if (import.meta.env.DEV) {
       const params = new URLSearchParams(window.location.search);
       const scene = params.get('_scene');
+      if (scene === 'ebony-base' || scene === 'ebony-stomp' || scene === 'ebony-victory') {
+        const duo = params.get('_duo') === '1';
+        const config: FightConfig = {
+          amazonas: duo ? 2 : 1, ninjas: 0, roxy: 0,
+          amazonVariant: 'ebony', ebonyVictory: true,
+        };
+        const world = worldRef.current;
+        const oldSound = world.sound;
+        Object.assign(world, createWorld(createFightLineup(config), config), {
+          phase: 'playing', heroX: 512, heroY: 510, heroHp: 35,
+          sound: oldSound, soundEnabled: false,
+        });
+        world.sound.enabled = false;
+        const enemy = world.enemies[0];
+        enemy.x = 642;
+        enemy.y = 510;
+        enemy.direction = 1;
+        const pose = Math.floor(clamp(Number(params.get('_pose') ?? '0'), 0, 5));
+        if (scene === 'ebony-stomp') {
+          beginSpecialGrapple(world, enemy);
+          world.ebonyElapsed = pose * EBONY_STOMP_DURATION / 6 + .05;
+          world.ebonyHitFrame = pose;
+        } else if (scene === 'ebony-victory') {
+          beginGenericDefeat(world, enemy);
+          world.ebonyElapsed = Math.min(3, pose) * EBONY_VICTORY_DURATION / 4 + .05;
+        } else {
+          enemy.state = params.get('_action') === 'walk' ? 'walk'
+            : params.get('_action') === 'run' ? 'run'
+            : params.get('_action') === 'hurt' ? 'hurt' : 'attack';
+          enemy.attackPoseIndex = pose % 3;
+        }
+        freezePreview = params.get('_freeze') === '1';
+        setSnapshot(publishSnapshot(world));
+      }
       if (scene === 'playing' || scene === 'roxy-kick' || scene === 'grapple' ||
           scene === 'special-defeat' || scene === STATE_NINJA_FOOTSMOTHER ||
           scene === STATE_ROXY_OFFER || scene === STATE_ROXY_CHALLENGE || scene === STATE_ROXY_SMOTHER ||
@@ -2486,6 +2657,10 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       loadImage(roxySmotherUrl),
       loadImage(pinAttackUrl),
       loadImage(pinExtendedUrl),
+      loadImage(ebonySheetUrl),
+      loadImage(ebonyStompUrl),
+      loadImage(ebonyVictoryUrl),
+      loadImage(ebonyDuoVictoryUrl),
     ]).then(([
       background,
       hero,
@@ -2498,12 +2673,20 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       roxySmother,
       pinAttack,
       pinExtended,
+      ebony,
+      ebonyStomp,
+      ebonyVictory,
+      ebonyDuoVictory,
     ]) => {
       if (disposed) return;
       atlas = {
         background,
         hero: removeCheckerboard(hero),
         amazon: withRedToenails(removeCheckerboard(amazon), 'amazon'),
+        ebony: withRedToenails(prepareEbonySheet(ebony, EBONY_BASE_CROPS), 'ebony'),
+        ebonyStomp: withRedToenails(prepareEbonySheet(ebonyStomp, EBONY_STOMP), 'ebonyStomp'),
+        ebonyVictory: withRedToenails(prepareEbonySheet(ebonyVictory, EBONY_VICTORY), 'ebonyVictory'),
+        ebonyDuoVictory: withRedToenails(prepareEbonySheet(ebonyDuoVictory, EBONY_DUO_VICTORY, 572), 'ebonyDuoVictory'),
         ninja: removeNinjaCheckerboard(ninja),
         ninjaFootsmother: removeFootsmotherCheckerboard(ninjaFootsmother),
         ninjaFootsmotherEnding: removeFootsmotherCheckerboard(
@@ -2535,7 +2718,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       const world = worldRef.current;
       const dt = lastTime === 0 ? 0 : Math.min(0.045, (time - lastTime) / 1000);
       lastTime = time;
-      stepWorld(world, dt, time, pressedRef.current);
+      if (!freezePreview) stepWorld(world, dt, time, pressedRef.current);
       drawWorld(context, world, atlas, time);
       if (time - lastPublish >= 100) {
         setSnapshot(publishSnapshot(world));
@@ -2547,7 +2730,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
     const onKeyDown = (event: KeyboardEvent) => {
       if (
         event.target instanceof HTMLElement &&
-        ['INPUT', 'TEXTAREA'].includes(event.target.tagName)
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)
       ) {
         return;
       }
@@ -2599,6 +2782,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
     snapshot,
     startGame,
     restartGame,
+    exitEbonyVictory,
     toggleSound,
     chooseRoxyChallenge,
     exitRoxyChallenge,

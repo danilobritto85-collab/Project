@@ -1,10 +1,21 @@
-type AtlasKind = 'amazon' | 'ebony' | 'ebonyStomp' | 'pinAttack' | 'pinExtended';
+type AtlasKind = 'amazon' | 'ebony' | 'ebonyStomp' | 'ebonyVictory' | 'ebonyDuoVictory' | 'pinAttack' | 'pinExtended';
 type NailCluster = readonly [number, number, 'front' | 'side', number?, number?];
 interface FrameRect { x: number; y: number; w: number; h: number }
 
 // Coordinates refer to the normalized 1024×768 sheets. Only exposed nail
 // surfaces are painted; sole-facing and covered toes are left untouched.
 const NAILS: Record<AtlasKind, readonly NailCluster[]> = {
+  ebonyVictory: [
+    [329, 304, 'side', 1.2], [760, 341, 'front', 1.1],
+    [873, 303, 'side', 1.2], [143, 689, 'front', 1.2],
+    [240, 676, 'side', 1.2],
+  ],
+  ebonyDuoVictory: [
+    [471, 255, 'side'], [234, 236, 'front'],
+    [376, 220, 'side'], [758, 249, 'front'],
+    [984, 253, 'front'], [879, 219, 'side'],
+    [420, 541, 'front'], [124, 518, 'front'], [278, 500, 'side'],
+  ],
   ebony: [
     [39, 249, 'front'], [118, 240, 'side'],
     [440, 249, 'side'], [537, 249, 'side'],
@@ -87,8 +98,9 @@ export function withRedToenails(image: HTMLCanvasElement | null, kind: AtlasKind
   const source = sourceContext.getImageData(0, 0, image.width, image.height).data;
   for (let i = 0; i < polish.data.length; i += 4) {
     // Preserve outlines, wraps and the existing alpha mask.
-    if (!source[i + 3] || source[i] < 105 ||
-      source[i] < source[i + 1] + 12 || source[i + 1] < source[i + 2] + 5) {
+    const isEbony = kind.startsWith('ebony');
+    if (!source[i + 3] || source[i] < (isEbony ? 40 : 105) ||
+      source[i] < source[i + 1] + 12 || source[i + 1] < source[i + 2] + (isEbony ? 3 : 5)) {
       polish.data[i + 3] = 0;
     }
   }
