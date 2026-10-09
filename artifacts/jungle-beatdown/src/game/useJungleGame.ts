@@ -371,11 +371,14 @@ type OpponentKind = EnemyKind | 'ebony';
 
 function createFightLineup(config: FightConfig): OpponentKind[] {
   const counts: Record<OpponentKind, number> = {
-    amazon: clamp(Math.floor(config.amazonas), 0, 5),
-    ebony: clamp(Math.floor(config.ebony), 0, 5),
-    ninja: clamp(Math.floor(config.ninjas), 0, 3),
-    roxy: clamp(Math.floor(config.roxy), 0, 1),
+    amazon: config.amazonas,
+    ebony: config.ebony,
+    ninja: config.ninjas,
+    roxy: config.roxy,
   };
+  if (Object.values(counts).some((count) => !Number.isSafeInteger(count) || count < 0)) {
+    throw new RangeError('As quantidades de adversárias devem ser números inteiros não negativos.');
+  }
   if (counts.amazon === 5 && counts.ninja === 3 && counts.roxy === 1 && counts.ebony === 0) {
     return [...STARTING_ENEMY_KINDS];
   }
@@ -410,7 +413,7 @@ function createEnemy(id: number, index: number, opponent: OpponentKind, lineupSi
     state: 'idle',
     stateTimer: 0,
     attackPoseIndex: index % 3,
-    attackCooldown: 1.3 + index * 0.32,
+    attackCooldown: 1.3 + (index % 9) * 0.32,
     respawnAt: 0,
     hue: kind === 'amazon' && index > 0 ? ((index * 19) % 41) - 20 : 0,
   };

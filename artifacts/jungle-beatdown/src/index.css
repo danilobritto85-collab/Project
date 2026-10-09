@@ -356,13 +356,21 @@ button:focus-visible { outline: 2px solid #f4cc63; outline-offset: 3px; }
 }
 .quantity-control button svg { width: 13px; height: 13px; }
 .quantity-control button:disabled { opacity: .38; cursor: not-allowed; }
-.quantity-control output {
-  min-width: 18px;
+.quantity-control input {
+  width: 62px;
+  height: 30px;
+  padding: 3px;
+  border: 1px solid rgba(229, 202, 112, .25);
+  background: #17291f;
+  appearance: textfield;
   color: #f2e9d0;
   text-align: center;
   font: 600 14px var(--app-font-mono);
   font-variant-numeric: tabular-nums;
 }
+.quantity-control input::-webkit-inner-spin-button,
+.quantity-control input::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.quantity-control input:focus-visible { outline: 2px solid #f1d26f; outline-offset: 2px; }
 .roxy-special-help {
   margin: 0;
   color: #bac9b9;

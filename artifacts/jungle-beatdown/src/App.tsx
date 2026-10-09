@@ -24,7 +24,6 @@ import {
 } from './game/useJungleGame';
 
 type OpponentCountKey = 'amazonas' | 'ebony' | 'ninjas' | 'roxy';
-const MAX_FIGHT_COUNTS: Record<OpponentCountKey, number> = { amazonas: 5, ebony: 5, ninjas: 3, roxy: 1 };
 
 function formatScore(score: number) {
   return Math.max(0, score).toString().padStart(6, '0');
@@ -34,25 +33,28 @@ interface OpponentCounterProps {
   label: string;
   kind: OpponentCountKey;
   value: number;
-  max: number;
   onChange: (kind: OpponentCountKey, value: number) => void;
 }
 
-function OpponentCounter({ label, kind, value, max, onChange }: OpponentCounterProps) {
+function OpponentCounter({ label, kind, value, onChange }: OpponentCounterProps) {
   return (
     <div className="opponent-row">
       <div className="opponent-label">
         <span>{label}</span>
-        <small>até {max}</small>
+        <small>quantidade livre</small>
       </div>
       <div className="quantity-control" aria-label={`Quantidade de ${label}`}>
         <button type="button" onClick={() => onChange(kind, value - 1)}
           disabled={value <= 0} aria-label={`Diminuir ${label}`}>
           <Minus aria-hidden="true" />
         </button>
-        <output aria-live="polite" data-testid={`count-${kind}`}>{value}</output>
+        <input type="number" min="0" step="1" inputMode="numeric"
+          value={value} aria-label={`Quantidade de ${label}`}
+          data-testid={`count-${kind}`}
+          onChange={(event) => onChange(kind,
+            event.currentTarget.value === '' ? 0 : event.currentTarget.valueAsNumber)} />
         <button type="button" onClick={() => onChange(kind, value + 1)}
-          disabled={value >= max} aria-label={`Aumentar ${label}`}>
+          disabled={!Number.isSafeInteger(value + 1)} aria-label={`Aumentar ${label}`}>
           <Plus aria-hidden="true" />
         </button>
       </div>
@@ -136,9 +138,10 @@ function App() {
   const showRetry = isDefeatSequence || snapshot.phase === 'game-over';
   const fightCount = fightConfig.amazonas + fightConfig.ebony + fightConfig.ninjas + fightConfig.roxy;
   const handleOpponentCountChange = (kind: OpponentCountKey, value: number) => {
+    if (!Number.isSafeInteger(value) || value < 0) return;
     setFightConfig((current) => ({
       ...current,
-      [kind]: Math.max(0, Math.min(MAX_FIGHT_COUNTS[kind], value)),
+      [kind]: value,
     }));
   };
   const sequencePercent = Math.max(0, Math.min(100,
@@ -227,16 +230,16 @@ function App() {
                     <h2 id="setup-title">Escolha suas adversárias</h2>
                     <div className="opponent-list">
                       <OpponentCounter label="Amazonas" kind="amazonas"
-                        value={fightConfig.amazonas} max={MAX_FIGHT_COUNTS.amazonas}
+                        value={fightConfig.amazonas}
                         onChange={handleOpponentCountChange} />
                       <OpponentCounter label="Amazon Ebony" kind="ebony"
-                        value={fightConfig.ebony} max={MAX_FIGHT_COUNTS.ebony}
+                        value={fightConfig.ebony}
                         onChange={handleOpponentCountChange} />
                       <OpponentCounter label="Ninjas" kind="ninjas"
-                        value={fightConfig.ninjas} max={MAX_FIGHT_COUNTS.ninjas}
+                        value={fightConfig.ninjas}
                         onChange={handleOpponentCountChange} />
                       <OpponentCounter label="Roxy" kind="roxy"
-                        value={fightConfig.roxy} max={MAX_FIGHT_COUNTS.roxy}
+                        value={fightConfig.roxy}
                         onChange={handleOpponentCountChange} />
                     </div>
                     {fightConfig.ebony > 0 && (
@@ -412,7 +415,7 @@ function App() {
             <div className="touch-control-note">No celular, use os botões sobre a arena.</div>
           </div>
         </section>
-        <div className="footer-note"><Swords size={12} /> <span>Até 5 Amazonas · 5 Ebony · 3 Ninjas · 1 Roxy</span> · arena de combate 2.5D</div>
+        <div className="footer-note"><Swords size={12} /> <span>Quantidades livres · Muitos personagens podem reduzir o desempenho</span> · arena de combate 2.5D</div>
       </div>
     </main>
   );
