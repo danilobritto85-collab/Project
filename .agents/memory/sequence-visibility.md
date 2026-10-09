@@ -11,12 +11,6 @@ Do not show a Game Over screen at the end. Generic defeats may hold the heroine'
 
 **How to apply:** Put countdown and escape instructions outside the main fight area and never replace the scene with an end-screen modal.
 
-Generic defeats show only the heroine falling and fainting. Do not render or animate Amazonas or Ninjas in this state; for now, enemy defeat choreography is limited to the personalized struggle sequences.
-
-**Why:** The user explicitly removed generic Amazon/Ninja defeat animations and asked to keep only personalized struggle animations for now.
-
-**How to apply:** Keep the heroine's short hurt/down/defeated progression, hide all enemies for the generic defeat branch, and leave custom grapple/struggle branches unchanged.
-
 In generic defeats, keep active enemies visible in neutral idle poses at their current positions. Do not animate, reposition, or use enemy defeat/pin poses. Hide the generic defeat countdown card while keeping the internal transition timer.
 
 **Why:** The user asked to remove enemy animations during generic defeats and said the heroine does not need a counter when she falls.
