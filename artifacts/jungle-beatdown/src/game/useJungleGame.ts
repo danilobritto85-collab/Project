@@ -2,6 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { removeCheckerFragments, repairForegroundMask } from './spriteMask';
 import { getRedToenailFrame, withRedToenails } from './toenailPolish';
+import {
+  EBONY_FRAMES, EBONY_WALK, EBONY_RUN, EBONY_ATTACKS, EBONY_BASE_CROPS,
+  EBONY_STOMP, EBONY_FINAL_STRIKE, EBONY_STOMP_DURATION, EBONY_VICTORY_DURATION,
+  cleanEbonySheet, drawEbonyFrame, type EbonyFrame,
+} from './ebonySprites';
 
 import amazonSheetUrl from '@assets/amazon_1791470375689.png';
 import backgroundUrl from '@assets/background_1791470375690.png';
@@ -23,6 +28,9 @@ import enemyLaughAudioUrl from '@assets/generated_audio/enemy_laugh.mp3';
 import heroineFaintSighAudioUrl from '@assets/generated_audio/heroine_faint_sigh.mp3';
 import roxyKickAudioUrl from '@assets/generated_audio/roxy_kick.mp3';
 import roxyDialogueAudioUrl from '@assets/generated_audio/roxy_voluntary_dialogue.mp3';
+import ebonySheetUrl from '@assets/amazon_ebony_1791560944520.png';
+import ebonyStompUrl from '@assets/amazon_ebony_stomp_1791560944521.png';
+import ebonyVictoryUrl from '@assets/amazon_ebony_victory_1791560944521.png';
 
 const WIDTH = 1024;
 const HEIGHT = 576;
@@ -36,12 +44,16 @@ export interface FightConfig {
   amazonas: number;
   ninjas: number;
   roxy: number;
+  amazonVariant: 'classic' | 'ebony';
+  ebonyVictory: boolean;
 }
 
 export const DEFAULT_FIGHT_CONFIG: FightConfig = {
   amazonas: 5,
   ninjas: 3,
   roxy: 1,
+  amazonVariant: 'classic',
+  ebonyVictory: false,
 };
 
 export const STATE_NINJA_FOOTSMOTHER = 'ninja-footsmother' as const;
@@ -52,6 +64,8 @@ export const STATE_ROXY_SMOTHER = 'roxy-smother' as const;
 export type GamePhase =
   | 'title'
   | 'playing'
+  | 'ebony-stomp'
+  | 'ebony-victory'
   | 'grapple'
   | 'special-defeat'
   | typeof STATE_NINJA_FOOTSMOTHER
@@ -87,6 +101,9 @@ interface SpriteAtlas {
   background: HTMLImageElement | null;
   hero: HTMLCanvasElement | null;
   amazon: HTMLCanvasElement | null;
+  ebony: HTMLCanvasElement | null;
+  ebonyStomp: HTMLCanvasElement | null;
+  ebonyVictory: HTMLCanvasElement | null;
   ninja: HTMLCanvasElement | null;
   ninjaFootsmother: HTMLCanvasElement | null;
   ninjaFootsmotherEnding: HTMLCanvasElement | null;
@@ -103,6 +120,7 @@ type EnemyState = 'idle' | 'walk' | 'run' | 'attack' | 'hurt' | 'down';
 interface Enemy {
   id: number;
   kind: EnemyKind;
+  ebony: boolean;
   x: number;
   y: number;
   vx: number;
@@ -132,7 +150,10 @@ interface Particle {
 
 interface World {
   phase: GamePhase;
-  defeatKind: 'special' | 'group' | 'ninja-footsmother' | 'roxy-smother' | null;
+  defeatKind: 'special' | 'group' | 'ninja-footsmother' | 'roxy-smother' | 'ebony-victory' | null;
+  fightConfig: FightConfig;
+  ebonyElapsed: number;
+  ebonyHitFrame: number;
   isGrappleActive: boolean;
   heroX: number;
   heroY: number;

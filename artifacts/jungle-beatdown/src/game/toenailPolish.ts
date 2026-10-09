@@ -1,10 +1,23 @@
-type AtlasKind = 'amazon' | 'pinAttack' | 'pinExtended';
+type AtlasKind = 'amazon' | 'ebony' | 'ebonyStomp' | 'pinAttack' | 'pinExtended';
 type NailCluster = readonly [number, number, 'front' | 'side', number?, number?];
 interface FrameRect { x: number; y: number; w: number; h: number }
 
 // Coordinates refer to the normalized 1024×768 sheets. Only exposed nail
 // surfaces are painted; sole-facing and covered toes are left untouched.
 const NAILS: Record<AtlasKind, readonly NailCluster[]> = {
+  ebony: [
+    [39, 249, 'front'], [118, 240, 'side'],
+    [440, 249, 'side'], [537, 249, 'side'],
+    [650, 249, 'side'], [611, 249, 'front'],
+    [775, 250, 'side'], [981, 249, 'side'],
+    [62, 510, 'front'], [168, 510, 'front'],
+    [309, 510, 'front'], [615, 510, 'front'],
+  ],
+  ebonyStomp: [
+    [48, 291, 'front'], [136, 287, 'side'],
+    [174, 686, 'front', 1.3], [536, 684, 'front', 1.3],
+    [918, 686, 'front', 1.3],
+  ],
   amazon: [
     [47, 249, 'front'], [120, 241, 'side'],
     [391, 248, 'side'], [449, 251, 'side'],

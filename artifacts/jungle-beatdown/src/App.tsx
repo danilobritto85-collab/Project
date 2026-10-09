@@ -23,7 +23,8 @@ import {
   type FightConfig,
 } from './game/useJungleGame';
 
-const MAX_FIGHT_COUNTS: FightConfig = { amazonas: 5, ninjas: 3, roxy: 1 };
+type OpponentCountKey = 'amazonas' | 'ninjas' | 'roxy';
+const MAX_FIGHT_COUNTS: Record<OpponentCountKey, number> = { amazonas: 5, ninjas: 3, roxy: 1 };
 
 function formatScore(score: number) {
   return Math.max(0, score).toString().padStart(6, '0');
@@ -31,10 +32,10 @@ function formatScore(score: number) {
 
 interface OpponentCounterProps {
   label: string;
-  kind: keyof FightConfig;
+  kind: OpponentCountKey;
   value: number;
   max: number;
-  onChange: (kind: keyof FightConfig, value: number) => void;
+  onChange: (kind: OpponentCountKey, value: number) => void;
 }
 
 function OpponentCounter({ label, kind, value, max, onChange }: OpponentCounterProps) {
@@ -128,10 +129,11 @@ function App() {
   const isRoxySmother = snapshot.phase === STATE_ROXY_SMOTHER;
   const isGroupDefeat = snapshot.phase === 'group-defeat';
   const isPlaying = snapshot.phase === 'playing';
-  const isDefeatSequence = isSpecialDefeat || isNinjaFootsmother || isRoxySmother || isGroupDefeat;
+  const isDefeatSequence = isSpecialDefeat || isNinjaFootsmother || isRoxySmother || isGroupDefeat ||
+    snapshot.phase === 'ebony-victory';
   const showRetry = isDefeatSequence || snapshot.phase === 'game-over';
   const fightCount = fightConfig.amazonas + fightConfig.ninjas + fightConfig.roxy;
-  const handleOpponentCountChange = (kind: keyof FightConfig, value: number) => {
+  const handleOpponentCountChange = (kind: OpponentCountKey, value: number) => {
     setFightConfig((current) => ({
       ...current,
       [kind]: Math.max(0, Math.min(MAX_FIGHT_COUNTS[kind], value)),
@@ -232,6 +234,32 @@ function App() {
                         value={fightConfig.roxy} max={MAX_FIGHT_COUNTS.roxy}
                         onChange={handleOpponentCountChange} />
                     </div>
+                    <label className="amazon-variant">
+                      <span>Visual das Amazonas</span>
+                      <select value={fightConfig.amazonVariant} data-testid="select-amazon-variant"
+                        onChange={(event) => setFightConfig((current) => ({
+                          ...current,
+                          amazonVariant: event.target.value as FightConfig['amazonVariant'],
+                          ebonyVictory: false,
+                        }))}>
+                        <option value="classic">Amazonas clássicas</option>
+                        <option value="ebony">Amazon Ebony</option>
+                      </select>
+                    </label>
+                    {fightConfig.amazonVariant === 'ebony' && fightConfig.amazonas > 0 && (
+                      <div className="ebony-options">
+                        <label>
+                          <input type="checkbox" checked={fightConfig.ebonyVictory}
+                            data-testid="checkbox-ebony-victory"
+                            onChange={(event) => setFightConfig((current) => ({
+                              ...current, ebonyVictory: event.target.checked,
+                            }))} />
+                          Poses especiais de vitória Ebony
+                        </label>
+                        <p>Stomp automático: com 42 HP ou menos, ataques próximos têm 25% de chance
+                          de iniciar o combo de 6 quadros. A pose final de combate é opcional.</p>
+                      </div>
+                    )}
                     {fightConfig.roxy > 0 ? (
                       <p className="roxy-special-help">
                         <strong>Especial da Roxy:</strong> é automático, sem botão. Com 42 HP ou menos,
