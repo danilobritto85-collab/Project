@@ -42,3 +42,17 @@ uri = "file://attached_assets/generated_audio/heroine_faint_sigh.mp3"
 type = "audio"
 title = "heroine_faint_sigh"
 description = "Generated sound effect: A single approximately 4-second nonverbal audio cue for an adult female fantasy beat-em-up heroine fainting after combat: start with two soft, strained, breathy gasps, then gr…"
+
+[[outputs]]
+id = "hNy7-q3wKMcXsZzNFe_pP"
+uri = "file://attached_assets/generated_audio/heroine_struggle_soft.mp3"
+type = "audio"
+title = "soft_heroine_effort"
+description = "Generated sound effect: Isolated nonverbal game sound for an adult female fantasy combat heroine: one very soft restrained exertion grunt followed by a quiet breath, tired but controlled. Subdued nat…"
+
+[[outputs]]
+id = "6CxL4JznENhDzVgaCDZmL"
+uri = "file://attached_assets/generated_audio/heroine_deep_breath.mp3"
+type = "audio"
+title = "heroine_deep_breath"
+description = "Generated sound effect: Isolated neutral breathing sound for an adult female fantasy-game character, one slow deep audible inhale followed by a gentle controlled exhale. Calm, low intensity, natural …"

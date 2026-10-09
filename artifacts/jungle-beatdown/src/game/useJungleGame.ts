@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import { repairForegroundMask } from './spriteMask';
+import { removeCheckerFragments, repairForegroundMask } from './spriteMask';
 import { getRedToenailFrame, withRedToenails } from './toenailPolish';
 
 import amazonSheetUrl from '@assets/amazon_1791470375689.png';
@@ -14,7 +14,8 @@ import ninjaFootsmotherEndingUrl from '@assets/ninja_footsmother_ending.png';
 import amazonKickAudioUrl from '@assets/generated_audio/amazon_kick.mp3';
 import ninjaKickAudioUrl from '@assets/generated_audio/ninja_kick.mp3';
 import heroineHurtAudioUrl from '@assets/generated_audio/heroine_hurt.mp3';
-import heroineStruggleAudioUrl from '@assets/generated_audio/heroine_struggle.mp3';
+import heroineStruggleAudioUrl from '@assets/generated_audio/heroine_struggle_soft.mp3';
+import heroineBreathingAudioUrl from '@assets/generated_audio/heroine_deep_breath.mp3';
 import enemyLaughAudioUrl from '@assets/generated_audio/enemy_laugh.mp3';
 import heroineFaintSighAudioUrl from '@assets/generated_audio/heroine_faint_sigh.mp3';
 
@@ -133,6 +134,7 @@ interface World {
   smokeTimer: number;
   heartTimer: number;
   struggleVoiceTimer: number;
+  nextStruggleBreath: boolean;
   randomSeed: number;
 }
 
@@ -141,6 +143,7 @@ type SoundCue =
   | 'ninjaKick'
   | 'heroineHurt'
   | 'heroineStruggle'
+  | 'heroineBreathing'
   | 'enemyLaugh'
   | 'heroineFaintSigh';
 
@@ -224,9 +227,9 @@ const NINJA_FOOTSMOTHER_FRAMES: SpriteRect[] = [
   { x: 682, y: 286, w: 342, h: 286 },
 ];
 const NINJA_FOOTSMOTHER_ENDING_FRAMES: SpriteRect[] = [
-  { x: 0, y: 0, w: 232, h: 212 },
-  { x: 232, y: 0, w: 232, h: 212 },
-  { x: 464, y: 0, w: 232, h: 212 },
+  { x: 0, y: 0, w: 232, h: 200 },
+  { x: 232, y: 0, w: 232, h: 200 },
+  { x: 464, y: 0, w: 232, h: 200 },
 ];
 const WALK_CYCLE = [0, 1, 2, 1] as const;
 const ATTACK_FRAMES: Record<EnemyKind, SpriteRect[]> = {
@@ -349,6 +352,7 @@ function createWorld(): World {
     smokeTimer: 0,
     heartTimer: 0,
     struggleVoiceTimer: 0,
+    nextStruggleBreath: false,
     randomSeed: 3917,
   };
 }
@@ -657,6 +661,20 @@ function removeFootsmotherCheckerboard(
   }
 
   context.putImageData(frame, 0, 0);
+  // Color keying can also remove warm shadows from faces, boots and clothing.
+  // Repair each paired pose independently, retaining both characters and effects.
+  const poses = includeBottomMargin
+    ? NINJA_FOOTSMOTHER_FRAMES : NINJA_FOOTSMOTHER_ENDING_FRAMES;
+  for (const pose of poses) {
+    const cropped = context.getImageData(pose.x, pose.y, pose.w, pose.h);
+    removeCheckerFragments(cropped.data, pose.w, pose.h);
+    repairForegroundMask(cropped.data, pose.w, pose.h, 700);
+    context.putImageData(cropped, pose.x, pose.y);
+  }
+  if (!includeBottomMargin) {
+    // The uploaded ending strip includes a non-artwork footer below the grid.
+    context.clearRect(0, 200, canvas.width, canvas.height - 200);
+  }
   return canvas;
 }
 
@@ -983,16 +1001,17 @@ function drawFootsmotherFrame(
 ) {
   if (!image) return;
   const visible = getCompositeVisibleBounds(image, frame);
-  const drawHeight = 196;
-  const drawWidth = (drawHeight * visible.w) / visible.h;
-  const heroineOffset = drawWidth * 0.22;
-  const pairCenterX = heroX + (flipped ? heroineOffset : -heroineOffset);
+  const endingStrip = frame.w < 300;
+  // Use body landmarks, not the changing smoke/heart bounds, to fix scale and floor.
+  const scale = 164 / (endingStrip ? 140 : 190);
+  const heroineAnchor = endingStrip ? 187 : 286;
+  const sourceGround = endingStrip ? 185 : frame.y === 0 ? 248 : 260;
 
   context.save();
   if (flipped) {
-    context.translate(pairCenterX, 0);
+    context.translate(heroX, 0);
     context.scale(-1, 1);
-    context.translate(-pairCenterX, 0);
+    context.translate(-heroX, 0);
   }
   context.drawImage(
     image,
@@ -1000,10 +1019,10 @@ function drawFootsmotherFrame(
     frame.y + visible.y,
     visible.w,
     visible.h,
-    pairCenterX - drawWidth / 2,
-    groundY - drawHeight + 7,
-    drawWidth,
-    drawHeight,
+    heroX + (visible.x - heroineAnchor) * scale,
+    groundY + 7 + (visible.y - sourceGround) * scale,
+    visible.w * scale,
+    visible.h * scale,
   );
   context.restore();
 }
@@ -1337,7 +1356,7 @@ function beginSpecialGrapple(world: World, enemy: Enemy) {
   world.heroHitCooldown = 1.1;
   world.struggleVoiceTimer = 1.45;
   playStomp(world);
-  playClip(world, 'heroineStruggle', 0.62, 900);
+  playClip(world, 'heroineStruggle', 0.32, 900);
 }
 
 function escapeGrapple(world: World) {
@@ -1620,7 +1639,7 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
     const grappler = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
     world.struggleVoiceTimer -= dt;
     if (world.struggleVoiceTimer <= 0) {
-      playClip(world, 'heroineStruggle', 0.56, 1000);
+      playClip(world, 'heroineStruggle', 0.28, 1000);
       world.struggleVoiceTimer = 1.55 + random(world) * 0.55;
     }
     if (world.grappleSecondsLeft <= 0) {
@@ -1629,7 +1648,8 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
       world.smokeTimer = 0;
       world.heartTimer = 0.12;
       stopClips(world);
-      world.struggleVoiceTimer = 1.5;
+      world.struggleVoiceTimer = 1.1;
+      world.nextStruggleBreath = true;
       playClip(world, 'enemyLaugh', 0.55, 1600);
       if (grappler?.kind === 'ninja') {
         world.phase = STATE_NINJA_FOOTSMOTHER;
@@ -1708,9 +1728,14 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
 
   if (world.phase === STATE_NINJA_FOOTSMOTHER || world.phase === 'special-defeat') {
     world.struggleVoiceTimer -= dt;
-    if (world.struggleVoiceTimer <= 0) {
-      playClip(world, 'heroineStruggle', 0.56, 1000);
-      world.struggleVoiceTimer = 1.8 + random(world) * 0.4;
+    if (world.struggleVoiceTimer <= 0 && world.defeatSecondsLeft > 1.5) {
+      // Smoke is present throughout these custom scenes. Alternate breaths and
+      // soft effort cues rather than layering two heroine voices over each other.
+      const breathing = world.nextStruggleBreath;
+      playClip(world, breathing ? 'heroineBreathing' : 'heroineStruggle',
+        breathing ? 0.44 : 0.28, breathing ? 3200 : 1000);
+      world.nextStruggleBreath = !breathing;
+      world.struggleVoiceTimer = breathing ? 3.2 : 1.6;
     }
   }
 
@@ -1832,6 +1857,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       ninjaKick: ninjaKickAudioUrl,
       heroineHurt: heroineHurtAudioUrl,
       heroineStruggle: heroineStruggleAudioUrl,
+      heroineBreathing: heroineBreathingAudioUrl,
       enemyLaugh: enemyLaughAudioUrl,
       heroineFaintSigh: heroineFaintSighAudioUrl,
     };

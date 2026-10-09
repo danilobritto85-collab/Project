@@ -26,3 +26,15 @@ For warm-tinted checkerboards behind dark costumes, sample both tones from clean
 **Why:** A warm brown checkerboard is not removed by neutral-gray keys; broad keys damage black clothing, while wide edge protection leaves checker pixels around the silhouette.
 
 **How to apply:** Compare full RGB against the sampled warm tones, keep cool dark outline colors outside the key, and inspect both idle and paired combat poses for leftover tiles or holes.
+
+For paired Ninja artwork, remove disconnected checker fragments before repairing the alpha mask, and repair each cell independently.
+
+**Why:** Warm checker colors also occurred in the heroine's boots and Ninja facial/clothing shadows. Color keying alone removed real artwork; simply narrowing the key left a visible checker grid.
+
+**How to apply:** Preserve the original RGB artwork, filter background-only fragments, reconnect small outline gaps, and restore enclosed costume details without filling large spaces between limbs.
+
+Keep paired animation scale independent of smoke, hearts, and changing alpha bounds.
+
+**Why:** Fitting every frame to its full visible height caused the fighters to shrink or grow when effects changed. Non-artwork margins in uploaded strips also shifted the floor anchor.
+
+**How to apply:** Use a fixed body-height reference for each sheet and stable heroine/floor landmarks; trim interface/footer margins before computing visibility.

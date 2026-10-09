@@ -2,7 +2,12 @@
  * Repair small gaps left by gray-background keying without recoloring the
  * original artwork. Large transparent spaces between limbs stay transparent.
  */
-export function repairForegroundMask(pixels: Uint8ClampedArray, width: number, height: number) {
+export function repairForegroundMask(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+  maxHoleArea = 128,
+) {
   const count = width * height;
   const original = new Uint8Array(count);
   const dilated = new Uint8Array(count);
@@ -79,10 +84,59 @@ export function repairForegroundMask(pixels: Uint8ClampedArray, width: number, h
       if (y > 0) visit(pixel - width);
       if (y + 1 < height) visit(pixel + width);
     }
-    if (!touchesEdge && tail <= 128) {
+    if (!touchesEdge && tail <= maxHoleArea) {
       for (let i = 0; i < tail; i += 1) repaired[queue[i]] = 1;
     }
   }
 
   for (let i = 0; i < count; i += 1) pixels[i * 4 + 3] = repaired[i] ? 255 : 0;
+}
+
+/**
+ * Remove disconnected checker remnants before closing the paired silhouettes.
+ * Keep colored effects and cool costume details, not warm gray background flecks.
+ */
+export function removeCheckerFragments(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+) {
+  const count = width * height;
+  const visited = new Uint8Array(count);
+  const queue = new Uint32Array(count);
+  for (let start = 0; start < count; start += 1) {
+    if (visited[start] || !pixels[start * 4 + 3]) continue;
+    let head = 0;
+    let tail = 1;
+    let foregroundSignals = 0;
+    queue[0] = start;
+    visited[start] = 1;
+    const visit = (next: number) => {
+      if (!visited[next] && pixels[next * 4 + 3]) {
+        visited[next] = 1;
+        queue[tail++] = next;
+      }
+    };
+    while (head < tail) {
+      const pixel = queue[head++];
+      const x = pixel % width;
+      const y = Math.floor(pixel / width);
+      const red = pixels[pixel * 4];
+      const green = pixels[pixel * 4 + 1];
+      const blue = pixels[pixel * 4 + 2];
+      if (Math.max(red, green, blue) - Math.min(red, green, blue) > 26 ||
+          blue - red > 4 || green - red > 4) {
+        foregroundSignals += 1;
+      }
+      if (x > 0) visit(pixel - 1);
+      if (x + 1 < width) visit(pixel + 1);
+      if (y > 0) visit(pixel - width);
+      if (y + 1 < height) visit(pixel + width);
+    }
+    const keep = tail >= 800 ||
+      (tail >= 10 && foregroundSignals >= Math.max(3, tail * 0.1));
+    if (!keep) {
+      for (let i = 0; i < tail; i += 1) pixels[queue[i] * 4 + 3] = 0;
+    }
+  }
 }

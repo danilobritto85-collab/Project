@@ -19,9 +19,9 @@ In generic defeats, keep active enemies visible in neutral idle poses at their c
 
 Both Ninja Footsmother and Amazon custom struggle defeats use sound, respecting the player's global sound switch.
 
-**Why:** The user changed the previous silent-Ninja request and explicitly asked for Footsmother of both Ninjas and Amazons with sound.
+**Why:** The user requested sound for both custom defeats, then asked for a softer heroine struggle voice and deep breathing during the smoke.
 
-**How to apply:** Use the existing enemy laugh on entry, heroine struggle cues during the sequence, and the fainting/sigh cue at completion; do not continue looping voices after the final pose.
+**How to apply:** Use the enemy laugh on entry, alternate subdued heroine effort cues with slow deep breaths during smoke, and use the fainting/sigh cue at completion. Avoid overlapping heroine voices or continuing loops after the final pose.
 
 For the Kunoichi's ten-second defeat, use the original six-frame sheet for the opening 8.5 seconds and the new three-frame sheet for the final 1.5 seconds. Once HP reaches zero, hold the last frame of the new sheet.
 
