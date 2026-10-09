@@ -35,6 +35,6 @@ For paired Ninja artwork, remove disconnected checker fragments before repairing
 
 Keep paired animation scale independent of smoke, hearts, and changing alpha bounds.
 
-**Why:** Fitting every frame to its full visible height caused the fighters to shrink or grow when effects changed. Non-artwork margins in uploaded strips also shifted the floor anchor.
+**Why:** Fitting every frame to its full visible height caused the fighters to shrink or grow when effects changed. Non-artwork margins shifted floor anchors, while guessed per-row baselines left shorter poses hovering.
 
-**How to apply:** Use a fixed body-height reference for each sheet and stable heroine/floor landmarks; trim interface/footer margins before computing visibility.
+**How to apply:** Use a fixed body-height reference for each sheet and a stable horizontal heroine landmark. Align each cleaned pose's actual bottom edge to the same ground coordinate; trim interface/footer margins first. Smoke above the actors must not affect body scale or ground contact.

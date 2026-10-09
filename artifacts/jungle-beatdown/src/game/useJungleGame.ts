@@ -1002,10 +1002,10 @@ function drawFootsmotherFrame(
   if (!image) return;
   const visible = getCompositeVisibleBounds(image, frame);
   const endingStrip = frame.w < 300;
-  // Use body landmarks, not the changing smoke/heart bounds, to fix scale and floor.
+  // Keep body scale fixed, but seat each cleaned pose on its actual bottom edge.
+  // A sheet-wide guessed baseline makes shorter poses hover between frames.
   const scale = 164 / (endingStrip ? 140 : 190);
   const heroineAnchor = endingStrip ? 187 : 286;
-  const sourceGround = endingStrip ? 185 : frame.y === 0 ? 248 : 260;
 
   context.save();
   if (flipped) {
@@ -1013,6 +1013,19 @@ function drawFootsmotherFrame(
     context.scale(-1, 1);
     context.translate(-heroX, 0);
   }
+  const seatCenter = endingStrip ? 112 : 170;
+  context.fillStyle = 'rgba(7, 13, 8, 0.26)';
+  context.beginPath();
+  context.ellipse(
+    heroX + (seatCenter - heroineAnchor) * scale,
+    groundY + 7,
+    110 * scale,
+    6,
+    0,
+    0,
+    Math.PI * 2,
+  );
+  context.fill();
   context.drawImage(
     image,
     frame.x + visible.x,
@@ -1020,7 +1033,7 @@ function drawFootsmotherFrame(
     visible.w,
     visible.h,
     heroX + (visible.x - heroineAnchor) * scale,
-    groundY + 7 + (visible.y - sourceGround) * scale,
+    groundY + 7 - visible.h * scale,
     visible.w * scale,
     visible.h * scale,
   );
