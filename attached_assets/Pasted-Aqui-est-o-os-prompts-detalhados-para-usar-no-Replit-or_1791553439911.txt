@@ -1,0 +1,55 @@
+Aqui estão os prompts detalhados para usar no Replit, organizados por sprite sheet, para que você possa gerar as imagens finais limpas, sem o fundo quadriculado e com as referências de tamanho corretas.
+
+### Estrutura do Prompt para o Replit
+
+Para garantir que o Replit entenda exatamente o que você quer, um bom prompt deve conter:
+
+1. **Estilo:** Pixel art detalhado de 16/32 bits (estilo de jogo de luta clássico, como Street Fighter Alpha ou King of Fighters).
+2. **Personagem:** Descrição da Roxy (cabelo roxo, rabo de cavalo, quimono branco com detalhes roxos, descalça com faixas nos tornozelos).
+3. **Ação:** Descrição da pose específica da folha de sprites.
+4. **Fundo:** Fundo transparente (explicado como "alpha channel grid" ou "checkerboard grid" para ser substituído, ou "solid white background" se preferir recortar manualmente). Para facilitar, vamos pedir sem fundo ("clean transparency").
+
+---
+
+#### 1. Prompt para `roxy.png` (Folha de Movimentos Básicos)
+
+Este prompt gera a folha de sprites completa com 12 poses de ação e expressão, incluindo as que você usou como referência para as punições.
+
+**Prompt:**
+
+> "A complete 2D pixel art sprite sheet, in a 16-bit fighting game style, featuring the character Roxy. The sheet is laid out in a 3x4 grid (or similar organized arrangement) and includes the following twelve distinct poses:
+> Row 1: 1. Standing Idle (ready stance), 2. Walking Forward, 3. Crouching, 4. Crouch Idle.
+> Row 2: 5. Standing Punch, 6. High Roundhouse Kick (foot extended), 7. Crouching Medium Kick, 8. Jumping.
+> Row 3: 9. Victory Pose (arms crossed, smiling), 10. Pointing, 11. Sitting on the floor (legs out, contemplative), 12. Sitting (chin on hand).
+> The character, Roxy, has long purple hair tied in a high ponytail, wears a white sleeveless quimono tunic with purple trim and a purple sash, and brown pants. She is barefoot with white cloth wraps around her ankles. The sprites are clean, well-defined, and set against a solid, clean white background for easy transparency removal. The art style is clean and high-quality pixel art."
+
+---
+
+#### 2. Prompt para `roxy_hypno.png` (Punição: Hipnose)
+
+Este prompt gera a sequência de 6 imagens que compõem a cena de hipnose, com as duas personagens.
+
+**Prompt:**
+
+> "A 2D pixel art sequence sprite sheet, in a 16-bit fighting game style, detailing a 6-step hypnotic punishment sequence featuring Roxy and a blonde woman.
+> Step 1: Roxy in a casting stance, holding her hand out, generating a large, pink, swirling hypnotic spiral effect. The blonde woman stands opposite, looking dazed.
+> Step 2: The blonde woman is now kneeling on the floor, in a trance, with swirl-eyes. Roxy stands over her, hands on hips, looking pleased.
+> Step 3: Roxy is sitting on the floor, legs out, pointing at her own bare foot, commanding the kneeling blonde woman.
+> Step 4: A close-up of the kneeling blonde woman, her face pressed against Roxy's bare foot, with multiple pink hearts floating around her head, indicating submission/devotion. The background shows Roxy's foot and the kneeling woman.
+> The art style is clean pixel art. The character Roxy (purple ponytail, white tunic) and the blonde woman are consistent in appearance. The entire sequence is presented against a solid, clean white background for easy transparency removal."
+
+---
+
+#### 3. Prompt para `roxy_smother.png` (Punição: Sufocamento/Humilhação)
+
+Este prompt gera a sequência de 7 imagens que compõem a cena de humilhação com os pés, com as duas personagens.
+
+**Prompt:**
+
+> "A 2D pixel art sequence sprite sheet, in a 16-bit fighting game style, detailing a 7-step smother/humiliation punishment sequence featuring Roxy and a blonde woman.
+> Step 1: Roxy delivering a standing high kick to the blonde woman's face.
+> Step 2: The blonde woman is lying unconscious (or defeated) on the ground. Roxy stands over her.
+> Step 3: Roxy is sitting on the kneeling blonde woman's back, pressing her down.
+> Step 4: Roxy is sitting on the prone blonde woman's chest/face, forcing her foot into her face.
+> Step 5: A close-up of Roxy's bare foot, pressing down on the blonde woman's face, with multiple pink hearts floating around. The blonde woman's face is visible, eyes closed, cheeks pressed.
+> The art style is clean pixel art. The character Roxy (purple ponytail, white tunic) and the blonde woman are consistent in appearance. The entire sequence is presented against a solid, clean white background for easy transparency removal."
