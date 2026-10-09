@@ -1294,7 +1294,8 @@ function drawWorld(
 
 function enterGameOver(world: World) {
   if (world.phase === 'game-over') return;
-  if (world.defeatKind === 'special') {
+  if (world.defeatKind === 'special' || world.defeatKind === 'ninja-footsmother') {
+    stopClips(world);
     playClip(world, 'heroineFaintSigh', 0.68, 3500);
   }
   world.phase = 'game-over';
@@ -1627,8 +1628,10 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
       world.particles = [];
       world.smokeTimer = 0;
       world.heartTimer = 0.12;
+      stopClips(world);
+      world.struggleVoiceTimer = 1.5;
+      playClip(world, 'enemyLaugh', 0.55, 1600);
       if (grappler?.kind === 'ninja') {
-        stopClips(world);
         world.phase = STATE_NINJA_FOOTSMOTHER;
         world.defeatKind = 'ninja-footsmother';
         world.defeatSecondsLeft = NINJA_FOOTSMOTHER_DURATION;
@@ -1646,7 +1649,6 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
         world.defeatKind = 'special';
         world.defeatSecondsLeft = SPECIAL_DEFEAT_DURATION;
         playSweep(world, 550, 220, 0.6, 0.045, 'sine');
-        playClip(world, 'enemyLaugh', 0.55, 1600);
       }
     }
   } else if (world.phase === STATE_NINJA_FOOTSMOTHER ||
@@ -1702,6 +1704,14 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
       world.defeatSecondsLeft = Math.max(0, world.defeatSecondsLeft - dt);
     }
     if (world.phase === 'group-defeat' && world.defeatSecondsLeft <= 0) enterGameOver(world);
+  }
+
+  if (world.phase === STATE_NINJA_FOOTSMOTHER || world.phase === 'special-defeat') {
+    world.struggleVoiceTimer -= dt;
+    if (world.struggleVoiceTimer <= 0) {
+      playClip(world, 'heroineStruggle', 0.56, 1000);
+      world.struggleVoiceTimer = 1.8 + random(world) * 0.4;
+    }
   }
 
   updateEnemies(world, dt, now);

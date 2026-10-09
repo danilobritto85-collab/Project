@@ -1,3 +1,3 @@
 - [Uploaded game art](uploaded-game-art.md) — inspect real image dimensions and format before assigning sprite crop coordinates.
-- [Defeat sequences](sequence-visibility.md) — generic defeats have no timer card and static enemies; Ninja Footsmother is silent while custom struggles remain.
+- [Defeat sequences](sequence-visibility.md) — generic defeats have no timer card and static enemies; Ninja and Amazon custom struggles use audio.
 - [Amazon styling](amazon-styling.md) — Amazon toenails are red, including paired scenes and palette variants.

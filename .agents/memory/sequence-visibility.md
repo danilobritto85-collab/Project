@@ -17,11 +17,11 @@ In generic defeats, keep active enemies visible in neutral idle poses at their c
 
 **How to apply:** Freeze enemies in idle poses, keep the heroine's fall/faint progression, and omit only the generic defeat HUD; preserve the timer that advances the game state.
 
-The Ninja Footsmother defeat itself is silent. The preceding escape QTE may still use the normal struggle cue; stop any active clip on transition into Footsmother and do not play a sigh or other cue during its defeat/ending state.
+Both Ninja Footsmother and Amazon custom struggle defeats use sound, respecting the player's global sound switch.
 
-**Why:** The user explicitly requested “Footsmother sem o som” after asking for heroine struggle/fainting audio.
+**Why:** The user changed the previous silent-Ninja request and explicitly asked for Footsmother of both Ninjas and Amazons with sound.
 
-**How to apply:** Keep audio for the QTE and Amazon custom struggle, but silence the Ninja Footsmother animation and its completion.
+**How to apply:** Use the existing enemy laugh on entry, heroine struggle cues during the sequence, and the fainting/sigh cue at completion; do not continue looping voices after the final pose.
 
 For the Kunoichi's ten-second defeat, use the original six-frame sheet for the opening 8.5 seconds and the new three-frame sheet for the final 1.5 seconds. Once HP reaches zero, hold the last frame of the new sheet.
 
