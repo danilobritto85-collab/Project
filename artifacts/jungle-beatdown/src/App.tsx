@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import {
   AudioLines,
@@ -6,21 +6,57 @@ import {
   Compass,
   Heart,
   Play,
+  Plus,
+  Minus,
   RotateCcw,
   Swords,
 } from 'lucide-react';
 import jungleBackground from '@assets/background_1791470375690.png';
 import {
+  DEFAULT_FIGHT_CONFIG,
   NINJA_FOOTSMOTHER_DURATION,
   STATE_NINJA_FOOTSMOTHER,
   STATE_ROXY_OFFER,
   STATE_ROXY_CHALLENGE,
   STATE_ROXY_SMOTHER,
   useJungleGame,
+  type FightConfig,
 } from './game/useJungleGame';
+
+const MAX_FIGHT_COUNTS: FightConfig = { amazonas: 5, ninjas: 3, roxy: 1 };
 
 function formatScore(score: number) {
   return Math.max(0, score).toString().padStart(6, '0');
+}
+
+interface OpponentCounterProps {
+  label: string;
+  kind: keyof FightConfig;
+  value: number;
+  max: number;
+  onChange: (kind: keyof FightConfig, value: number) => void;
+}
+
+function OpponentCounter({ label, kind, value, max, onChange }: OpponentCounterProps) {
+  return (
+    <div className="opponent-row">
+      <div className="opponent-label">
+        <span>{label}</span>
+        <small>até {max}</small>
+      </div>
+      <div className="quantity-control" aria-label={`Quantidade de ${label}`}>
+        <button type="button" onClick={() => onChange(kind, value - 1)}
+          disabled={value <= 0} aria-label={`Diminuir ${label}`}>
+          <Minus aria-hidden="true" />
+        </button>
+        <output aria-live="polite" data-testid={`count-${kind}`}>{value}</output>
+        <button type="button" onClick={() => onChange(kind, value + 1)}
+          disabled={value >= max} aria-label={`Aumentar ${label}`}>
+          <Plus aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+  );
 }
 
 interface TouchButtonProps {
@@ -70,12 +106,12 @@ function TouchButton({
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [fightConfig, setFightConfig] = useState<FightConfig>(DEFAULT_FIGHT_CONFIG);
   const {
     snapshot,
     startGame,
     restartGame,
     toggleSound,
-    heroPortrait,
     pressVirtualControl,
     releaseVirtualControl,
     chooseRoxyChallenge,
@@ -94,6 +130,13 @@ function App() {
   const isPlaying = snapshot.phase === 'playing';
   const isDefeatSequence = isSpecialDefeat || isNinjaFootsmother || isRoxySmother || isGroupDefeat;
   const showRetry = isDefeatSequence || snapshot.phase === 'game-over';
+  const fightCount = fightConfig.amazonas + fightConfig.ninjas + fightConfig.roxy;
+  const handleOpponentCountChange = (kind: keyof FightConfig, value: number) => {
+    setFightConfig((current) => ({
+      ...current,
+      [kind]: Math.max(0, Math.min(MAX_FIGHT_COUNTS[kind], value)),
+    }));
+  };
   const sequencePercent = Math.max(0, Math.min(100,
     (snapshot.defeatSecondsLeft /
       (isSpecialDefeat || isNinjaFootsmother || isRoxySmother
@@ -153,7 +196,7 @@ function App() {
                   <div className="hud-heading"><span><Heart size={12} /> Exploradora</span><strong>{snapshot.heroHp} / {snapshot.maxHeroHp}</strong></div>
                   <div className="hp-track"><div className="hp-fill" style={{ width: `${hpPercent}%` }} /></div>
                   <div className="enemy-track" aria-label={`${snapshot.activeEnemies} inimigas ativas, ${snapshot.defeatedEnemies} derrotadas`}>
-                    {Array.from({ length: 9 }, (_, index) => (
+                    {Array.from({ length: snapshot.totalEnemies }, (_, index) => (
                       <i key={index} className={`enemy-pip ${index >= snapshot.activeEnemies ? 'down' : ''}`} />
                     ))}
                   </div>
@@ -172,16 +215,41 @@ function App() {
                     <div className="eyebrow">Briga de rua, trilha de selva</div>
                     <h1 className="game-title">Jungle <span>Beatdown</span></h1>
                     <p className="title-description">
-                        Cinco amazonas, três kunoichis e Roxy. Mova-se, lute e sobreviva ao cerco na selva.
+                      Monte o confronto e escolha quantas adversárias entram na arena.
                     </p>
-                    <button className="start-button" type="button" onClick={startGame} data-testid="button-start">
-                      <Play fill="currentColor" /> Iniciar partida
+                  </div>
+                  <section className="title-setup" aria-labelledby="setup-title">
+                    <div className="setup-kicker">Pré-jogo · Confronto</div>
+                    <h2 id="setup-title">Escolha suas adversárias</h2>
+                    <div className="opponent-list">
+                      <OpponentCounter label="Amazonas" kind="amazonas"
+                        value={fightConfig.amazonas} max={MAX_FIGHT_COUNTS.amazonas}
+                        onChange={handleOpponentCountChange} />
+                      <OpponentCounter label="Ninjas" kind="ninjas"
+                        value={fightConfig.ninjas} max={MAX_FIGHT_COUNTS.ninjas}
+                        onChange={handleOpponentCountChange} />
+                      <OpponentCounter label="Roxy" kind="roxy"
+                        value={fightConfig.roxy} max={MAX_FIGHT_COUNTS.roxy}
+                        onChange={handleOpponentCountChange} />
+                    </div>
+                    {fightConfig.roxy > 0 ? (
+                      <p className="roxy-special-help">
+                        <strong>Especial da Roxy:</strong> é automático, sem botão. Com 42 HP ou menos,
+                        ataques próximos podem iniciar um agarrão (25% de chance). Pressione <kbd>J</kbd>
+                        por 5 s para escapar; se a Roxy agarrar a heroína, falhar pode levar ao convite
+                        voluntário ou ao Smother.
+                      </p>
+                    ) : fightCount > 0 ? (
+                      <p className="roxy-special-help">Roxy não participa desta luta.</p>
+                    ) : (
+                      <p className="roxy-special-help">Selecione ao menos uma adversária para começar.</p>
+                    )}
+                    <button className="start-button" type="button"
+                      onClick={() => startGame(fightConfig)}
+                      disabled={fightCount === 0} data-testid="button-start">
+                      <Play fill="currentColor" /> Iniciar luta · {fightCount}
                     </button>
-                  </div>
-                  <div className="title-art" aria-hidden="true">
-                     {heroPortrait && <img className="hero-art" src={heroPortrait} alt="" />}
-                    <div className="art-tag">Expedição em andamento · 01</div>
-                  </div>
+                  </section>
                 </div>
               </div>
             )}
@@ -316,7 +384,7 @@ function App() {
             <div className="touch-control-note">No celular, use os botões sobre a arena.</div>
           </div>
         </section>
-        <div className="footer-note"><Swords size={12} /> <span>5 Amazonas · 3 Kunoichis</span> · arena de combate 2.5D · feita para jogar</div>
+        <div className="footer-note"><Swords size={12} /> <span>Até 5 Amazonas · 3 Ninjas · 1 Roxy</span> · arena de combate 2.5D</div>
       </div>
     </main>
   );

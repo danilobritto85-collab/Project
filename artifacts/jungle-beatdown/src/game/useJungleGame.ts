@@ -26,12 +26,23 @@ import roxyDialogueAudioUrl from '@assets/generated_audio/roxy_voluntary_dialogu
 
 const WIDTH = 1024;
 const HEIGHT = 576;
-const TARGET_ENEMIES = 9;
 const STARTING_ENEMY_KINDS: readonly EnemyKind[] = [
   'amazon', 'ninja', 'amazon', 'ninja', 'roxy', 'amazon', 'ninja', 'amazon', 'amazon',
 ];
 const FLOOR_MIN = HEIGHT * 0.75;
 const FLOOR_MAX = HEIGHT * 0.95;
+
+export interface FightConfig {
+  amazonas: number;
+  ninjas: number;
+  roxy: number;
+}
+
+export const DEFAULT_FIGHT_CONFIG: FightConfig = {
+  amazonas: 5,
+  ninjas: 3,
+  roxy: 1,
+};
 
 export const STATE_NINJA_FOOTSMOTHER = 'ninja-footsmother' as const;
 export const STATE_ROXY_OFFER = 'roxy-offer' as const;
@@ -55,6 +66,7 @@ export interface GameSnapshot {
   heroHp: number;
   maxHeroHp: number;
   activeEnemies: number;
+  totalEnemies: number;
   defeatedEnemies: number;
   score: number;
   grappleSecondsLeft: number;
@@ -135,6 +147,7 @@ interface World {
   heroHitCooldown: number;
   score: number;
   defeatedEnemies: number;
+  enemyLineup: EnemyKind[];
   enemies: Enemy[];
   currentGrappler: number | null;
   grappleSecondsLeft: number;
@@ -172,6 +185,7 @@ type SoundEngine = {
   clips: Partial<Record<SoundCue, HTMLAudioElement>>;
   active: Set<HTMLAudioElement>;
   lastPlayed: Partial<Record<SoundCue, number>>;
+  lastNinjaKiai: number;
 };
 
 const spriteBoundsCache = new WeakMap<HTMLCanvasElement, Map<string, SpriteRect>>();
@@ -241,9 +255,14 @@ const ROXY_FRAMES = {
   idle: { x: 0, y: 0, w: 600, h: 597 },
   walk: { x: 600, y: 0, w: 600, h: 597 },
   run: { x: 600, y: 0, w: 600, h: 597 },
-  kick: { x: 600, y: 597, w: 600, h: 597 },
-  spin: { x: 600, y: 597, w: 600, h: 597 },
-  highKick: { x: 600, y: 597, w: 600, h: 597 },
+  // The kick-row panels are shifted down within the sheet: the top of each
+  // 600px-wide panel contains the previous row's sandals. Start at the actual
+  // kick art so those fragments cannot flash above Roxy's head.
+  kick: { x: 600, y: 680, w: 600, h: 514 },
+  // The side kick's leg extends across the next atlas column; include it in
+  // the frame instead of clipping the foot off at the 600px cell boundary.
+  spin: { x: 1320, y: 680, w: 880, h: 514 },
+  highKick: { x: 600, y: 680, w: 600, h: 514 },
   pinPose: { x: 1200, y: 1194, w: 600, h: 598 },
   pinLift: { x: 1800, y: 1194, w: 600, h: 598 },
   hurt: { x: 1200, y: 0, w: 600, h: 597 },
@@ -279,7 +298,9 @@ const WALK_CYCLE = [0, 1, 2, 1] as const;
 const ATTACK_FRAMES: Record<EnemyKind, SpriteRect[]> = {
   amazon: [AMAZON_FRAMES.kick, AMAZON_FRAMES.spin, AMAZON_FRAMES.highKick],
   ninja: [NINJA_FRAMES.kick, NINJA_FRAMES.spin, NINJA_FRAMES.highKick],
-  roxy: [ROXY_FRAMES.kick, ROXY_FRAMES.spin, ROXY_FRAMES.highKick],
+  // The Roxy sheet has two distinct kick panels. Cycling into empty sheet
+  // space or repeating the high-kick panel made her attack pose blink.
+  roxy: [ROXY_FRAMES.kick, ROXY_FRAMES.spin],
 };
 const ENEMY_FRAMES = { amazon: AMAZON_FRAMES, ninja: NINJA_FRAMES, roxy: ROXY_FRAMES };
 
@@ -290,12 +311,6 @@ const GROUP_AMAZON_OFFSETS = [
   { dx: 90, dy: 4, flipped: true },
   { dx: 180, dy: -4, flipped: true },
 ] as const;
-const GROUP_NINJA_OFFSETS = [
-  { dx: -320, dy: -78 },
-  { dx: 0, dy: -84 },
-  { dx: 320, dy: -78 },
-] as const;
-
 const GRAPPLE_FRAMES: SpriteRect[] = [
   { x: 8, y: 58, w: 322, h: 318 },
   { x: 351, y: 58, w: 322, h: 318 },
@@ -331,7 +346,8 @@ const initialSnapshot: GameSnapshot = {
   phase: 'title',
   heroHp: 100,
   maxHeroHp: 100,
-  activeEnemies: TARGET_ENEMIES,
+  activeEnemies: STARTING_ENEMY_KINDS.length,
+  totalEnemies: STARTING_ENEMY_KINDS.length,
   defeatedEnemies: 0,
   score: 0,
   grappleSecondsLeft: 0,
@@ -341,11 +357,34 @@ const initialSnapshot: GameSnapshot = {
   roxyChallengeElapsed: 0,
 };
 
-function createEnemy(id: number, index: number, kind: EnemyKind): Enemy {
+function createFightLineup(config: FightConfig): EnemyKind[] {
+  const counts: Record<EnemyKind, number> = {
+    amazon: clamp(Math.floor(config.amazonas), 0, 5),
+    ninja: clamp(Math.floor(config.ninjas), 0, 3),
+    roxy: clamp(Math.floor(config.roxy), 0, 1),
+  };
+  if (counts.amazon === 5 && counts.ninja === 3 && counts.roxy === 1) {
+    return [...STARTING_ENEMY_KINDS];
+  }
+
+  const lineup: EnemyKind[] = [];
+  const order: EnemyKind[] = ['amazon', 'ninja', 'roxy'];
+  while (order.some((kind) => counts[kind] > 0)) {
+    for (const kind of order) {
+      if (counts[kind] > 0) {
+        lineup.push(kind);
+        counts[kind] -= 1;
+      }
+    }
+  }
+  return lineup;
+}
+
+function createEnemy(id: number, index: number, kind: EnemyKind, lineupSize: number): Enemy {
   return {
     id,
     kind,
-    x: 92 + index * ((WIDTH - 184) / Math.max(1, STARTING_ENEMY_KINDS.length - 1)),
+    x: 92 + index * ((WIDTH - 184) / Math.max(1, lineupSize - 1)),
     y: 475 + ((index * 29) % 55),
     vx: 0,
     vy: 0,
@@ -361,7 +400,7 @@ function createEnemy(id: number, index: number, kind: EnemyKind): Enemy {
   };
 }
 
-function createWorld(): World {
+function createWorld(enemyLineup: readonly EnemyKind[] = STARTING_ENEMY_KINDS): World {
   return {
     phase: 'title',
     defeatKind: null,
@@ -379,7 +418,9 @@ function createWorld(): World {
     heroHitCooldown: 0,
     score: 0,
     defeatedEnemies: 0,
-  enemies: STARTING_ENEMY_KINDS.map((kind, index) => createEnemy(index + 1, index, kind)),
+    enemyLineup: [...enemyLineup],
+    enemies: enemyLineup.map((kind, index) =>
+      createEnemy(index + 1, index, kind, enemyLineup.length)),
     currentGrappler: null,
     grappleSecondsLeft: 0,
     escapeProgress: 0,
@@ -396,6 +437,7 @@ function createWorld(): World {
       clips: {},
       active: new Set<HTMLAudioElement>(),
       lastPlayed: {},
+      lastNinjaKiai: -Infinity,
     },
     particles: [],
     smokeTimer: 0,
@@ -422,6 +464,7 @@ function publishSnapshot(world: World): GameSnapshot {
     maxHeroHp: 100,
     activeEnemies: world.enemies.filter((amazon) => amazon.hp > 0 && amazon.active)
       .length,
+    totalEnemies: world.enemies.length,
     defeatedEnemies: world.defeatedEnemies,
     score: world.score,
     grappleSecondsLeft: Math.max(0, world.grappleSecondsLeft),
@@ -957,6 +1000,67 @@ function playClip(world: World, cue: SoundCue, volume = 1, cooldownMs = 0) {
   void clip.play().catch(release);
 }
 
+function playNinjaKiai(world: World) {
+  const context = ensureSound(world);
+  if (!context) return;
+  const now = context.currentTime;
+  if ((now - world.sound.lastNinjaKiai) * 1000 < 420) return;
+  world.sound.lastNinjaKiai = now;
+
+  // A short formant-shaped "yā!" gives the existing kick impact a clear,
+  // voice-like Kunoichi battle cry without another network-loaded sound.
+  const duration = 0.34;
+  const base = 170 + random(world) * 40;
+  const voice = context.createOscillator();
+  const envelope = context.createGain();
+  voice.type = 'sawtooth';
+  voice.frequency.setValueAtTime(base, now);
+  voice.frequency.linearRampToValueAtTime(base * 1.7, now + 0.09);
+  voice.frequency.linearRampToValueAtTime(base * 1.18, now + duration);
+  envelope.gain.setValueAtTime(0.001, now);
+  envelope.gain.linearRampToValueAtTime(0.12, now + 0.035);
+  envelope.gain.setValueAtTime(0.095, now + 0.16);
+  envelope.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+  const iVowel = context.createBiquadFilter();
+  iVowel.type = 'bandpass';
+  iVowel.Q.value = 2.4;
+  iVowel.frequency.setValueAtTime(340, now);
+  iVowel.frequency.linearRampToValueAtTime(760, now + 0.11);
+  iVowel.frequency.linearRampToValueAtTime(650, now + duration);
+
+  const openVowel = context.createBiquadFilter();
+  openVowel.type = 'bandpass';
+  openVowel.Q.value = 1.7;
+  openVowel.frequency.setValueAtTime(2380, now);
+  openVowel.frequency.linearRampToValueAtTime(1320, now + 0.13);
+
+  const upperHarmonics = context.createBiquadFilter();
+  upperHarmonics.type = 'bandpass';
+  upperHarmonics.Q.value = 1.2;
+  upperHarmonics.frequency.value = 2900;
+
+  const iGain = context.createGain();
+  const openGain = context.createGain();
+  const upperGain = context.createGain();
+  iGain.gain.value = 0.65;
+  openGain.gain.value = 0.32;
+  upperGain.gain.value = 0.11;
+
+  voice.connect(iVowel);
+  voice.connect(openVowel);
+  voice.connect(upperHarmonics);
+  iVowel.connect(iGain);
+  openVowel.connect(openGain);
+  upperHarmonics.connect(upperGain);
+  iGain.connect(envelope);
+  openGain.connect(envelope);
+  upperGain.connect(envelope);
+  envelope.connect(context.destination);
+  voice.start(now);
+  voice.stop(now + duration + 0.02);
+}
+
 function stopClips(world: World) {
   for (const clip of world.sound.active) {
     clip.pause();
@@ -1190,13 +1294,14 @@ function drawEnemySprite(
   height = 180,
   lift = 0,
   groundOffset = 7,
+  anchorX = enemy.x,
 ) {
   const width = Math.max(126, (height * frame.w) / frame.h);
   drawAtlasSprite(
     context,
     atlas[enemy.kind],
     frame,
-    enemy.x,
+    anchorX,
     enemy.y,
     width,
     height,
@@ -1436,7 +1541,7 @@ function drawWorld(
     world.enemies
       .filter((enemy) => enemy.hp > 0 && enemy.active)
       .forEach((enemy) => {
-        const idlePose = enemy.kind === 'ninja' ? NINJA_FRAMES.idle : AMAZON_FRAMES.idle;
+        const idlePose = ENEMY_FRAMES[enemy.kind].idle;
         defeatActors.push({
           y: enemy.y,
           draw: () => drawEnemySprite(context, atlas, enemy, idlePose),
@@ -1454,10 +1559,20 @@ function drawWorld(
       const rect = defeated
         ? enemy.stateTimer > 0 ? ENEMY_FRAMES[enemy.kind].down : ENEMY_FRAMES[enemy.kind].defeated
         : enemyAnimationFrame(enemy, now);
+      const extendedRoxyKick = enemy.kind === 'roxy' && enemy.state === 'attack' &&
+        enemy.attackPoseIndex % ATTACK_FRAMES.roxy.length === 1;
+      const frameScale = 180 / rect.h;
+      const roxyBodyCenterX = 337;
+      const anchorX = extendedRoxyKick
+        ? enemy.x + (enemy.direction < 0 ? -1 : 1) *
+          (rect.w / 2 - roxyBodyCenterX) * frameScale
+        : enemy.x;
       actors.push({
-        y: enemy.y,
+        // Keep Roxy's extended kick silhouette readable when it crosses the
+        // heroine at the same depth.
+        y: enemy.y + (enemy.kind === 'roxy' && enemy.state === 'attack' ? 0.5 : 0),
         draw: () =>
-          drawEnemySprite(context, atlas, enemy, rect, defeated ? 120 : 180),
+          drawEnemySprite(context, atlas, enemy, rect, defeated ? 120 : 180, 0, 7, anchorX),
       });
     }
 
@@ -1785,6 +1900,7 @@ function updateEnemies(world: World, dt: number, now: number) {
         enemy.kind === 'ninja' ? 0.48 : enemy.kind === 'roxy' ? 0.52 : 0.56,
         120,
       );
+      if (enemy.kind === 'ninja') playNinjaKiai(world);
       if (distance < 106 && world.heroHitCooldown <= 0) {
         world.heroHp = Math.max(0, world.heroHp - (7 + Math.floor(random(world) * 4)));
         world.heroHitCooldown = 0.68;
@@ -2022,13 +2138,15 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
   const [heroPortrait, setHeroPortrait] = useState<string | null>(null);
   const pressedRef = useRef<Set<string>>(new Set());
 
-  const startGame = useCallback(() => {
+  const startGame = useCallback((config: FightConfig = DEFAULT_FIGHT_CONFIG) => {
     const world = worldRef.current;
     if (world.phase === 'title' || world.phase === 'game-over') {
+      const lineup = createFightLineup(config);
+      if (!lineup.length) return;
       const soundEnabled = world.soundEnabled;
       const previousSound = world.sound;
       stopClips(world);
-      Object.assign(world, createWorld(), {
+      Object.assign(world, createWorld(lineup), {
         phase: 'playing',
         soundEnabled,
         sound: { ...previousSound, enabled: soundEnabled },
@@ -2041,10 +2159,11 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
 
   const restartGame = useCallback(() => {
     const world = worldRef.current;
+    const lineup = [...world.enemyLineup];
     const soundEnabled = world.soundEnabled;
     const previousSound = world.sound;
     stopClips(world);
-    Object.assign(world, createWorld(), {
+    Object.assign(world, createWorld(lineup), {
       phase: 'playing',
       soundEnabled,
       sound: { ...previousSound, enabled: soundEnabled },
@@ -2087,8 +2206,6 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
         playHit(world);
       } else if (world.phase === 'playing' && !world.isGrappleActive && !wasPressed) {
         doHeroAttack(world, 'punch');
-      } else if (world.phase === 'title' && !wasPressed) {
-        startGame();
       }
     }
     if (code === 'KeyK' && world.phase === 'playing' &&
@@ -2102,11 +2219,8 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       world.actionTimer = 0.32;
       playStomp(world);
     }
-    if ((code === 'Enter' || code === 'NumpadEnter') && world.phase === 'title' && !wasPressed) {
-      startGame();
-    }
     if (code === 'KeyR' && world.phase === 'game-over' && !wasPressed) restartGame();
-  }, [chooseRoxyChallenge, exitRoxyChallenge, restartGame, startGame]);
+  }, [chooseRoxyChallenge, exitRoxyChallenge, restartGame]);
 
   const releaseVirtualControl = useCallback((code: string) => {
     pressedRef.current.delete(code);
@@ -2169,12 +2283,12 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
     if (import.meta.env.DEV) {
       const params = new URLSearchParams(window.location.search);
       const scene = params.get('_scene');
-      if (scene === 'playing' || scene === 'grapple' ||
+      if (scene === 'playing' || scene === 'roxy-kick' || scene === 'grapple' ||
           scene === 'special-defeat' || scene === STATE_NINJA_FOOTSMOTHER ||
           scene === STATE_ROXY_OFFER || scene === STATE_ROXY_CHALLENGE || scene === STATE_ROXY_SMOTHER ||
           scene === 'group-defeat') {
         const world = worldRef.current;
-        if (scene === 'playing') {
+        if (scene === 'playing' || scene === 'roxy-kick') {
           world.phase = 'playing';
           world.heroX = WIDTH / 2;
           world.heroY = 508;
@@ -2191,6 +2305,24 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
             enemy.stateTimer = 0;
             enemy.respawnAt = 0;
           });
+          if (scene === 'roxy-kick') {
+            const pose = clamp(Number(params.get('_pose') ?? 0), 0, 1);
+            world.heroX = 654;
+            const roxy = world.enemies.find((enemy) => enemy.kind === 'roxy');
+            world.enemies.forEach((enemy) => {
+              enemy.active = enemy === roxy;
+              enemy.hp = enemy.active ? 3 : 0;
+            });
+            if (roxy) {
+              roxy.x = 722;
+              roxy.y = 522;
+              roxy.direction = -1;
+              roxy.state = 'attack';
+              roxy.stateTimer = 10;
+              roxy.attackCooldown = 8;
+              roxy.attackPoseIndex = pose;
+            }
+          }
         } else {
         const requestedKind = params.get('_grappler');
         const preferredKind: EnemyKind = requestedKind === 'roxy' ||
@@ -2264,16 +2396,29 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
             const index = enemy.kind === 'amazon'
               ? groupAmazons.indexOf(enemy)
               : groupNinjas.indexOf(enemy);
-            const offset = enemy.kind === 'amazon'
-              ? GROUP_AMAZON_OFFSETS[index]
-              : GROUP_NINJA_OFFSETS[index];
-            if (!offset) return;
             const groupCenterX = clamp(world.heroX, 80, WIDTH - 80);
-            enemy.x = clamp(groupCenterX + offset.dx, 64, WIDTH - 64);
-            enemy.y = clamp(world.heroY + offset.dy, FLOOR_MIN, FLOOR_MAX);
+            const darkCount = groupNinjas.length +
+              world.enemies.filter((item) => item.kind === 'roxy' && item.hp > 0 && item.active).length;
+            const darkIndex = enemy.kind === 'amazon'
+              ? -1
+              : world.enemies.filter((item) => item.kind !== 'amazon' &&
+                  item.hp > 0 && item.active).indexOf(enemy);
+            const amazonOffset = enemy.kind === 'amazon'
+              ? GROUP_AMAZON_OFFSETS[index] : undefined;
+            const darkOffsetX = darkCount <= 1 ? 0
+              : (darkIndex - (darkCount - 1) / 2) * Math.min(220, 600 / (darkCount - 1));
+            if (enemy.kind === 'amazon' && !amazonOffset) return;
+            enemy.x = clamp(
+              groupCenterX + (amazonOffset?.dx ?? darkOffsetX),
+              64,
+              WIDTH - 64,
+            );
+            const groupOffsetY = amazonOffset?.dy ?? -80 + (darkIndex % 2) * 6;
+            enemy.y = clamp(world.heroY + groupOffsetY, FLOOR_MIN, FLOOR_MAX);
             enemy.pinElapsed = enemy.kind === 'amazon' ? elapsed - 3 : 0;
             enemy.state = 'idle';
-            enemy.direction = offset.dx < 0 ? 1 : offset.dx > 0 ? -1 : 1;
+            const offsetX = amazonOffset?.dx ?? darkOffsetX;
+            enemy.direction = offsetX < 0 ? 1 : offsetX > 0 ? -1 : 1;
           });
         }
         }
