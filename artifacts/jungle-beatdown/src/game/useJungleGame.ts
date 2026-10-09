@@ -1230,17 +1230,29 @@ function drawWorld(
       : 0.9 + GROUP_DEFEAT_DURATION - world.defeatSecondsLeft;
     const fallenPose = elapsed < 0.3 ? HERO_FRAMES.hurt
       : elapsed < 0.9 ? HERO_FRAMES.down : HERO_FRAMES.defeated;
-    drawAtlasSprite(
-      context,
-      atlas.hero,
-      fallenPose,
-      centerX,
-      elapsed < 0.9 ? centerY : Math.min(FLOOR_MAX, centerY + 24),
-      elapsed < 0.9 ? 150 : 230,
-      elapsed < 0.9 ? 164 : 80,
-      world.facing < 0,
-    );
-
+    const defeatActors: Array<{ y: number; draw: () => void }> = [{
+      y: centerY,
+      draw: () => drawAtlasSprite(
+        context,
+        atlas.hero,
+        fallenPose,
+        centerX,
+        elapsed < 0.9 ? centerY : Math.min(FLOOR_MAX, centerY + 24),
+        elapsed < 0.9 ? 150 : 230,
+        elapsed < 0.9 ? 164 : 80,
+        world.facing < 0,
+      ),
+    }];
+    world.enemies
+      .filter((enemy) => enemy.hp > 0 && enemy.active)
+      .forEach((enemy) => {
+        const idlePose = enemy.kind === 'ninja' ? NINJA_FRAMES.idle : AMAZON_FRAMES.idle;
+        defeatActors.push({
+          y: enemy.y,
+          draw: () => drawEnemySprite(context, atlas, enemy, idlePose),
+        });
+      });
+    defeatActors.sort((a, b) => a.y - b.y).forEach((actor) => actor.draw());
   } else {
     const actors: Array<{ y: number; draw: () => void }> = [];
     const visibleEnemies = world.enemies.filter(
@@ -1282,7 +1294,7 @@ function drawWorld(
 
 function enterGameOver(world: World) {
   if (world.phase === 'game-over') return;
-  if (world.defeatKind !== 'group') {
+  if (world.defeatKind === 'special') {
     playClip(world, 'heroineFaintSigh', 0.68, 3500);
   }
   world.phase = 'game-over';
@@ -1524,7 +1536,7 @@ function updateEnemies(world: World, dt: number, now: number) {
           beginGenericDefeat(world);
           continue;
         }
-        if (world.heroHp <= 42 && random(world) < 0.1) {
+        if (world.heroHp <= 42 && random(world) < 0.25) {
           beginSpecialGrapple(world, enemy);
           continue;
         }
@@ -1604,6 +1616,7 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
     }
   } else if (world.phase === 'grapple') {
     world.grappleSecondsLeft = Math.max(0, world.grappleSecondsLeft - dt);
+    const grappler = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
     world.struggleVoiceTimer -= dt;
     if (world.struggleVoiceTimer <= 0) {
       playClip(world, 'heroineStruggle', 0.56, 1000);
@@ -1614,8 +1627,8 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
       world.particles = [];
       world.smokeTimer = 0;
       world.heartTimer = 0.12;
-      const grappler = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
       if (grappler?.kind === 'ninja') {
+        stopClips(world);
         world.phase = STATE_NINJA_FOOTSMOTHER;
         world.defeatKind = 'ninja-footsmother';
         world.defeatSecondsLeft = NINJA_FOOTSMOTHER_DURATION;
@@ -1628,8 +1641,6 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
         grappler.vy = 0;
         world.heroVelocityX = 0;
         world.heroVelocityY = 0;
-        playSweep(world, 550, 220, 0.6, 0.045, 'sine');
-        playClip(world, 'enemyLaugh', 0.55, 1600);
       } else {
         world.phase = 'special-defeat';
         world.defeatKind = 'special';

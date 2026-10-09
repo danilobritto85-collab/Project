@@ -3,7 +3,7 @@ name: Sequence visibility
 description: User's requirement that defeat and struggle action remain visible while their countdown runs.
 ---
 
-Keep defeat and struggle scenes visible. Use small countdown indicators rather than a modal or full-screen dimming layer during the sequence.
+Keep defeat and struggle scenes visible without a modal or full-screen dimming layer. Show countdown indicators for active grapples and custom timed struggles, but not for generic defeats.
 
 Do not show a Game Over screen at the end. Generic defeats may hold the heroine's final fainted pose; custom struggle sequences keep their specified motion.
 
@@ -16,6 +16,18 @@ Generic defeats show only the heroine falling and fainting. Do not render or ani
 **Why:** The user explicitly removed generic Amazon/Ninja defeat animations and asked to keep only personalized struggle animations for now.
 
 **How to apply:** Keep the heroine's short hurt/down/defeated progression, hide all enemies for the generic defeat branch, and leave custom grapple/struggle branches unchanged.
+
+In generic defeats, keep active enemies visible in neutral idle poses at their current positions. Do not animate, reposition, or use enemy defeat/pin poses. Hide the generic defeat countdown card while keeping the internal transition timer.
+
+**Why:** The user asked to remove enemy animations during generic defeats and said the heroine does not need a counter when she falls.
+
+**How to apply:** Freeze enemies in idle poses, keep the heroine's fall/faint progression, and omit only the generic defeat HUD; preserve the timer that advances the game state.
+
+The Ninja Footsmother defeat itself is silent. The preceding escape QTE may still use the normal struggle cue; stop any active clip on transition into Footsmother and do not play a sigh or other cue during its defeat/ending state.
+
+**Why:** The user explicitly requested “Footsmother sem o som” after asking for heroine struggle/fainting audio.
+
+**How to apply:** Keep audio for the QTE and Amazon custom struggle, but silence the Ninja Footsmother animation and its completion.
 
 For the Kunoichi's ten-second defeat, use the original six-frame sheet for the opening 8.5 seconds and the new three-frame sheet for the final 1.5 seconds. Once HP reaches zero, hold the last frame of the new sheet.
 

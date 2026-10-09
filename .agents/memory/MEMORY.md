@@ -1,3 +1,3 @@
 - [Uploaded game art](uploaded-game-art.md) — inspect real image dimensions and format before assigning sprite crop coordinates.
-- [Sequence visibility](sequence-visibility.md) — generic defeats show only the heroine fainting; custom struggle sequences remain visible and Ninja defeats hold their final pose.
+- [Defeat sequences](sequence-visibility.md) — generic defeats have no timer card and static enemies; Ninja Footsmother is silent while custom struggles remain.
 - [Amazon styling](amazon-styling.md) — Amazon toenails are red, including paired scenes and palette variants.

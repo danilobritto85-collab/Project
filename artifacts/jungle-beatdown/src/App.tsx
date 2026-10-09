@@ -190,7 +190,7 @@ function App() {
               </div>
             )}
 
-            {isDefeatSequence && (
+            {isDefeatSequence && !isGroupDefeat && (
               <div className="sequence-hud defeat-hud" role="status"
                 data-testid={isNinjaFootsmother ? 'status-ninja-footsmother'
                   : isSpecialDefeat ? 'status-special-defeat' : 'status-group-defeat'}>
