@@ -405,6 +405,7 @@ function createEnemy(id: number, index: number, kind: EnemyKind, lineupSize: num
   return {
     id,
     kind,
+    ebony: false,
     x: 92 + index * ((WIDTH - 184) / Math.max(1, lineupSize - 1)),
     y: 475 + ((index * 29) % 55),
     vx: 0,
@@ -421,10 +422,16 @@ function createEnemy(id: number, index: number, kind: EnemyKind, lineupSize: num
   };
 }
 
-function createWorld(enemyLineup: readonly EnemyKind[] = STARTING_ENEMY_KINDS): World {
+function createWorld(
+  enemyLineup: readonly EnemyKind[] = STARTING_ENEMY_KINDS,
+  fightConfig: FightConfig = DEFAULT_FIGHT_CONFIG,
+): World {
   return {
     phase: 'title',
     defeatKind: null,
+    fightConfig: { ...fightConfig },
+    ebonyElapsed: 0,
+    ebonyHitFrame: -1,
     isGrappleActive: false,
     heroX: 175,
     heroY: 479,
@@ -440,8 +447,10 @@ function createWorld(enemyLineup: readonly EnemyKind[] = STARTING_ENEMY_KINDS): 
     score: 0,
     defeatedEnemies: 0,
     enemyLineup: [...enemyLineup],
-    enemies: enemyLineup.map((kind, index) =>
-      createEnemy(index + 1, index, kind, enemyLineup.length)),
+    enemies: enemyLineup.map((kind, index) => ({
+      ...createEnemy(index + 1, index, kind, enemyLineup.length),
+      ebony: kind === 'amazon' && fightConfig.amazonVariant === 'ebony',
+    })),
     currentGrappler: null,
     grappleSecondsLeft: 0,
     escapeProgress: 0,
@@ -1286,6 +1295,17 @@ function drawRoxyDefeatFrame(
 }
 
 function enemyAnimationFrame(enemy: Enemy, now: number): SpriteRect {
+  if (enemy.ebony) {
+    if (enemy.state === 'walk') {
+      const frameIndex = WALK_CYCLE[Math.floor(now / 175 + enemy.id * 0.67) % WALK_CYCLE.length];
+      return EBONY_WALK[frameIndex];
+    }
+    if (enemy.state === 'run') return EBONY_RUN[Math.floor(now / 145 + enemy.id) % EBONY_RUN.length];
+    if (enemy.state === 'attack') return EBONY_ATTACKS[enemy.attackPoseIndex % EBONY_ATTACKS.length];
+    if (enemy.state === 'hurt') return EBONY_FRAMES.hurt;
+    if (enemy.state === 'down') return EBONY_FRAMES.down;
+    return EBONY_FRAMES.idle;
+  }
   const frames = ENEMY_FRAMES[enemy.kind];
   if (enemy.state === 'walk') {
     const cycleIndex = Math.floor(now / 175 + enemy.id * 0.67) % WALK_CYCLE.length;
@@ -1317,6 +1337,11 @@ function drawEnemySprite(
   groundOffset = 7,
   anchorX = enemy.x,
 ) {
+  if (enemy.ebony) {
+    drawEbonyFrame(context, atlas.ebony, frame as EbonyFrame,
+      anchorX, enemy.y, enemy.direction < 0, lift);
+    return;
+  }
   const width = Math.max(126, (height * frame.w) / frame.h);
   drawAtlasSprite(
     context,
