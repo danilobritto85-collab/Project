@@ -16,7 +16,8 @@ import pinAttackUrl from '@assets/pin_attack_1791470375691.png';
 import pinExtendedUrl from '@assets/pin_extended_1791470375691.png';
 import ninjaFootsmotherUrl from '@assets/ninja_footsmother.png';
 import ninjaFootsmotherEndingUrl from '@assets/ninja_footsmother_ending.png';
-import roxySheetUrl from '@assets/roxy_1791553456528.png';
+import roxySheetUrl from '@assets/roxy_clean.png';
+import { ROXY_FRAMES, prepareRoxySheet, drawRoxyFrame, type RoxyFrame } from './roxySprites';
 import roxyHypnoUrl from '@assets/roxy_hypno_1791553456528.png';
 import roxySmotherUrl from '@assets/roxy_smother_1791553456529.png';
 import amazonKickAudioUrl from '@assets/generated_audio/amazon_kick.mp3';
@@ -43,17 +44,17 @@ const FLOOR_MAX = HEIGHT * 0.95;
 
 export interface FightConfig {
   amazonas: number;
+  ebony: number;
   ninjas: number;
   roxy: number;
-  amazonVariant: 'classic' | 'ebony';
   ebonyVictory: boolean;
 }
 
 export const DEFAULT_FIGHT_CONFIG: FightConfig = {
   amazonas: 5,
+  ebony: 0,
   ninjas: 3,
   roxy: 1,
-  amazonVariant: 'classic',
   ebonyVictory: false,
 };
 
@@ -137,6 +138,7 @@ interface Enemy {
   attackCooldown: number;
   respawnAt: number;
   hue: number;
+  stride: number;
   pinElapsed?: number;
 }
 
@@ -172,7 +174,7 @@ interface World {
   heroHitCooldown: number;
   score: number;
   defeatedEnemies: number;
-  enemyLineup: EnemyKind[];
+  enemyLineup: OpponentKind[];
   enemies: Enemy[];
   currentGrappler: number | null;
   grappleSecondsLeft: number;
@@ -276,24 +278,6 @@ const NINJA_RUN_FRAMES: SpriteRect[] = [
   { x: 808, y: 82, w: 112, h: 179 },
   { x: 910, y: 82, w: 112, h: 179 },
 ];
-const ROXY_FRAMES = {
-  idle: { x: 0, y: 0, w: 600, h: 597 },
-  walk: { x: 600, y: 0, w: 600, h: 597 },
-  run: { x: 600, y: 0, w: 600, h: 597 },
-  // The kick-row panels are shifted down within the sheet: the top of each
-  // 600px-wide panel contains the previous row's sandals. Start at the actual
-  // kick art so those fragments cannot flash above Roxy's head.
-  kick: { x: 600, y: 680, w: 600, h: 514 },
-  // The side kick's leg extends across the next atlas column; include it in
-  // the frame instead of clipping the foot off at the 600px cell boundary.
-  spin: { x: 1320, y: 680, w: 880, h: 514 },
-  highKick: { x: 600, y: 680, w: 600, h: 514 },
-  pinPose: { x: 1200, y: 1194, w: 600, h: 598 },
-  pinLift: { x: 1800, y: 1194, w: 600, h: 598 },
-  hurt: { x: 1200, y: 0, w: 600, h: 597 },
-  down: { x: 0, y: 1194, w: 600, h: 598 },
-  defeated: { x: 1800, y: 1194, w: 600, h: 598 },
-} satisfies Record<string, SpriteRect>;
 const ROXY_HYPNO_FRAMES: SpriteRect[] = [
   { x: 0, y: 0, w: 688, h: 384 },
   { x: 688, y: 0, w: 688, h: 384 },
@@ -383,18 +367,21 @@ const initialSnapshot: GameSnapshot = {
   ebonyVictoryActive: false,
 };
 
-function createFightLineup(config: FightConfig): EnemyKind[] {
-  const counts: Record<EnemyKind, number> = {
+type OpponentKind = EnemyKind | 'ebony';
+
+function createFightLineup(config: FightConfig): OpponentKind[] {
+  const counts: Record<OpponentKind, number> = {
     amazon: clamp(Math.floor(config.amazonas), 0, 5),
+    ebony: clamp(Math.floor(config.ebony), 0, 5),
     ninja: clamp(Math.floor(config.ninjas), 0, 3),
     roxy: clamp(Math.floor(config.roxy), 0, 1),
   };
-  if (counts.amazon === 5 && counts.ninja === 3 && counts.roxy === 1) {
+  if (counts.amazon === 5 && counts.ninja === 3 && counts.roxy === 1 && counts.ebony === 0) {
     return [...STARTING_ENEMY_KINDS];
   }
 
-  const lineup: EnemyKind[] = [];
-  const order: EnemyKind[] = ['amazon', 'ninja', 'roxy'];
+  const lineup: OpponentKind[] = [];
+  const order: OpponentKind[] = ['amazon', 'ebony', 'ninja', 'roxy'];
   while (order.some((kind) => counts[kind] > 0)) {
     for (const kind of order) {
       if (counts[kind] > 0) {
@@ -406,11 +393,13 @@ function createFightLineup(config: FightConfig): EnemyKind[] {
   return lineup;
 }
 
-function createEnemy(id: number, index: number, kind: EnemyKind, lineupSize: number): Enemy {
+function createEnemy(id: number, index: number, opponent: OpponentKind, lineupSize: number): Enemy {
+  const kind = opponent === 'ebony' ? 'amazon' : opponent;
   return {
     id,
     kind,
-    ebony: false,
+    ebony: opponent === 'ebony',
+    stride: index * 1.4,
     x: 92 + index * ((WIDTH - 184) / Math.max(1, lineupSize - 1)),
     y: 475 + ((index * 29) % 55),
     vx: 0,
@@ -428,7 +417,7 @@ function createEnemy(id: number, index: number, kind: EnemyKind, lineupSize: num
 }
 
 function createWorld(
-  enemyLineup: readonly EnemyKind[] = STARTING_ENEMY_KINDS,
+  enemyLineup: readonly OpponentKind[] = STARTING_ENEMY_KINDS,
   fightConfig: FightConfig = DEFAULT_FIGHT_CONFIG,
 ): World {
   return {
@@ -453,10 +442,7 @@ function createWorld(
     score: 0,
     defeatedEnemies: 0,
     enemyLineup: [...enemyLineup],
-    enemies: enemyLineup.map((kind, index) => ({
-      ...createEnemy(index + 1, index, kind, enemyLineup.length),
-      ebony: kind === 'amazon' && fightConfig.amazonVariant === 'ebony',
-    })),
+    enemies: enemyLineup.map((kind, index) => createEnemy(index + 1, index, kind, enemyLineup.length)),
     currentGrappler: null,
     grappleSecondsLeft: 0,
     escapeProgress: 0,
@@ -1344,6 +1330,11 @@ function drawEnemySprite(
   groundOffset = 7,
   anchorX = enemy.x,
 ) {
+  if (enemy.kind === 'roxy') {
+    drawRoxyFrame(context, atlas.roxy, frame as RoxyFrame,
+      enemy.x, enemy.y, enemy.direction < 0, enemy.state, enemy.stride, lift);
+    return;
+  }
   if (enemy.ebony) {
     drawEbonyFrame(context, atlas.ebony, frame as EbonyFrame,
       anchorX, enemy.y, enemy.direction < 0, lift);
@@ -1634,20 +1625,12 @@ function drawWorld(
       const rect = defeated
         ? enemy.stateTimer > 0 ? enemyFrames.down : enemyFrames.defeated
         : enemyAnimationFrame(enemy, now);
-      const extendedRoxyKick = enemy.kind === 'roxy' && enemy.state === 'attack' &&
-        enemy.attackPoseIndex % ATTACK_FRAMES.roxy.length === 1;
-      const frameScale = 180 / rect.h;
-      const roxyBodyCenterX = 337;
-      const anchorX = extendedRoxyKick
-        ? enemy.x + (enemy.direction < 0 ? -1 : 1) *
-          (rect.w / 2 - roxyBodyCenterX) * frameScale
-        : enemy.x;
       actors.push({
         // Keep Roxy's extended kick silhouette readable when it crosses the
         // heroine at the same depth.
         y: enemy.y + (enemy.kind === 'roxy' && enemy.state === 'attack' ? 0.5 : 0),
         draw: () =>
-          drawEnemySprite(context, atlas, enemy, rect, defeated ? 120 : 180, 0, 7, anchorX),
+          drawEnemySprite(context, atlas, enemy, rect, defeated ? 120 : 180, 0, 7),
       });
     }
 
@@ -1961,6 +1944,9 @@ function updateEnemies(world: World, dt: number, now: number) {
 
   const activeEnemies = world.enemies.filter((enemy) => enemy.hp > 0 && enemy.active);
   for (const enemy of activeEnemies) {
+    if (enemy.state === 'walk' || enemy.state === 'run') {
+      enemy.stride += Math.hypot(enemy.vx, enemy.vy) * dt * Math.PI * 2 / 60;
+    }
     enemy.stateTimer = Math.max(0, enemy.stateTimer - dt);
     enemy.attackCooldown = Math.max(0, enemy.attackCooldown - dt);
     if (enemy.stateTimer <= 0 &&
@@ -1988,6 +1974,15 @@ function updateEnemies(world: World, dt: number, now: number) {
       continue;
     }
     if (world.phase !== 'playing') continue;
+
+    // Let Roxy finish the current pose before pursuing again. Otherwise the
+    // next AI tick replaces her kick/hit pose with a walk and slides her legs.
+    if (enemy.kind === 'roxy' && enemy.stateTimer > 0 &&
+        (enemy.state === 'attack' || enemy.state === 'hurt' || enemy.state === 'down')) {
+      enemy.vx = 0;
+      enemy.vy = 0;
+      continue;
+    }
 
     const dx = world.heroX - enemy.x;
     const dy = world.heroY - enemy.y;
@@ -2469,8 +2464,9 @@ export function useJungleGame(
       if (scene === 'ebony-base' || scene === 'ebony-stomp' || scene === 'ebony-victory') {
         const duo = params.get('_duo') === '1';
         const config: FightConfig = {
-          amazonas: duo ? 2 : 1, ninjas: 0, roxy: 0,
-          amazonVariant: 'ebony', ebonyVictory: true,
+          amazonas: 0, ninjas: 0, roxy: 0,
+          ebony: duo ? 2 : 1,
+          ebonyVictory: true,
         };
         const world = worldRef.current;
         const oldSound = world.sound;
@@ -2500,12 +2496,12 @@ export function useJungleGame(
         freezePreview = params.get('_freeze') === '1';
         setSnapshot(publishSnapshot(world));
       }
-      if (scene === 'playing' || scene === 'roxy-kick' || scene === 'grapple' ||
+      if (scene === 'playing' || scene === 'roxy-kick' || scene === 'roxy-move' || scene === 'grapple' ||
           scene === 'special-defeat' || scene === STATE_NINJA_FOOTSMOTHER ||
           scene === STATE_ROXY_OFFER || scene === STATE_ROXY_CHALLENGE || scene === STATE_ROXY_SMOTHER ||
           scene === 'group-defeat') {
         const world = worldRef.current;
-        if (scene === 'playing' || scene === 'roxy-kick') {
+        if (scene === 'playing' || scene === 'roxy-kick' || scene === 'roxy-move') {
           world.phase = 'playing';
           world.heroX = WIDTH / 2;
           world.heroY = 508;
@@ -2522,7 +2518,7 @@ export function useJungleGame(
             enemy.stateTimer = 0;
             enemy.respawnAt = 0;
           });
-          if (scene === 'roxy-kick') {
+          if (scene === 'roxy-kick' || scene === 'roxy-move') {
             const pose = clamp(Number(params.get('_pose') ?? 0), 0, 1);
             world.heroX = 654;
             const roxy = world.enemies.find((enemy) => enemy.kind === 'roxy');
@@ -2534,11 +2530,14 @@ export function useJungleGame(
               roxy.x = 722;
               roxy.y = 522;
               roxy.direction = -1;
-              roxy.state = 'attack';
+              roxy.state = scene === 'roxy-move'
+                ? params.get('_action') === 'run' ? 'run' : 'walk' : 'attack';
+              roxy.stride = Number(params.get('_stride') ?? '1.57');
               roxy.stateTimer = 10;
               roxy.attackCooldown = 8;
               roxy.attackPoseIndex = pose;
             }
+            freezePreview = params.get('_freeze') === '1';
           }
         } else {
         const requestedKind = params.get('_grappler');
@@ -2693,7 +2692,7 @@ export function useJungleGame(
           ninjaFootsmotherEnding,
           false,
         ),
-        roxy: removeRoxyCheckerboard(roxy, Object.values(ROXY_FRAMES)),
+        roxy: prepareRoxySheet(roxy),
         roxyHypno: removeRoxyCheckerboard(roxyHypno, ROXY_HYPNO_FRAMES),
         roxySmother: removeRoxyCheckerboard(roxySmother, ROXY_SMOTHER_FRAMES),
         pinAttack: withRedToenails(removeCheckerboard(pinAttack, true), 'pinAttack'),

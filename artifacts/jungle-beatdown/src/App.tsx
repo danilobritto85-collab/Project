@@ -23,8 +23,8 @@ import {
   type FightConfig,
 } from './game/useJungleGame';
 
-type OpponentCountKey = 'amazonas' | 'ninjas' | 'roxy';
-const MAX_FIGHT_COUNTS: Record<OpponentCountKey, number> = { amazonas: 5, ninjas: 3, roxy: 1 };
+type OpponentCountKey = 'amazonas' | 'ebony' | 'ninjas' | 'roxy';
+const MAX_FIGHT_COUNTS: Record<OpponentCountKey, number> = { amazonas: 5, ebony: 5, ninjas: 3, roxy: 1 };
 
 function formatScore(score: number) {
   return Math.max(0, score).toString().padStart(6, '0');
@@ -133,7 +133,7 @@ function App() {
   const isDefeatSequence = isSpecialDefeat || isNinjaFootsmother || isRoxySmother || isGroupDefeat ||
     snapshot.phase === 'ebony-victory';
   const showRetry = isDefeatSequence || snapshot.phase === 'game-over';
-  const fightCount = fightConfig.amazonas + fightConfig.ninjas + fightConfig.roxy;
+  const fightCount = fightConfig.amazonas + fightConfig.ebony + fightConfig.ninjas + fightConfig.roxy;
   const handleOpponentCountChange = (kind: OpponentCountKey, value: number) => {
     setFightConfig((current) => ({
       ...current,
@@ -228,6 +228,9 @@ function App() {
                       <OpponentCounter label="Amazonas" kind="amazonas"
                         value={fightConfig.amazonas} max={MAX_FIGHT_COUNTS.amazonas}
                         onChange={handleOpponentCountChange} />
+                      <OpponentCounter label="Amazon Ebony" kind="ebony"
+                        value={fightConfig.ebony} max={MAX_FIGHT_COUNTS.ebony}
+                        onChange={handleOpponentCountChange} />
                       <OpponentCounter label="Ninjas" kind="ninjas"
                         value={fightConfig.ninjas} max={MAX_FIGHT_COUNTS.ninjas}
                         onChange={handleOpponentCountChange} />
@@ -235,19 +238,7 @@ function App() {
                         value={fightConfig.roxy} max={MAX_FIGHT_COUNTS.roxy}
                         onChange={handleOpponentCountChange} />
                     </div>
-                    <label className="amazon-variant">
-                      <span>Visual das Amazonas</span>
-                      <select value={fightConfig.amazonVariant} data-testid="select-amazon-variant"
-                        onChange={(event) => setFightConfig((current) => ({
-                          ...current,
-                          amazonVariant: event.target.value as FightConfig['amazonVariant'],
-                          ebonyVictory: false,
-                        }))}>
-                        <option value="classic">Amazonas clássicas</option>
-                        <option value="ebony">Amazon Ebony</option>
-                      </select>
-                    </label>
-                    {fightConfig.amazonVariant === 'ebony' && fightConfig.amazonas > 0 && (
+                    {fightConfig.ebony > 0 && (
                       <div className="ebony-options">
                         <label>
                           <input type="checkbox" checked={fightConfig.ebonyVictory}
@@ -420,7 +411,7 @@ function App() {
             <div className="touch-control-note">No celular, use os botões sobre a arena.</div>
           </div>
         </section>
-        <div className="footer-note"><Swords size={12} /> <span>Até 5 Amazonas · 3 Ninjas · 1 Roxy</span> · arena de combate 2.5D</div>
+        <div className="footer-note"><Swords size={12} /> <span>Até 5 Amazonas · 5 Ebony · 3 Ninjas · 1 Roxy</span> · arena de combate 2.5D</div>
       </div>
     </main>
   );

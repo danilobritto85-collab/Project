@@ -15,8 +15,8 @@ Roxy's former hypnosis/foot-kiss sequence is now a voluntary interaction: an inf
 
 **How to apply:** Preserve the consent choice and withdrawal option in future revisions. Do not restore the mind-control/dazed intro, automatic intimate animation, or fainting/struggle audio to this voluntary scene.
 
-Roxy's teal/gray checkerboard needs a dedicated color key using native image dimensions.
+Roxy's movement sheet has irregular artwork boundaries, not equal-sized pose cells. Keep both feet complete and the body scale consistent between movement and attacks.
 
-**Why:** The normal sheets are large JPEG data behind PNG names; scaling to the older 1024×768 logical atlas misplaced Roxy's cells, and generic neutral-gray removal left tiles or removed foreground.
+**Why:** Cropping at equal cell boundaries cut the feet off. Repeating the single supplied walking pose without leg movement made her appear planted in the floor.
 
-**How to apply:** Preserve the source canvas dimensions, key only Roxy's teal-black and gray-green checker colors, then repair each cell independently.
+**How to apply:** Verify each sheet's dimensions independently, use its actual pose boundaries, and preserve existing transparent alpha. Do not change the separate paired-scene coordinates to match the movement sheet.

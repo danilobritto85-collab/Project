@@ -3,11 +3,11 @@ name: Amazon Ebony
 description: User-defined scope and consent requirements for the Amazon Ebony variant.
 ---
 
-Ebony is a selectable variant of the existing Amazon group, not an additional opponent category. Preserve the classic Amazon option.
+Ebony has her own quantity selector in the opponent list. Preserve the classic Amazon option and allow both to be selected together.
 
-**Why:** The user chose “Variante selecionável” when asked how she should enter the roster.
+**Why:** After the initial shared variant selector, the user requested “Adicione a ebony na lista de seleção.”
 
-**How to apply:** New Ebony features use the existing Amazon quantity and must not replace the classic artwork.
+**How to apply:** Keep the quantity controls separate; choosing Ebony must not replace all classic Amazonas.
 
 Ebony victory scenes are optional, require explicit opt-in, and are consensual.
 
