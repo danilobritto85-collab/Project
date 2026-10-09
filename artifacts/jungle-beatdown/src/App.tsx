@@ -13,7 +13,8 @@ import jungleBackground from '@assets/background_1791470375690.png';
 import {
   NINJA_FOOTSMOTHER_DURATION,
   STATE_NINJA_FOOTSMOTHER,
-  STATE_ROXY_HYPNO,
+  STATE_ROXY_OFFER,
+  STATE_ROXY_CHALLENGE,
   STATE_ROXY_SMOTHER,
   useJungleGame,
 } from './game/useJungleGame';
@@ -77,6 +78,8 @@ function App() {
     heroPortrait,
     pressVirtualControl,
     releaseVirtualControl,
+    chooseRoxyChallenge,
+    exitRoxyChallenge,
   } = useJungleGame(canvasRef);
   const hpPercent = Math.max(0, Math.min(100, (snapshot.heroHp / snapshot.maxHeroHp) * 100));
   const escapePercent = Math.max(0, Math.min(100, snapshot.escapeProgress * 100));
@@ -84,16 +87,16 @@ function App() {
   const isGrapple = snapshot.phase === 'grapple';
   const isSpecialDefeat = snapshot.phase === 'special-defeat';
   const isNinjaFootsmother = snapshot.phase === STATE_NINJA_FOOTSMOTHER;
-  const isRoxyHypno = snapshot.phase === STATE_ROXY_HYPNO;
+  const isRoxyOffer = snapshot.phase === STATE_ROXY_OFFER;
+  const isRoxyChallenge = snapshot.phase === STATE_ROXY_CHALLENGE;
   const isRoxySmother = snapshot.phase === STATE_ROXY_SMOTHER;
   const isGroupDefeat = snapshot.phase === 'group-defeat';
   const isPlaying = snapshot.phase === 'playing';
-  const isDefeatSequence = isSpecialDefeat || isNinjaFootsmother || isRoxyHypno ||
-    isRoxySmother || isGroupDefeat;
+  const isDefeatSequence = isSpecialDefeat || isNinjaFootsmother || isRoxySmother || isGroupDefeat;
   const showRetry = isDefeatSequence || snapshot.phase === 'game-over';
   const sequencePercent = Math.max(0, Math.min(100,
     (snapshot.defeatSecondsLeft /
-      (isSpecialDefeat || isNinjaFootsmother || isRoxyHypno || isRoxySmother
+      (isSpecialDefeat || isNinjaFootsmother || isRoxySmother
         ? NINJA_FOOTSMOTHER_DURATION : 20)) * 100));
 
   return (
@@ -199,18 +202,16 @@ function App() {
             {isDefeatSequence && !isGroupDefeat && (
               <div className="sequence-hud defeat-hud" role="status"
                 data-testid={isNinjaFootsmother ? 'status-ninja-footsmother'
-                  : isRoxyHypno ? 'status-roxy-hypno'
                   : isRoxySmother ? 'status-roxy-smother'
                   : isSpecialDefeat ? 'status-special-defeat' : 'status-group-defeat'}>
                 <div className="sequence-info">
                   <span className="sequence-label">
                     {isNinjaFootsmother ? 'Footsmother da kunoichi'
-                      : isRoxyHypno ? 'Hipnose da Roxy'
                       : isRoxySmother ? 'Smother da Roxy'
                       : isSpecialDefeat ? 'Luta para se soltar' : 'Heroína desmaiada'}
                   </span>
                   <span className="sequence-hint">
-                    {isNinjaFootsmother || isRoxyHypno || isRoxySmother
+                    {isNinjaFootsmother || isRoxySmother
                       ? 'Imobilização · 10 segundos' : 'Sequência de derrota'}
                   </span>
                 </div>
@@ -256,6 +257,52 @@ function App() {
               </div>
             )}
           </div>
+
+          {isRoxyOffer && (
+            <section className="roxy-choice-panel" role="dialog"
+              aria-labelledby="roxy-choice-title" aria-describedby="roxy-choice-description"
+              data-testid="roxy-consent-offer">
+              <div className="roxy-choice-copy">
+                <h2 id="roxy-choice-title">Desafio opcional da Roxy</h2>
+                <p id="roxy-choice-description">
+                  Interação voluntária entre personagens adultas: beijo nos pés,
+                  sem hipnose ou perda de HP. A luta está pausada.
+                </p>
+                <p className="roxy-dialogue">Roxy: “Quer participar? Você pode recusar ou parar quando quiser.”</p>
+              </div>
+              <div className="roxy-choice-actions">
+                <button type="button" className="roxy-choice-accept"
+                  onClick={() => chooseRoxyChallenge(true)} data-testid="button-roxy-accept">
+                  Aceitar voluntariamente <kbd>Y</kbd>
+                </button>
+                <button type="button" onClick={() => chooseRoxyChallenge(false)}
+                  data-testid="button-roxy-decline" autoFocus>
+                  Recusar · derrota normal <kbd>N</kbd>
+                </button>
+              </div>
+            </section>
+          )}
+
+          {isRoxyChallenge && (
+            <section className="roxy-choice-panel roxy-voluntary-panel" aria-live="polite"
+              data-testid="roxy-voluntary-scene">
+              <div className="roxy-choice-copy">
+                <h2>Escolha voluntária · HP preservado</h2>
+                <p>Heroína: “Quero participar. Posso parar a qualquer momento.”</p>
+                {snapshot.roxyChallengeElapsed >= 1.1 && (
+                  <p className="roxy-dialogue" data-testid="roxy-dialogue">
+                    Roxy: “Beija meus pés… Isso… boa menina.”
+                  </p>
+                )}
+              </div>
+              <div className="roxy-choice-actions">
+                <button type="button" onClick={exitRoxyChallenge}
+                  data-testid="button-roxy-stop">
+                  {snapshot.defeatSecondsLeft > 0 ? 'Parar a cena' : 'Voltar ao combate'} <kbd>Esc</kbd>
+                </button>
+              </div>
+            </section>
+          )}
 
           <div className="controls-strip">
             <div className="control-title">Comandos de combate</div>

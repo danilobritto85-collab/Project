@@ -223,6 +223,44 @@ button:focus-visible { outline: 2px solid #f4cc63; outline-offset: 3px; }
 .sequence-track { height: 3px; grid-column: 1 / -1; background: rgba(242, 229, 182, .13); }
 .sequence-fill { height: 100%; background: #e6c666; transition: width .1s linear; }
 .defeat-hud .sequence-fill { background: #d59b85; }
+.roxy-choice-panel {
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  border-top: 1px solid rgba(229, 202, 112, .35);
+  background: #14271f;
+  color: #eee7d3;
+}
+.roxy-choice-copy { flex: 1; }
+.roxy-choice-copy h2 {
+  margin: 0 0 7px;
+  color: #f0d677;
+  font: 11px var(--app-font-mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.roxy-choice-copy p { margin: 4px 0; font-size: 12px; line-height: 1.5; color: #c6d0bd; }
+.roxy-choice-copy .roxy-dialogue { color: #eee7d3; }
+.roxy-choice-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.roxy-choice-actions button {
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid rgba(229, 202, 112, .45);
+  background: #1d3428;
+  color: #eee7d3;
+  font: 11px var(--app-font-mono);
+  cursor: pointer;
+}
+.roxy-choice-actions .roxy-choice-accept { background: #e6c666; color: #17251b; }
+.roxy-choice-actions button:hover { filter: brightness(1.12); }
+.roxy-choice-actions button:focus-visible { outline: 2px solid #f2d77c; outline-offset: 3px; }
+.roxy-choice-actions kbd { margin-left: 7px; }
+@media (max-width: 700px) {
+  .roxy-choice-panel { flex-direction: column; align-items: stretch; padding: 13px; gap: 10px; }
+  .roxy-choice-actions button { flex: 1; }
+}
 .state-overlay {
   position: absolute; z-index: 5; inset: 0;
   display: flex; align-items: center; justify-content: center;

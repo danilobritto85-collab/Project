@@ -22,7 +22,7 @@ import heroineBreathingAudioUrl from '@assets/generated_audio/heroine_deep_breat
 import enemyLaughAudioUrl from '@assets/generated_audio/enemy_laugh.mp3';
 import heroineFaintSighAudioUrl from '@assets/generated_audio/heroine_faint_sigh.mp3';
 import roxyKickAudioUrl from '@assets/generated_audio/roxy_kick.mp3';
-import roxyHypnosisAudioUrl from '@assets/generated_audio/roxy_hypnosis.mp3';
+import roxyDialogueAudioUrl from '@assets/generated_audio/roxy_voluntary_dialogue.mp3';
 
 const WIDTH = 1024;
 const HEIGHT = 576;
@@ -34,7 +34,8 @@ const FLOOR_MIN = HEIGHT * 0.75;
 const FLOOR_MAX = HEIGHT * 0.95;
 
 export const STATE_NINJA_FOOTSMOTHER = 'ninja-footsmother' as const;
-export const STATE_ROXY_HYPNO = 'roxy-hypno' as const;
+export const STATE_ROXY_OFFER = 'roxy-offer' as const;
+export const STATE_ROXY_CHALLENGE = 'roxy-challenge' as const;
 export const STATE_ROXY_SMOTHER = 'roxy-smother' as const;
 
 export type GamePhase =
@@ -43,7 +44,8 @@ export type GamePhase =
   | 'grapple'
   | 'special-defeat'
   | typeof STATE_NINJA_FOOTSMOTHER
-  | typeof STATE_ROXY_HYPNO
+  | typeof STATE_ROXY_OFFER
+  | typeof STATE_ROXY_CHALLENGE
   | typeof STATE_ROXY_SMOTHER
   | 'group-defeat'
   | 'game-over';
@@ -59,6 +61,7 @@ export interface GameSnapshot {
   escapeProgress: number;
   defeatSecondsLeft: number;
   soundEnabled: boolean;
+  roxyChallengeElapsed: number;
 }
 
 interface SpriteRect {
@@ -117,7 +120,7 @@ interface Particle {
 
 interface World {
   phase: GamePhase;
-  defeatKind: 'special' | 'group' | 'ninja-footsmother' | 'roxy-hypno' | 'roxy-smother' | null;
+  defeatKind: 'special' | 'group' | 'ninja-footsmother' | 'roxy-smother' | null;
   isGrappleActive: boolean;
   heroX: number;
   heroY: number;
@@ -140,6 +143,7 @@ interface World {
   defeatStartHp: number;
   ninjaFootsmotherElapsed: number;
   roxyDefeatElapsed: number;
+  roxyDialoguePlayed: boolean;
   footstepTimer: number;
   soundEnabled: boolean;
   sound: SoundEngine;
@@ -160,7 +164,7 @@ type SoundCue =
   | 'enemyLaugh'
   | 'heroineFaintSigh'
   | 'roxyKick'
-  | 'roxyHypnosis';
+  | 'roxyDialogue';
 
 type SoundEngine = {
   context: AudioContext | null;
@@ -334,6 +338,7 @@ const initialSnapshot: GameSnapshot = {
   escapeProgress: 0,
   defeatSecondsLeft: 0,
   soundEnabled: true,
+  roxyChallengeElapsed: 0,
 };
 
 function createEnemy(id: number, index: number, kind: EnemyKind): Enemy {
@@ -382,6 +387,7 @@ function createWorld(): World {
     defeatStartHp: 100,
     ninjaFootsmotherElapsed: 0,
     roxyDefeatElapsed: 0,
+    roxyDialoguePlayed: false,
     footstepTimer: 0,
     soundEnabled: true,
     sound: {
@@ -422,6 +428,7 @@ function publishSnapshot(world: World): GameSnapshot {
     escapeProgress: world.escapeProgress,
     defeatSecondsLeft: Math.max(0, world.defeatSecondsLeft),
     soundEnabled: world.soundEnabled,
+    roxyChallengeElapsed: world.phase === STATE_ROXY_CHALLENGE ? world.roxyDefeatElapsed : 0,
   };
 }
 
@@ -1232,9 +1239,8 @@ function heroRect(world: World) {
       (world.phase === 'game-over' && world.defeatKind === 'ninja-footsmother')) {
     return HERO_FRAMES.defeated;
   }
-  if (world.phase === STATE_ROXY_HYPNO || world.phase === STATE_ROXY_SMOTHER ||
-      (world.phase === 'game-over' &&
-        (world.defeatKind === 'roxy-hypno' || world.defeatKind === 'roxy-smother'))) {
+  if (world.phase === STATE_ROXY_SMOTHER ||
+      (world.phase === 'game-over' && world.defeatKind === 'roxy-smother')) {
     return HERO_FRAMES.defeated;
   }
   if (world.phase === 'special-defeat' || (world.phase === 'game-over' && world.defeatKind === 'special')) return HERO_FRAMES.down;
@@ -1272,11 +1278,10 @@ function drawWorld(
 
   const ninjaFootsmotherSequence = world.phase === STATE_NINJA_FOOTSMOTHER ||
     (world.phase === 'game-over' && world.defeatKind === 'ninja-footsmother');
-  const roxyHypnoSequence = world.phase === STATE_ROXY_HYPNO ||
-    (world.phase === 'game-over' && world.defeatKind === 'roxy-hypno');
+  const roxyVoluntarySequence = world.phase === STATE_ROXY_CHALLENGE;
   const roxySmotherSequence = world.phase === STATE_ROXY_SMOTHER ||
     (world.phase === 'game-over' && world.defeatKind === 'roxy-smother');
-  const roxyDefeatSequence = roxyHypnoSequence || roxySmotherSequence;
+  const roxyDefeatSequence = roxyVoluntarySequence || roxySmotherSequence;
   if (ninjaFootsmotherSequence) {
     const grappler = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
     const bystanders = world.enemies
@@ -1332,15 +1337,16 @@ function drawWorld(
     for (const enemy of bystanders) {
       drawEnemySprite(context, atlas, enemy, enemyAnimationFrame(enemy, now));
     }
-    const frames = roxyHypnoSequence ? ROXY_HYPNO_FRAMES : ROXY_SMOTHER_FRAMES;
-    const sheet = roxyHypnoSequence ? atlas.roxyHypno : atlas.roxySmother;
+    const frames = roxyVoluntarySequence ? ROXY_HYPNO_FRAMES : ROXY_SMOTHER_FRAMES;
+    const sheet = roxyVoluntarySequence ? atlas.roxyHypno : atlas.roxySmother;
     const elapsed = Math.max(0, world.roxyDefeatElapsed);
-    const introDuration = roxyHypnoSequence ? 4.8 : 3.6;
+    const introDuration = 3.6;
     const introIndex = Math.min(
       frames.length - 1,
       Math.floor((elapsed / introDuration) * frames.length),
     );
-    const loopIndex = roxyHypnoSequence
+    // The voluntary scene never shows the mind-control or dazed frames.
+    const loopIndex = roxyVoluntarySequence
       ? frames.length - 1
       : elapsed < introDuration ? introIndex : [2, 3][Math.floor(now / 420) % 2];
     drawRoxyDefeatFrame(
@@ -1349,7 +1355,7 @@ function drawWorld(
       frames[Math.max(0, loopIndex)],
       clamp(world.heroX, 190, WIDTH - 190),
       clamp(world.heroY, FLOOR_MIN, FLOOR_MAX),
-      roxyHypnoSequence ? 220 : 225,
+      roxyVoluntarySequence ? 220 : 225,
       grappler?.direction === -1,
     );
   }
@@ -1479,7 +1485,7 @@ function drawWorld(
 function enterGameOver(world: World) {
   if (world.phase === 'game-over') return;
   if (world.defeatKind === 'special' || world.defeatKind === 'ninja-footsmother' ||
-      world.defeatKind === 'roxy-hypno' || world.defeatKind === 'roxy-smother') {
+      world.defeatKind === 'roxy-smother') {
     stopClips(world);
     playClip(world, 'heroineFaintSigh', 0.68, 3500);
   }
@@ -1498,6 +1504,69 @@ function beginGenericDefeat(world: World) {
   world.heroVelocityX = 0;
   world.heroVelocityY = 0;
   playClip(world, 'heroineFaintSigh', 0.68, 3500);
+}
+
+function beginRoxyOffer(world: World, enemy: Enemy) {
+  stopClips(world);
+  world.phase = STATE_ROXY_OFFER;
+  world.defeatKind = null;
+  world.isGrappleActive = false;
+  world.grappleSecondsLeft = 0;
+  world.defeatSecondsLeft = 0;
+  world.roxyDefeatElapsed = 0;
+  world.roxyDialoguePlayed = false;
+  world.heroAction = 'idle';
+  world.actionTimer = 0;
+  world.heroVelocityX = 0;
+  world.heroVelocityY = 0;
+  world.jumpOffset = 0;
+  world.jumpVelocity = 0;
+  world.particles = [];
+  enemy.state = 'idle';
+  enemy.stateTimer = 0;
+  enemy.x = clamp(world.heroX + world.facing * 130, 64, WIDTH - 64);
+  enemy.y = world.heroY;
+  enemy.vx = 0;
+  enemy.vy = 0;
+  world.enemies.forEach((other) => {
+    if (other.hp > 0 && other.active) other.state = 'idle';
+  });
+}
+
+function respondToRoxyOffer(world: World, accepted: boolean) {
+  if (world.phase !== STATE_ROXY_OFFER) return;
+  stopClips(world);
+  if (!accepted) {
+    world.currentGrappler = null;
+    beginGenericDefeat(world);
+    return;
+  }
+  // Consent starts a separate scene, not an HP-draining defeat.
+  world.phase = STATE_ROXY_CHALLENGE;
+  world.defeatKind = null;
+  world.defeatSecondsLeft = ROXY_DEFEAT_DURATION;
+  world.roxyDefeatElapsed = 0;
+  world.roxyDialoguePlayed = false;
+}
+
+function endRoxyChallenge(world: World) {
+  if (world.phase !== STATE_ROXY_CHALLENGE) return;
+  stopClips(world);
+  world.phase = 'playing';
+  world.defeatKind = null;
+  world.isGrappleActive = false;
+  world.currentGrappler = null;
+  world.defeatSecondsLeft = 0;
+  world.heroAction = 'idle';
+  world.heroHitCooldown = 2.5;
+  world.actionTimer = 0.35;
+  world.enemies.forEach((enemy) => {
+    if (enemy.hp > 0 && enemy.active) {
+      enemy.state = 'idle';
+      enemy.stateTimer = 0;
+      enemy.attackCooldown = Math.max(enemy.attackCooldown, 2.5);
+    }
+  });
 }
 
 function beginSpecialGrapple(world: World, enemy: Enemy) {
@@ -1626,6 +1695,7 @@ function handleMovement(world: World, pressed: Set<string>, dt: number) {
 }
 
 function updateEnemies(world: World, dt: number, now: number) {
+  if (world.phase === STATE_ROXY_OFFER || world.phase === STATE_ROXY_CHALLENGE) return;
   if (world.phase === 'playing') {
     for (const enemy of world.enemies) {
       if (!enemy.active && enemy.hp <= 0) {
@@ -1820,7 +1890,6 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
       stopClips(world);
       world.struggleVoiceTimer = 1.1;
       world.nextStruggleBreath = true;
-      playClip(world, 'enemyLaugh', 0.55, 1600);
       if (grappler?.kind === 'ninja') {
         world.phase = STATE_NINJA_FOOTSMOTHER;
         world.defeatKind = 'ninja-footsmother';
@@ -1835,18 +1904,21 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
         world.heroVelocityX = 0;
         world.heroVelocityY = 0;
       } else if (grappler?.kind === 'roxy') {
-        const hypnosis = random(world) < 0.5;
-        world.phase = hypnosis ? STATE_ROXY_HYPNO : STATE_ROXY_SMOTHER;
-        world.defeatKind = hypnosis ? 'roxy-hypno' : 'roxy-smother';
-        world.defeatSecondsLeft = ROXY_DEFEAT_DURATION;
-        world.roxyDefeatElapsed = 0;
-        if (hypnosis) playClip(world, 'roxyHypnosis', 0.56, 4000);
+        if (random(world) < 0.5) {
+          beginRoxyOffer(world, grappler);
+        } else {
+          world.phase = STATE_ROXY_SMOTHER;
+          world.defeatKind = 'roxy-smother';
+          world.defeatSecondsLeft = ROXY_DEFEAT_DURATION;
+          world.roxyDefeatElapsed = 0;
+        }
       } else {
         world.phase = 'special-defeat';
         world.defeatKind = 'special';
         world.defeatSecondsLeft = SPECIAL_DEFEAT_DURATION;
         playSweep(world, 550, 220, 0.6, 0.045, 'sine');
       }
+      if (world.isGrappleActive) playClip(world, 'enemyLaugh', 0.55, 1600);
     }
   } else if (world.phase === STATE_NINJA_FOOTSMOTHER ||
     (world.phase === 'game-over' && world.defeatKind === 'ninja-footsmother')) {
@@ -1862,11 +1934,19 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
         enterGameOver(world);
       }
     }
-  } else if (world.phase === STATE_ROXY_HYPNO || world.phase === STATE_ROXY_SMOTHER ||
-    (world.phase === 'game-over' &&
-      (world.defeatKind === 'roxy-hypno' || world.defeatKind === 'roxy-smother'))) {
+  } else if (world.phase === STATE_ROXY_CHALLENGE) {
+    const wasRunning = world.defeatSecondsLeft > 0;
+    world.roxyDefeatElapsed = Math.min(ROXY_DEFEAT_DURATION, world.roxyDefeatElapsed + dt);
+    world.defeatSecondsLeft = Math.max(0, ROXY_DEFEAT_DURATION - world.roxyDefeatElapsed);
+    if (!world.roxyDialoguePlayed && world.roxyDefeatElapsed >= 1.1) {
+      world.roxyDialoguePlayed = true;
+      playClip(world, 'roxyDialogue', 0.65, 1000);
+    }
+    if (wasRunning && world.defeatSecondsLeft <= 0) stopClips(world);
+  } else if (world.phase === STATE_ROXY_SMOTHER ||
+    (world.phase === 'game-over' && world.defeatKind === 'roxy-smother')) {
     world.roxyDefeatElapsed += dt;
-    if (world.phase === STATE_ROXY_HYPNO || world.phase === STATE_ROXY_SMOTHER) {
+    if (world.phase === STATE_ROXY_SMOTHER) {
       world.defeatSecondsLeft = Math.max(0, world.defeatSecondsLeft - dt);
       const progress = 1 - world.defeatSecondsLeft / ROXY_DEFEAT_DURATION;
       world.heroHp = Math.max(0, world.defeatStartHp * (1 - progress));
@@ -1947,6 +2027,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
     if (world.phase === 'title' || world.phase === 'game-over') {
       const soundEnabled = world.soundEnabled;
       const previousSound = world.sound;
+      stopClips(world);
       Object.assign(world, createWorld(), {
         phase: 'playing',
         soundEnabled,
@@ -1962,6 +2043,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
     const world = worldRef.current;
     const soundEnabled = world.soundEnabled;
     const previousSound = world.sound;
+    stopClips(world);
     Object.assign(world, createWorld(), {
       phase: 'playing',
       soundEnabled,
@@ -1972,11 +2054,32 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
     if (soundEnabled) playStomp(world);
   }, []);
 
+  const chooseRoxyChallenge = useCallback((accepted: boolean) => {
+    respondToRoxyOffer(worldRef.current, accepted);
+    pressedRef.current.clear();
+    setSnapshot(publishSnapshot(worldRef.current));
+  }, []);
+
+  const exitRoxyChallenge = useCallback(() => {
+    endRoxyChallenge(worldRef.current);
+    pressedRef.current.clear();
+    setSnapshot(publishSnapshot(worldRef.current));
+  }, []);
+
   const pressVirtualControl = useCallback((code: string) => {
     const world = worldRef.current;
     const wasPressed = pressedRef.current.has(code);
     pressedRef.current.add(code);
 
+    if (!wasPressed && world.phase === STATE_ROXY_OFFER) {
+      if (code === 'KeyY') chooseRoxyChallenge(true);
+      if (code === 'KeyN' || code === 'Escape') chooseRoxyChallenge(false);
+      return;
+    }
+    if (!wasPressed && world.phase === STATE_ROXY_CHALLENGE && code === 'Escape') {
+      exitRoxyChallenge();
+      return;
+    }
     if (code === 'KeyJ') {
       if (world.phase === 'grapple') {
         world.escapeProgress = Math.min(1, world.escapeProgress + 0.105);
@@ -2003,7 +2106,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       startGame();
     }
     if (code === 'KeyR' && world.phase === 'game-over' && !wasPressed) restartGame();
-  }, [restartGame, startGame]);
+  }, [chooseRoxyChallenge, exitRoxyChallenge, restartGame, startGame]);
 
   const releaseVirtualControl = useCallback((code: string) => {
     pressedRef.current.delete(code);
@@ -2052,7 +2155,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       enemyLaugh: enemyLaughAudioUrl,
       heroineFaintSigh: heroineFaintSighAudioUrl,
       roxyKick: roxyKickAudioUrl,
-      roxyHypnosis: roxyHypnosisAudioUrl,
+      roxyDialogue: roxyDialogueAudioUrl,
     };
     const worldSound = worldRef.current.sound;
     for (const [cue, url] of Object.entries(soundUrls) as [SoundCue, string][]) {
@@ -2068,7 +2171,7 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       const scene = params.get('_scene');
       if (scene === 'playing' || scene === 'grapple' ||
           scene === 'special-defeat' || scene === STATE_NINJA_FOOTSMOTHER ||
-          scene === STATE_ROXY_HYPNO || scene === STATE_ROXY_SMOTHER ||
+          scene === STATE_ROXY_OFFER || scene === STATE_ROXY_CHALLENGE || scene === STATE_ROXY_SMOTHER ||
           scene === 'group-defeat') {
         const world = worldRef.current;
         if (scene === 'playing') {
@@ -2091,23 +2194,23 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
         } else {
         const requestedKind = params.get('_grappler');
         const preferredKind: EnemyKind = requestedKind === 'roxy' ||
-          scene === STATE_ROXY_HYPNO || scene === STATE_ROXY_SMOTHER ? 'roxy'
+          scene === STATE_ROXY_OFFER || scene === STATE_ROXY_CHALLENGE || scene === STATE_ROXY_SMOTHER ? 'roxy'
           : requestedKind === 'amazon' ? 'amazon'
             : requestedKind === 'ninja' || scene === STATE_NINJA_FOOTSMOTHER
               ? 'ninja' : 'amazon';
         const ninjaFootsmotherScene = scene === STATE_NINJA_FOOTSMOTHER ||
           (scene === 'special-defeat' && preferredKind === 'ninja');
-        const roxyHypnoScene = scene === STATE_ROXY_HYPNO;
+        const roxyOfferScene = scene === STATE_ROXY_OFFER;
+        const roxyChallengeScene = scene === STATE_ROXY_CHALLENGE;
         const roxySmotherScene = scene === STATE_ROXY_SMOTHER;
         const activePhase: GamePhase = ninjaFootsmotherScene
           ? STATE_NINJA_FOOTSMOTHER
-          : roxyHypnoScene ? STATE_ROXY_HYPNO
-            : roxySmotherScene ? STATE_ROXY_SMOTHER : scene;
+          : roxySmotherScene ? STATE_ROXY_SMOTHER : scene;
         const duration = activePhase === 'grapple' ? GRAPPLE_DURATION
           : activePhase === 'group-defeat' ? GROUP_DEFEAT_DURATION
           : activePhase === STATE_NINJA_FOOTSMOTHER
             ? NINJA_FOOTSMOTHER_DURATION
-            : activePhase === STATE_ROXY_HYPNO || activePhase === STATE_ROXY_SMOTHER
+            : activePhase === STATE_ROXY_CHALLENGE || activePhase === STATE_ROXY_SMOTHER
               ? ROXY_DEFEAT_DURATION : SPECIAL_DEFEAT_DURATION;
         const requestedElapsed = Number(params.get('_elapsed') ?? 0);
         const elapsed = Number.isFinite(requestedElapsed)
@@ -2118,7 +2221,8 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
         world.heroHp = activePhase === 'group-defeat' ? 0 : 35;
         world.defeatStartHp = 35;
         world.ninjaFootsmotherElapsed = ninjaFootsmotherScene ? elapsed : 0;
-        world.roxyDefeatElapsed = roxyHypnoScene || roxySmotherScene ? elapsed : 0;
+        world.roxyDefeatElapsed = roxyChallengeScene || roxySmotherScene ? elapsed : 0;
+        world.roxyDialoguePlayed = roxyChallengeScene && elapsed >= 1.1;
         world.enemies.forEach((enemy) => {
           enemy.hp = 3;
           enemy.active = true;
@@ -2137,16 +2241,22 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
         world.currentGrappler = activePhase === 'group-defeat' ? null : selectedGrappler.id;
         world.defeatKind = activePhase === 'group-defeat' ? 'group'
           : activePhase === STATE_NINJA_FOOTSMOTHER ? 'ninja-footsmother'
-          : activePhase === STATE_ROXY_HYPNO ? 'roxy-hypno'
           : activePhase === STATE_ROXY_SMOTHER ? 'roxy-smother'
           : activePhase === 'special-defeat' ? 'special' : null;
         world.isGrappleActive = activePhase === 'grapple' ||
           activePhase === 'special-defeat' || activePhase === STATE_NINJA_FOOTSMOTHER ||
-          activePhase === STATE_ROXY_HYPNO || activePhase === STATE_ROXY_SMOTHER;
+          activePhase === STATE_ROXY_SMOTHER;
         world.grappleSecondsLeft = activePhase === 'grapple' ? duration - elapsed : 0;
         world.defeatSecondsLeft = activePhase === 'grapple' ? 0 : duration - elapsed;
         world.actionTimer = activePhase === 'group-defeat' && elapsed < 0.9 ? 0.9 - elapsed : 0;
         world.particles = [];
+        if (roxyOfferScene || roxyChallengeScene) {
+          world.heroAction = 'idle';
+          world.enemies.forEach((enemy) => { enemy.state = 'idle'; });
+          if (roxyOfferScene) {
+            beginRoxyOffer(world, selectedGrappler);
+          }
+        }
         if (activePhase === 'group-defeat' && elapsed > 4) {
           const groupAmazons = world.enemies.filter((enemy) => enemy.kind === 'amazon');
           const groupNinjas = world.enemies.filter((enemy) => enemy.kind === 'ninja');
@@ -2250,6 +2360,10 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
       ) {
         return;
       }
+      if (event.target instanceof HTMLElement && event.target.tagName === 'BUTTON' &&
+          (event.code === 'Space' || event.code === 'Enter' || event.code === 'NumpadEnter')) {
+        return;
+      }
       const controlKeys = [
         'ArrowUp',
         'ArrowDown',
@@ -2295,6 +2409,8 @@ export function useJungleGame(canvasRef: RefObject<HTMLCanvasElement | null>) {
     startGame,
     restartGame,
     toggleSound,
+    chooseRoxyChallenge,
+    exitRoxyChallenge,
     heroPortrait,
     pressVirtualControl,
     releaseVirtualControl,

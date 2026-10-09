@@ -70,3 +70,10 @@ uri = "file://attached_assets/generated_audio/roxy_hypnosis.mp3"
 type = "audio"
 title = "roxy hypnosis cue"
 description = "Generated sound effect: Subtle magical hypnosis activation in a retro arcade game: airy shimmer, gently rising crystalline twinkle, soft resolving chime. No voices, no breaths, no music, no kiss soun…"
+
+[[outputs]]
+id = "X5q6YGpR6RTLCC4QkxEvh"
+uri = "file://attached_assets/generated_audio/roxy_voluntary_dialogue.mp3"
+type = "audio"
+title = "Roxy voluntary challenge dialogue"
+description = "Text-to-speech audio: Beija meus pés... Isso... boa menina."
