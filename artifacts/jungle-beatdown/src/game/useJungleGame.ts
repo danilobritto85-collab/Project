@@ -1497,16 +1497,26 @@ function drawWorld(
       frames.length - 1,
       Math.floor((elapsed / introDuration) * frames.length),
     );
-    // The voluntary scene never shows the mind-control or dazed frames.
+    // The voluntary scene skips the mind-control frames and alternates between
+    // the two foot-kiss poses from the final row of Roxy's sheet.
     const loopIndex = roxyVoluntarySequence
-      ? frames.length - 1
+      ? 2 + (Math.floor((elapsed + 0.45) / 1.2) % 2)
       : elapsed < introDuration ? introIndex : [2, 3][Math.floor(now / 420) % 2];
+    const voluntaryMotion = roxyVoluntarySequence;
     drawRoxyDefeatFrame(
       context,
       sheet,
       frames[Math.max(0, loopIndex)],
-      clamp(world.heroX, 190, WIDTH - 190),
-      clamp(world.heroY, FLOOR_MIN, FLOOR_MAX),
+      clamp(
+        world.heroX + (voluntaryMotion ? Math.sin(elapsed * 1.8) * 2 : 0),
+        190,
+        WIDTH - 190,
+      ),
+      clamp(
+        world.heroY + (voluntaryMotion ? Math.sin(elapsed * 2.4) * 1.2 : 0),
+        FLOOR_MIN,
+        FLOOR_MAX,
+      ),
       roxyVoluntarySequence ? 220 : 225,
       grappler?.direction === -1,
     );
@@ -1557,7 +1567,22 @@ function drawWorld(
       ? STRUGGLE_FRAMES[struggleFrame]
       : sequenceFrame(GRAPPLE_FRAMES, elapsed, duration);
     const struggleMotion = isStruggle ? Math.sin(now / 82) * 2 : 0;
-    if (ninjaGrappler && grappler) {
+    if (grappler?.kind === 'roxy') {
+      // Roxy's combat finisher uses her own kick-to-standing pair, not the
+      // Amazon-only pin sheets used by the generic special-defeat branch.
+      const roxyFinisherFrame = elapsed < 0.55
+        ? ROXY_SMOTHER_FRAMES[0]
+        : ROXY_SMOTHER_FRAMES[1];
+      drawRoxyDefeatFrame(
+        context,
+        atlas.roxySmother,
+        roxyFinisherFrame,
+        clamp(world.heroX, 190, WIDTH - 190),
+        clamp(world.heroY, FLOOR_MIN, FLOOR_MAX),
+        225,
+        grappler.direction === -1,
+      );
+    } else if (ninjaGrappler && grappler) {
       const ninjaMotion = isStruggle ? Math.sin(now / 92) * 2.1 : 0;
       const heroX = clamp(world.heroX + struggleMotion + ninjaMotion, 110, WIDTH - 110);
       drawAtlasSprite(
