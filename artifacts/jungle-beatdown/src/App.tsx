@@ -367,15 +367,15 @@ function App() {
               <div className="roxy-choice-copy">
                 <h2 id="roxy-choice-title">Desafio opcional da Roxy</h2>
                 <p id="roxy-choice-description">
-                  Interação voluntária entre personagens adultas: beijo nos pés,
-                  sem hipnose ou perda de HP. A luta está pausada.
+                  Interação voluntária entre personagens adultas: hipnose apenas após
+                  aceitar, seguida do beijo nos pés. Sem perda de HP; você pode parar.
                 </p>
                 <p className="roxy-dialogue">Roxy: “Quer participar? Você pode recusar ou parar quando quiser.”</p>
               </div>
               <div className="roxy-choice-actions">
                 <button type="button" className="roxy-choice-accept"
                   onClick={() => chooseRoxyChallenge(true)} data-testid="button-roxy-accept">
-                  Aceitar voluntariamente <kbd>Y</kbd>
+                  Aceitar hipnose e cena <kbd>Y</kbd>
                 </button>
                 <button type="button" onClick={() => chooseRoxyChallenge(false)}
                   data-testid="button-roxy-decline" autoFocus>
@@ -389,9 +389,9 @@ function App() {
             <section className="roxy-choice-panel roxy-voluntary-panel" aria-live="polite"
               data-testid="roxy-voluntary-scene">
               <div className="roxy-choice-copy">
-                <h2>Escolha voluntária · HP preservado</h2>
-                <p>Heroína: “Quero participar. Posso parar a qualquer momento.”</p>
-                {snapshot.roxyChallengeElapsed >= 1.1 && (
+                <h2>Hipnose consentida · HP preservado</h2>
+                <p>Heroína: “Quero participar da hipnose. Posso parar a qualquer momento.”</p>
+                {snapshot.roxyChallengeElapsed >= 3.6 && (
                   <p className="roxy-dialogue" data-testid="roxy-dialogue">
                     Roxy: “Beija meus pés… Isso… boa menina.”
                   </p>

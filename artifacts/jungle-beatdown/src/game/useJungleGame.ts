@@ -342,6 +342,8 @@ const GRAPPLE_DURATION = 5;
 const SPECIAL_DEFEAT_DURATION = 10;
 export const NINJA_FOOTSMOTHER_DURATION = 10;
 const ROXY_DEFEAT_DURATION = 10;
+const ROXY_HYPNOSIS_DURATION = 2.4;
+const ROXY_HYPNOSIS_FRAME_DURATION = 1.2;
 const NINJA_FOOTSMOTHER_ENDING_DURATION = 1.5;
 const NINJA_FOOTSMOTHER_FRAME_RATE = 6;
 const GROUP_DEFEAT_DURATION = 20;
@@ -1497,10 +1499,17 @@ function drawWorld(
       frames.length - 1,
       Math.floor((elapsed / introDuration) * frames.length),
     );
-    // The voluntary scene skips the mind-control frames and alternates between
-    // the two foot-kiss poses from the final row of Roxy's sheet.
+    // The first two poses are only shown after consent; the scene then cycles
+    // the two foot-kiss poses from the final row.
     const loopIndex = roxyVoluntarySequence
-      ? 2 + (Math.floor((elapsed + 0.45) / 1.2) % 2)
+      ? elapsed < ROXY_HYPNOSIS_DURATION
+        ? Math.min(1, Math.floor(elapsed / ROXY_HYPNOSIS_FRAME_DURATION))
+        : 2 + (
+          Math.floor(
+            (elapsed - ROXY_HYPNOSIS_DURATION) /
+              ROXY_HYPNOSIS_FRAME_DURATION,
+          ) % 2
+        )
       : elapsed < introDuration ? introIndex : [2, 3][Math.floor(now / 420) % 2];
     const voluntaryMotion = roxyVoluntarySequence;
     drawRoxyDefeatFrame(
@@ -1779,6 +1788,7 @@ function respondToRoxyOffer(world: World, accepted: boolean) {
   world.defeatSecondsLeft = ROXY_DEFEAT_DURATION;
   world.roxyDefeatElapsed = 0;
   world.roxyDialoguePlayed = false;
+  playSweep(world, 720, 330, 0.7, 0.026, 'sine');
 }
 
 function endRoxyChallenge(world: World) {
@@ -2249,7 +2259,7 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
     const wasRunning = world.defeatSecondsLeft > 0;
     world.roxyDefeatElapsed = Math.min(ROXY_DEFEAT_DURATION, world.roxyDefeatElapsed + dt);
     world.defeatSecondsLeft = Math.max(0, ROXY_DEFEAT_DURATION - world.roxyDefeatElapsed);
-    if (!world.roxyDialoguePlayed && world.roxyDefeatElapsed >= 1.1) {
+    if (!world.roxyDialoguePlayed && world.roxyDefeatElapsed >= 3.6) {
       world.roxyDialoguePlayed = true;
       playClip(world, 'roxyDialogue', 0.65, 1000);
     }
@@ -2608,7 +2618,7 @@ export function useJungleGame(
         world.defeatStartHp = 35;
         world.ninjaFootsmotherElapsed = ninjaFootsmotherScene ? elapsed : 0;
         world.roxyDefeatElapsed = roxyChallengeScene || roxySmotherScene ? elapsed : 0;
-        world.roxyDialoguePlayed = roxyChallengeScene && elapsed >= 1.1;
+        world.roxyDialoguePlayed = roxyChallengeScene && elapsed >= 3.6;
         world.enemies.forEach((enemy) => {
           enemy.hp = 3;
           enemy.active = true;

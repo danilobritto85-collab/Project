@@ -9,11 +9,11 @@ Roxy is the ninth opponent alongside five Amazons and three Kunoichis.
 
 **How to apply:** Keep Roxy's kick voice distinct. Smother follows the established custom-defeat pattern: subdued heroine struggle and deep breathing cues alternate without overlapping, then the sequence ends cleanly.
 
-Roxy's former hypnosis/foot-kiss sequence is now a voluntary interaction: an informed accept/decline choice must precede it, with no hypnosis or HP drain and an option to stop at any time. Its dialogue must never play before acceptance.
+Roxy's hypnosis-and-foot-kiss scene is voluntary: the accept/decline choice must explicitly disclose the hypnosis, which starts only after acceptance. There is no HP drain and the player can stop at any time. Its dialogue must never play before acceptance.
 
-**Why:** The user requested that the scene be consensual and explicitly selected the optional accept/decline approach. Declining follows the normal defeat rather than starting the intimate scene.
+**Why:** The user requested an optional, consensual scene with an explicit accept/decline choice, then asked to include hypnosis in it. Declining follows the normal defeat instead.
 
-**How to apply:** Preserve the consent choice and withdrawal option in future revisions. Do not restore the mind-control/dazed intro, automatic intimate animation, or fainting/struggle audio to this voluntary scene.
+**How to apply:** After acceptance, show Roxy's hypnotic introduction, then the foot-kiss poses and dialogue. Preserve the HP, the stop control, and the rejection path. Never show hypnosis before consent.
 
 Roxy's movement sheet has irregular artwork boundaries, not equal-sized pose cells. Keep both feet complete and the body scale consistent between movement and attacks.
 
