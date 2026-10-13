@@ -99,6 +99,8 @@ function TouchButton({
       onPointerUp={release}
       onPointerCancel={release}
       onLostPointerCapture={() => onRelease(code)}
+      onDragStart={(event) => event.preventDefault()}
+      onSelect={(event) => event.preventDefault()}
       onContextMenu={(event) => event.preventDefault()}
     >
       <span className="touch-control-glyph">{glyph}</span>
@@ -339,23 +341,24 @@ function App() {
               </div>
             )}
 
-            {(isPlaying || isGrapple) && (
-              <div className="touch-controls" role="group" aria-label="Controles touch">
-                <div className="touch-dpad" role="group" aria-label="Mover">
-                  <TouchButton code="KeyW" label="Mover para cima" glyph="▲" className="touch-up" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
-                  <TouchButton code="KeyA" label="Mover para a esquerda" glyph="◀" className="touch-left" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
-                  <TouchButton code="KeyD" label="Mover para a direita" glyph="▶" className="touch-right" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
-                  <TouchButton code="KeyS" label="Mover para baixo" glyph="▼" className="touch-down" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
-                </div>
-                <div className="touch-action-pad" role="group" aria-label="Ações">
-                  <TouchButton code="KeyJ" label="Soco ou escapar" glyph="J" caption="SOCO" className="touch-punch" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
-                  <TouchButton code="KeyK" label="Chute" glyph="K" caption="CHUTE" className="touch-kick" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
-                  <TouchButton code="Space" label="Pular" glyph="⤒" caption="PULAR" className="touch-jump" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
-                  <TouchButton code="ShiftLeft" label="Correr" glyph="»" caption="CORRER" className="touch-run" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
-                </div>
-              </div>
-            )}
           </div>
+
+          {(isPlaying || isGrapple) && (
+            <div className="touch-controls" role="group" aria-label="Controles de jogo">
+              <div className="touch-dpad" role="group" aria-label="Mover">
+                <TouchButton code="KeyW" label="Mover para cima" glyph="▲" className="touch-up" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
+                <TouchButton code="KeyA" label="Mover para a esquerda" glyph="◀" className="touch-left" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
+                <TouchButton code="KeyD" label="Mover para a direita" glyph="▶" className="touch-right" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
+                <TouchButton code="KeyS" label="Mover para baixo" glyph="▼" className="touch-down" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
+              </div>
+              <div className="touch-action-pad" role="group" aria-label="Ações">
+                <TouchButton code="KeyJ" label="Soco ou escapar" glyph="J" caption="SOCO" className="touch-punch" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
+                <TouchButton code="KeyK" label="Chute" glyph="K" caption="CHUTE" className="touch-kick" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
+                <TouchButton code="Space" label="Pular" glyph="⤒" caption="PULAR" className="touch-jump" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
+                <TouchButton code="ShiftLeft" label="Correr" glyph="»" caption="CORRER" className="touch-run" onPress={pressVirtualControl} onRelease={releaseVirtualControl} />
+              </div>
+            </div>
+          )}
 
           {isRoxyOffer && (
             <section className="roxy-choice-panel" role="dialog"
@@ -412,7 +415,7 @@ function App() {
               <div className="control-item"><kbd>K</kbd> Chute</div>
               <div className="control-item"><kbd>Espaço</kbd> Pular</div>
             </div>
-            <div className="touch-control-note">No celular, use os botões sobre a arena.</div>
+            <div className="touch-control-note">No celular, os controles ficam abaixo da arena.</div>
           </div>
         </section>
         <div className="footer-note"><Swords size={12} /> <span>Quantidades livres · Muitos personagens podem reduzir o desempenho</span> · arena de combate 2.5D</div>
