@@ -1510,22 +1510,21 @@ function drawWorld(
         ? Math.min(1, Math.floor(elapsed / ROXY_HYPNOSIS_FRAME_DURATION))
         : 3
       : elapsed < introDuration ? introIndex : 3;
-    const voluntaryMotion = roxyVoluntarySequence;
+    const finalPose = roxyVoluntarySequence
+      ? elapsed >= ROXY_HYPNOSIS_DURATION
+      : elapsed >= introDuration;
+    const poseBreath = finalPose ? Math.sin(elapsed * 2.2) * 0.02 : 0;
     drawRoxyDefeatFrame(
       context,
       sheet,
       frames[Math.max(0, loopIndex)],
       clamp(
-        world.heroX + (voluntaryMotion ? Math.sin(elapsed * 1.8) * 2 : 0),
+        world.heroX + (finalPose ? Math.sin(elapsed * 1.1) * 1.25 : 0),
         190,
         WIDTH - 190,
       ),
-      clamp(
-        world.heroY + (voluntaryMotion ? Math.sin(elapsed * 2.4) * 1.2 : 0),
-        FLOOR_MIN,
-        FLOOR_MAX,
-      ),
-      roxyVoluntarySequence ? 220 : 225,
+      world.heroY,
+      (roxyVoluntarySequence ? 220 : 225) * (1 + poseBreath),
       grappler?.direction === -1,
     );
   }
