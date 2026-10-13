@@ -4,3 +4,4 @@
 - [Roxy sequences](roxy-sequences.md) — ninth opponent; foot-kiss scene requires explicit opt-in, no hypnosis or HP drain, and an option to stop.
 - [Amazon Ebony](amazon-ebony.md) — selectable Amazon variant; the user defines her optional victory scenes as consensual.
 - [Fight configuration](fight-configuration.md) — opponent quantities are freely chosen, including multiple Roxys; no fixed category caps.
+- [Karate sequences](karate-sequences.md) — Karate Blonde and Ebony special scenes require an accept/decline prompt before they begin.

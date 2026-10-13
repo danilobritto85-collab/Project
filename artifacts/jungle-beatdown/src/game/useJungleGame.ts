@@ -7,6 +7,12 @@ import {
   EBONY_STOMP, EBONY_VICTORY, EBONY_DUO_VICTORY, EBONY_STOMP_DURATION, EBONY_VICTORY_DURATION,
   prepareEbonySheet, drawEbonyFrame, ebonyVictoryPose, type EbonyFrame,
 } from './ebonySprites';
+import {
+  KARATE_BLONDE, KARATE_BLONDE_ATTACKS, KARATE_BLONDE_WALK,
+  KARATE_EBONY, KARATE_EBONY_ATTACKS, KARATE_EBONY_WALK,
+  karateBlondeSequenceFrames, karateEbonySequenceFrames, karateDuoSequenceFrames,
+  prepareKarateSheet, removeStoryboardHeadings,
+} from './karateSprites';
 
 import amazonSheetUrl from '@assets/amazon_1791470375689.png';
 import backgroundUrl from '@assets/background_1791470375690.png';
@@ -33,6 +39,12 @@ import ebonySheetUrl from '@assets/amazon_ebony_clean.png';
 import ebonyStompUrl from '@assets/amazon_ebony_stomp_clean.png';
 import ebonyVictoryUrl from '@assets/amazon_ebony_victory_clean.png';
 import ebonyDuoVictoryUrl from '@assets/amazon_ebony_duo_clean.png';
+import karateBlondeSheetUrl from '@assets/karate_blonde_1791929279634.png';
+import karateBlondeAttackOneUrl from '@assets/karate_blonde_atk_1_1791929279635.png';
+import karateBlondeAttackTwoUrl from '@assets/karate_blonde_atk_2_1791929279636.png';
+import karateEbonySheetUrl from '@assets/karate_ebony_1791929279637.png';
+import karateEbonyAttackOneUrl from '@assets/karate_ebony_atk_1_1791929279637.png';
+import karateEbonyAttackTwoUrl from '@assets/karate_ebony_atk_2_1791929279638.png';
 
 const WIDTH = 1024;
 const HEIGHT = 576;
@@ -47,6 +59,8 @@ export interface FightConfig {
   ebony: number;
   ninjas: number;
   roxy: number;
+  karateBlonde: number;
+  karateEbony: number;
   ebonyVictory: boolean;
 }
 
@@ -55,6 +69,8 @@ export const DEFAULT_FIGHT_CONFIG: FightConfig = {
   ebony: 0,
   ninjas: 3,
   roxy: 1,
+  karateBlonde: 0,
+  karateEbony: 0,
   ebonyVictory: false,
 };
 
@@ -62,6 +78,8 @@ export const STATE_NINJA_FOOTSMOTHER = 'ninja-footsmother' as const;
 export const STATE_ROXY_OFFER = 'roxy-offer' as const;
 export const STATE_ROXY_CHALLENGE = 'roxy-challenge' as const;
 export const STATE_ROXY_SMOTHER = 'roxy-smother' as const;
+export const STATE_KARATE_OFFER = 'karate-offer' as const;
+export const STATE_KARATE_CHALLENGE = 'karate-challenge' as const;
 
 export type GamePhase =
   | 'title'
@@ -74,6 +92,8 @@ export type GamePhase =
   | typeof STATE_ROXY_OFFER
   | typeof STATE_ROXY_CHALLENGE
   | typeof STATE_ROXY_SMOTHER
+  | typeof STATE_KARATE_OFFER
+  | typeof STATE_KARATE_CHALLENGE
   | 'group-defeat'
   | 'game-over';
 
@@ -91,6 +111,8 @@ export interface GameSnapshot {
   soundEnabled: boolean;
   roxyChallengeElapsed: number;
   ebonyVictoryActive: boolean;
+  karateOfferOpponent: 'blonde' | 'ebony' | 'duo' | null;
+  karateSceneActive: boolean;
 }
 
 interface SpriteRect {
@@ -108,6 +130,12 @@ interface SpriteAtlas {
   ebonyStomp: HTMLCanvasElement | null;
   ebonyVictory: HTMLCanvasElement | null;
   ebonyDuoVictory: HTMLCanvasElement | null;
+  karateBlonde: HTMLCanvasElement | null;
+  karateBlondeAttackOne: HTMLCanvasElement | null;
+  karateBlondeAttackTwo: HTMLCanvasElement | null;
+  karateEbony: HTMLCanvasElement | null;
+  karateEbonyAttackOne: HTMLCanvasElement | null;
+  karateEbonyAttackTwo: HTMLCanvasElement | null;
   ninja: HTMLCanvasElement | null;
   ninjaFootsmother: HTMLCanvasElement | null;
   ninjaFootsmotherEnding: HTMLCanvasElement | null;
@@ -118,7 +146,7 @@ interface SpriteAtlas {
   pinExtended: HTMLCanvasElement | null;
 }
 
-type EnemyKind = 'amazon' | 'ninja' | 'roxy';
+type EnemyKind = 'amazon' | 'ninja' | 'roxy' | 'karateBlonde' | 'karateEbony';
 type EnemyState = 'idle' | 'walk' | 'run' | 'attack' | 'hurt' | 'down';
 
 interface Enemy {
@@ -153,9 +181,11 @@ interface Particle {
   size: number;
 }
 
+type KarateSequenceKind = 'blonde' | 'ebony' | 'duo';
+
 interface World {
   phase: GamePhase;
-  defeatKind: 'special' | 'group' | 'ninja-footsmother' | 'roxy-smother' | 'ebony-victory' | null;
+  defeatKind: 'special' | 'group' | 'ninja-footsmother' | 'roxy-smother' | 'ebony-victory' | 'karate-victory' | null;
   fightConfig: FightConfig;
   ebonyElapsed: number;
   ebonyHitFrame: number;
@@ -184,6 +214,8 @@ interface World {
   ninjaFootsmotherElapsed: number;
   roxyDefeatElapsed: number;
   roxyDialoguePlayed: boolean;
+  karateSequence: KarateSequenceKind | null;
+  karateDefeatElapsed: number;
   footstepTimer: number;
   soundEnabled: boolean;
   sound: SoundEngine;
@@ -310,8 +342,16 @@ const ATTACK_FRAMES: Record<EnemyKind, SpriteRect[]> = {
   // The Roxy sheet has two distinct kick panels. Cycling into empty sheet
   // space or repeating the high-kick panel made her attack pose blink.
   roxy: [ROXY_FRAMES.kick, ROXY_FRAMES.spin],
+  karateBlonde: KARATE_BLONDE_ATTACKS,
+  karateEbony: KARATE_EBONY_ATTACKS,
 };
-const ENEMY_FRAMES = { amazon: AMAZON_FRAMES, ninja: NINJA_FRAMES, roxy: ROXY_FRAMES };
+const ENEMY_FRAMES = {
+  amazon: AMAZON_FRAMES,
+  ninja: NINJA_FRAMES,
+  roxy: ROXY_FRAMES,
+  karateBlonde: KARATE_BLONDE,
+  karateEbony: KARATE_EBONY,
+};
 
 const GROUP_AMAZON_OFFSETS = [
   { dx: -180, dy: -4, flipped: false },
@@ -349,6 +389,7 @@ const ROXY_HYPNOSIS_FRAME_DURATION = 1.2;
 const NINJA_FOOTSMOTHER_ENDING_DURATION = 1.5;
 const NINJA_FOOTSMOTHER_FRAME_RATE = 6;
 const GROUP_DEFEAT_DURATION = 20;
+const KARATE_DEFEAT_DURATION = 10;
 
 function sequenceFrame(frames: SpriteRect[], elapsed: number, duration: number) {
   const index = Math.min(frames.length - 1, Math.floor((elapsed / duration) * frames.length));
@@ -369,6 +410,8 @@ const initialSnapshot: GameSnapshot = {
   soundEnabled: true,
   roxyChallengeElapsed: 0,
   ebonyVictoryActive: false,
+  karateOfferOpponent: null,
+  karateSceneActive: false,
 };
 
 type OpponentKind = EnemyKind | 'ebony';
@@ -379,16 +422,21 @@ function createFightLineup(config: FightConfig): OpponentKind[] {
     ebony: config.ebony,
     ninja: config.ninjas,
     roxy: config.roxy,
+    karateBlonde: config.karateBlonde,
+    karateEbony: config.karateEbony,
   };
   if (Object.values(counts).some((count) => !Number.isSafeInteger(count) || count < 0)) {
     throw new RangeError('As quantidades de adversárias devem ser números inteiros não negativos.');
   }
-  if (counts.amazon === 5 && counts.ninja === 3 && counts.roxy === 1 && counts.ebony === 0) {
+  if (counts.amazon === 5 && counts.ninja === 3 && counts.roxy === 1 && counts.ebony === 0 &&
+      counts.karateBlonde === 0 && counts.karateEbony === 0) {
     return [...STARTING_ENEMY_KINDS];
   }
 
   const lineup: OpponentKind[] = [];
-  const order: OpponentKind[] = ['amazon', 'ebony', 'ninja', 'roxy'];
+  const order: OpponentKind[] = [
+    'amazon', 'ebony', 'ninja', 'roxy', 'karateBlonde', 'karateEbony',
+  ];
   while (order.some((kind) => counts[kind] > 0)) {
     for (const kind of order) {
       if (counts[kind] > 0) {
@@ -458,6 +506,8 @@ function createWorld(
     ninjaFootsmotherElapsed: 0,
     roxyDefeatElapsed: 0,
     roxyDialoguePlayed: false,
+    karateSequence: null,
+    karateDefeatElapsed: 0,
     footstepTimer: 0,
     soundEnabled: true,
     sound: {
@@ -502,6 +552,11 @@ function publishSnapshot(world: World): GameSnapshot {
     soundEnabled: world.soundEnabled,
     roxyChallengeElapsed: world.phase === STATE_ROXY_CHALLENGE ? world.roxyDefeatElapsed : 0,
     ebonyVictoryActive: world.defeatKind === 'ebony-victory',
+    karateOfferOpponent: world.phase === STATE_KARATE_OFFER
+      ? world.karateSequence ?? 'blonde'
+      : null,
+    karateSceneActive: world.phase === STATE_KARATE_CHALLENGE ||
+      (world.phase === 'game-over' && world.defeatKind === 'karate-victory'),
   };
 }
 
@@ -1294,6 +1349,42 @@ function drawRoxyDefeatFrame(
   context.restore();
 }
 
+function drawKarateSequenceFrame(
+  context: CanvasRenderingContext2D,
+  image: HTMLCanvasElement | null,
+  frame: SpriteRect,
+  centerX: number,
+  groundY: number,
+  targetHeight: number,
+  flipped: boolean,
+) {
+  if (!image) return;
+  const visible = getCompositeVisibleBounds(image, frame);
+  const scale = targetHeight / Math.max(1, visible.h);
+  context.save();
+  if (flipped) {
+    context.translate(centerX, 0);
+    context.scale(-1, 1);
+    context.translate(-centerX, 0);
+  }
+  context.fillStyle = 'rgba(7, 13, 8, 0.26)';
+  context.beginPath();
+  context.ellipse(centerX, groundY + 7, targetHeight * 0.52, 7, 0, 0, Math.PI * 2);
+  context.fill();
+  context.drawImage(
+    image,
+    frame.x + visible.x,
+    frame.y + visible.y,
+    visible.w,
+    visible.h,
+    centerX - visible.w * scale / 2,
+    groundY + 7 - visible.h * scale,
+    visible.w * scale,
+    visible.h * scale,
+  );
+  context.restore();
+}
+
 function enemyAnimationFrame(enemy: Enemy, now: number): SpriteRect {
   if (enemy.ebony) {
     if (enemy.state === 'walk') {
@@ -1305,6 +1396,20 @@ function enemyAnimationFrame(enemy: Enemy, now: number): SpriteRect {
     if (enemy.state === 'hurt') return EBONY_FRAMES.hurt;
     if (enemy.state === 'down') return EBONY_FRAMES.down;
     return EBONY_FRAMES.idle;
+  }
+  if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') {
+    const karate = enemy.kind === 'karateBlonde' ? KARATE_BLONDE : KARATE_EBONY;
+    const walkCycle = enemy.kind === 'karateBlonde' ? KARATE_BLONDE_WALK : KARATE_EBONY_WALK;
+    if (enemy.state === 'walk' || enemy.state === 'run') {
+      const speed = enemy.state === 'run' ? 104 : 150;
+      return walkCycle[Math.floor(now / speed + enemy.id * 0.61) % walkCycle.length];
+    }
+    if (enemy.state === 'attack') {
+      return ATTACK_FRAMES[enemy.kind][enemy.attackPoseIndex % ATTACK_FRAMES[enemy.kind].length];
+    }
+    if (enemy.state === 'hurt') return karate.hurt;
+    if (enemy.state === 'down') return karate.hurt;
+    return karate.idle;
   }
   const frames = ENEMY_FRAMES[enemy.kind];
   if (enemy.state === 'walk') {
@@ -1439,7 +1544,47 @@ function drawWorld(
   const roxySmotherSequence = world.phase === STATE_ROXY_SMOTHER ||
     (world.phase === 'game-over' && world.defeatKind === 'roxy-smother');
   const roxyDefeatSequence = roxyVoluntarySequence || roxySmotherSequence;
-  if (ninjaFootsmotherSequence) {
+  const karateDefeatSequence = world.phase === STATE_KARATE_CHALLENGE ||
+    (world.phase === 'game-over' && world.defeatKind === 'karate-victory');
+  if (karateDefeatSequence) {
+    const sequence = world.karateSequence ?? 'blonde';
+    const elapsed = world.phase === STATE_KARATE_CHALLENGE
+      ? world.karateDefeatElapsed : KARATE_DEFEAT_DURATION;
+    if (sequence === 'duo' && atlas.karateEbonyAttackOne) {
+      const frames = karateDuoSequenceFrames(
+        atlas.karateEbonyAttackOne.width,
+        atlas.karateEbonyAttackOne.height,
+      );
+      const index = Math.min(frames.length - 1,
+        Math.floor((elapsed / KARATE_DEFEAT_DURATION) * frames.length));
+      drawKarateSequenceFrame(context, atlas.karateEbonyAttackOne,
+        frames[Math.max(0, index)], WIDTH / 2, world.heroY, 250, false);
+    } else if (sequence === 'ebony' && atlas.karateEbonyAttackTwo) {
+      const frames = karateEbonySequenceFrames(
+        atlas.karateEbonyAttackTwo.width,
+        atlas.karateEbonyAttackTwo.height,
+      );
+      const index = Math.min(frames.length - 1,
+        Math.floor((elapsed / KARATE_DEFEAT_DURATION) * frames.length));
+      drawKarateSequenceFrame(context, atlas.karateEbonyAttackTwo,
+        frames[Math.max(0, index)], WIDTH / 2, world.heroY, 260, false);
+    } else if (atlas.karateBlondeAttackOne && atlas.karateBlondeAttackTwo) {
+      const first = karateBlondeSequenceFrames(
+        atlas.karateBlondeAttackOne.width,
+        atlas.karateBlondeAttackOne.height,
+      );
+      const ending = karateBlondeSequenceFrames(
+        atlas.karateBlondeAttackTwo.width,
+        atlas.karateBlondeAttackTwo.height,
+      ).slice(3, 6);
+      const frames = [...first, ...ending];
+      const index = Math.min(frames.length - 1,
+        Math.floor((elapsed / KARATE_DEFEAT_DURATION) * frames.length));
+      const sheet = index < first.length ? atlas.karateBlondeAttackOne : atlas.karateBlondeAttackTwo;
+      const pose = index < first.length ? frames[index] : ending[index - first.length];
+      drawKarateSequenceFrame(context, sheet, pose, WIDTH / 2, world.heroY, 265, false);
+    }
+  } else if (ninjaFootsmotherSequence) {
     const grappler = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
     const bystanders = world.enemies
       .filter((enemy) => enemy.hp > 0 && enemy.active && enemy.id !== world.currentGrappler)
@@ -1552,7 +1697,7 @@ function drawWorld(
       drawEbonyFrame(context, sheet, frames[index], world.heroX, world.heroY, flipped,
         0, now / 1000);
     }
-  } else if (ninjaFootsmotherSequence || roxyDefeatSequence) {
+  } else if (karateDefeatSequence || ninjaFootsmotherSequence || roxyDefeatSequence) {
     // The paired sprite sheet already contains both fighters; skip the regular actor pass.
   } else if (specialSequence || world.phase === 'grapple') {
     const isStruggle = specialSequence;
@@ -1809,6 +1954,63 @@ function endRoxyChallenge(world: World) {
   });
 }
 
+function beginKarateOffer(world: World, enemy: Enemy) {
+  stopClips(world);
+  world.phase = STATE_KARATE_OFFER;
+  world.defeatKind = null;
+  world.isGrappleActive = true;
+  world.currentGrappler = enemy.id;
+  world.heroHp = 0;
+  world.defeatSecondsLeft = 0;
+  world.karateDefeatElapsed = 0;
+  world.karateSequence = enemy.kind === 'karateEbony' ? 'ebony' : 'blonde';
+  world.heroAction = 'hurt';
+  world.actionTimer = 0;
+  world.heroVelocityX = 0;
+  world.heroVelocityY = 0;
+  world.jumpOffset = 0;
+  world.jumpVelocity = 0;
+  world.particles = [];
+  enemy.direction = enemy.x < world.heroX ? 1 : -1;
+  enemy.state = 'idle';
+  enemy.stateTimer = 0;
+  enemy.vx = 0;
+  enemy.vy = 0;
+  world.enemies.forEach((other) => {
+    if (other.hp > 0 && other.active) {
+      other.state = 'idle';
+      other.vx = 0;
+      other.vy = 0;
+    }
+  });
+}
+
+function respondToKarateOffer(world: World, accepted: boolean) {
+  if (world.phase !== STATE_KARATE_OFFER) return;
+  stopClips(world);
+  if (!accepted) {
+    world.currentGrappler = null;
+    world.karateSequence = null;
+    beginGenericDefeat(world);
+    return;
+  }
+  world.phase = STATE_KARATE_CHALLENGE;
+  world.defeatKind = 'karate-victory';
+  world.defeatSecondsLeft = KARATE_DEFEAT_DURATION;
+  world.karateDefeatElapsed = 0;
+  playSweep(world, 570, 250, 0.45, 0.022, 'sine');
+}
+
+function endKarateChallenge(world: World) {
+  if (world.phase !== STATE_KARATE_CHALLENGE) return;
+  stopClips(world);
+  playClip(world, 'heroineFaintSigh', 0.68, 3500);
+  world.phase = 'game-over';
+  world.defeatKind = 'karate-victory';
+  world.defeatSecondsLeft = 0;
+  world.isGrappleActive = false;
+}
+
 function beginSpecialGrapple(world: World, enemy: Enemy) {
   if (enemy.ebony) {
     world.phase = 'ebony-stomp';
@@ -1954,7 +2156,8 @@ function handleMovement(world: World, pressed: Set<string>, dt: number) {
 }
 
 function updateEnemies(world: World, dt: number, now: number) {
-  if (world.phase === STATE_ROXY_OFFER || world.phase === STATE_ROXY_CHALLENGE) return;
+  if (world.phase === STATE_ROXY_OFFER || world.phase === STATE_ROXY_CHALLENGE ||
+      world.phase === STATE_KARATE_OFFER || world.phase === STATE_KARATE_CHALLENGE) return;
   if (world.phase === 'playing') {
     for (const enemy of world.enemies) {
       if (!enemy.active && enemy.hp <= 0) {
@@ -2065,7 +2268,11 @@ function updateEnemies(world: World, dt: number, now: number) {
         playStomp(world);
         playClip(world, 'heroineHurt', 0.64, 430);
         if (world.heroHp <= 0) {
-          beginGenericDefeat(world, enemy);
+          if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') {
+            beginKarateOffer(world, enemy);
+          } else {
+            beginGenericDefeat(world, enemy);
+          }
           continue;
         }
         if (enemy.ebony) {
@@ -2281,6 +2488,16 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
       playClip(world, 'roxyDialogue', 0.65, 1000);
     }
     if (wasRunning && world.defeatSecondsLeft <= 0) stopClips(world);
+  } else if (world.phase === STATE_KARATE_CHALLENGE) {
+    world.karateDefeatElapsed = Math.min(
+      KARATE_DEFEAT_DURATION,
+      world.karateDefeatElapsed + dt,
+    );
+    world.defeatSecondsLeft = Math.max(
+      0,
+      KARATE_DEFEAT_DURATION - world.karateDefeatElapsed,
+    );
+    if (world.defeatSecondsLeft <= 0) endKarateChallenge(world);
   } else if (world.phase === STATE_ROXY_SMOTHER ||
     (world.phase === 'game-over' && world.defeatKind === 'roxy-smother')) {
     world.roxyDefeatElapsed += dt;
@@ -2419,6 +2636,18 @@ export function useJungleGame(
     setSnapshot(publishSnapshot(worldRef.current));
   }, []);
 
+  const chooseKarateChallenge = useCallback((accepted: boolean) => {
+    respondToKarateOffer(worldRef.current, accepted);
+    pressedRef.current.clear();
+    setSnapshot(publishSnapshot(worldRef.current));
+  }, []);
+
+  const exitKarateChallenge = useCallback(() => {
+    endKarateChallenge(worldRef.current);
+    pressedRef.current.clear();
+    setSnapshot(publishSnapshot(worldRef.current));
+  }, []);
+
   const pressVirtualControl = useCallback((code: string) => {
     const world = worldRef.current;
     if (code === 'Escape' && world.defeatKind === 'ebony-victory') {
@@ -2433,8 +2662,17 @@ export function useJungleGame(
       if (code === 'KeyN' || code === 'Escape') chooseRoxyChallenge(false);
       return;
     }
+    if (!wasPressed && world.phase === STATE_KARATE_OFFER) {
+      if (code === 'KeyY') chooseKarateChallenge(true);
+      if (code === 'KeyN' || code === 'Escape') chooseKarateChallenge(false);
+      return;
+    }
     if (!wasPressed && world.phase === STATE_ROXY_CHALLENGE && code === 'Escape') {
       exitRoxyChallenge();
+      return;
+    }
+    if (!wasPressed && world.phase === STATE_KARATE_CHALLENGE && code === 'Escape') {
+      exitKarateChallenge();
       return;
     }
     if (code === 'KeyJ') {
@@ -2458,7 +2696,13 @@ export function useJungleGame(
       playStomp(world);
     }
     if (code === 'KeyR' && world.phase === 'game-over' && !wasPressed) restartGame();
-  }, [chooseRoxyChallenge, exitRoxyChallenge, restartGame]);
+  }, [
+    chooseRoxyChallenge,
+    chooseKarateChallenge,
+    exitRoxyChallenge,
+    exitKarateChallenge,
+    restartGame,
+  ]);
 
   const releaseVirtualControl = useCallback((code: string) => {
     pressedRef.current.delete(code);
@@ -2494,6 +2738,12 @@ export function useJungleGame(
       ebonyStomp: null,
       ebonyVictory: null,
       ebonyDuoVictory: null,
+      karateBlonde: null,
+      karateBlondeAttackOne: null,
+      karateBlondeAttackTwo: null,
+      karateEbony: null,
+      karateEbonyAttackOne: null,
+      karateEbonyAttackTwo: null,
       ninja: null,
       ninjaFootsmother: null,
       ninjaFootsmotherEnding: null,
@@ -2526,10 +2776,74 @@ export function useJungleGame(
     if (import.meta.env.DEV) {
       const params = new URLSearchParams(window.location.search);
       const scene = params.get('_scene');
+      if (scene === 'karate-blonde' || scene === 'karate-ebony') {
+        const blonde = scene === 'karate-blonde';
+        const config: FightConfig = {
+          amazonas: 0,
+          ebony: 0,
+          ninjas: 0,
+          roxy: 0,
+          karateBlonde: blonde ? 1 : 0,
+          karateEbony: blonde ? 0 : 1,
+          ebonyVictory: false,
+        };
+        const world = worldRef.current;
+        const oldSound = world.sound;
+        Object.assign(world, createWorld(createFightLineup(config), config), {
+          phase: 'playing',
+          heroX: 390,
+          heroY: 512,
+          sound: oldSound,
+          soundEnabled: false,
+        });
+        const karateka = world.enemies[0];
+        if (karateka) {
+          karateka.x = 650;
+          karateka.y = 510;
+          karateka.direction = -1;
+          karateka.state = params.get('_action') === 'attack' ? 'attack' : 'walk';
+          karateka.attackPoseIndex = clamp(Number(params.get('_pose') ?? 2), 0, 4);
+        }
+        freezePreview = params.get('_freeze') === '1';
+        setSnapshot(publishSnapshot(world));
+      }
+      if (scene === 'karate-offer' || scene === 'karate-challenge' || scene === 'karate-duo') {
+        const duo = scene === 'karate-duo';
+        const blonde = params.get('_opponent') === 'blonde' || duo;
+        const config: FightConfig = {
+          amazonas: 0,
+          ebony: 0,
+          ninjas: 0,
+          roxy: 0,
+          karateBlonde: blonde ? 1 : 0,
+          karateEbony: !blonde || duo ? 1 : 0,
+          ebonyVictory: false,
+        };
+        const world = worldRef.current;
+        const oldSound = world.sound;
+        Object.assign(world, createWorld(createFightLineup(config), config), {
+          phase: scene === 'karate-offer' ? STATE_KARATE_OFFER : STATE_KARATE_CHALLENGE,
+          heroX: WIDTH / 2,
+          heroY: 510,
+          heroHp: 0,
+          sound: oldSound,
+          soundEnabled: false,
+          isGrappleActive: true,
+          defeatKind: scene === 'karate-offer' ? null : 'karate-victory',
+          karateSequence: duo ? 'duo' : blonde ? 'blonde' : 'ebony',
+          karateDefeatElapsed: Number(params.get('_elapsed') ?? 3),
+          defeatSecondsLeft: KARATE_DEFEAT_DURATION,
+        });
+        world.currentGrappler = world.enemies[0]?.id ?? null;
+        freezePreview = params.get('_freeze') === '1';
+        setSnapshot(publishSnapshot(world));
+      }
       if (scene === 'ebony-base' || scene === 'ebony-stomp' || scene === 'ebony-victory') {
         const duo = params.get('_duo') === '1';
         const config: FightConfig = {
           amazonas: 0, ninjas: 0, roxy: 0,
+          karateBlonde: 0,
+          karateEbony: 0,
           ebony: duo ? 2 : 1,
           ebonyVictory: true,
         };
@@ -2725,6 +3039,12 @@ export function useJungleGame(
       loadImage(ebonyStompUrl),
       loadImage(ebonyVictoryUrl),
       loadImage(ebonyDuoVictoryUrl),
+      loadImage(karateBlondeSheetUrl),
+      loadImage(karateBlondeAttackOneUrl),
+      loadImage(karateBlondeAttackTwoUrl),
+      loadImage(karateEbonySheetUrl),
+      loadImage(karateEbonyAttackOneUrl),
+      loadImage(karateEbonyAttackTwoUrl),
     ]).then(([
       background,
       hero,
@@ -2741,6 +3061,12 @@ export function useJungleGame(
       ebonyStomp,
       ebonyVictory,
       ebonyDuoVictory,
+      karateBlonde,
+      karateBlondeAttackOne,
+      karateBlondeAttackTwo,
+      karateEbony,
+      karateEbonyAttackOne,
+      karateEbonyAttackTwo,
     ]) => {
       if (disposed) return;
       atlas = {
@@ -2751,6 +3077,45 @@ export function useJungleGame(
         ebonyStomp: withRedToenails(prepareEbonySheet(ebonyStomp, EBONY_STOMP), 'ebonyStomp'),
         ebonyVictory: withRedToenails(prepareEbonySheet(ebonyVictory, EBONY_VICTORY), 'ebonyVictory'),
         ebonyDuoVictory: withRedToenails(prepareEbonySheet(ebonyDuoVictory, EBONY_DUO_VICTORY, 572), 'ebonyDuoVictory'),
+        karateBlonde: prepareKarateSheet(karateBlonde),
+        karateBlondeAttackOne: (() => {
+          const sheet = prepareKarateSheet(karateBlondeAttackOne, true);
+          removeStoryboardHeadings(
+            sheet,
+            karateBlondeSequenceFrames(sheet.width, sheet.height),
+            24,
+          );
+          return sheet;
+        })(),
+        karateBlondeAttackTwo: (() => {
+          const sheet = prepareKarateSheet(karateBlondeAttackTwo, true);
+          removeStoryboardHeadings(
+            sheet,
+            karateBlondeSequenceFrames(sheet.width, sheet.height),
+            24,
+          );
+          return sheet;
+        })(),
+        karateEbony: prepareKarateSheet(karateEbony),
+        karateEbonyAttackOne: (() => {
+          const sheet = prepareKarateSheet(karateEbonyAttackOne, true);
+          removeStoryboardHeadings(
+            sheet,
+            karateDuoSequenceFrames(sheet.width, sheet.height),
+            48,
+          );
+          return sheet;
+        })(),
+        karateEbonyAttackTwo: (() => {
+          const sheet = prepareKarateSheet(karateEbonyAttackTwo);
+          removeStoryboardHeadings(
+            sheet,
+            karateEbonySequenceFrames(sheet.width, sheet.height),
+            48,
+            28,
+          );
+          return sheet;
+        })(),
         ninja: removeNinjaCheckerboard(ninja),
         ninjaFootsmother: removeFootsmotherCheckerboard(ninjaFootsmother),
         ninjaFootsmotherEnding: removeFootsmotherCheckerboard(
@@ -2851,6 +3216,8 @@ export function useJungleGame(
     toggleSound,
     chooseRoxyChallenge,
     exitRoxyChallenge,
+    chooseKarateChallenge,
+    exitKarateChallenge,
     heroPortrait,
     pressVirtualControl,
     releaseVirtualControl,

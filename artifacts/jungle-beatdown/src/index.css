@@ -271,7 +271,7 @@ button:focus-visible { outline: 2px solid #f4cc63; outline-offset: 3px; }
 @keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
 .title-content {
   width: min(100%, 1040px); display: grid; grid-template-columns: 1.05fr .95fr;
-  align-items: center; gap: clamp(20px, 4vw, 48px);
+  align-items: center; gap: clamp(20px, 4vw, 48px); max-height: 100%;
 }
 .title-copy { position: relative; }
 .eyebrow {
@@ -301,8 +301,10 @@ button:focus-visible { outline: 2px solid #f4cc63; outline-offset: 3px; }
   width: min(100%, 460px);
   justify-self: end;
   display: grid;
-  gap: 11px;
-  padding: 17px 18px;
+  max-height: 100%;
+  overflow-y: auto;
+  gap: 7px;
+  padding: 12px 14px;
   border: 1px solid rgba(229, 202, 112, .62);
   background: rgba(15, 30, 24, .94);
   box-shadow: 5px 5px 0 rgba(5, 14, 10, .72);
@@ -321,7 +323,7 @@ button:focus-visible { outline: 2px solid #f4cc63; outline-offset: 3px; }
   font-weight: 800;
   text-transform: uppercase;
 }
-.opponent-list { display: grid; gap: 7px; }
+.opponent-list { display: grid; gap: 4px; }
 .amazon-variant { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #e9e7d7; font-size: 11px; }
 .amazon-variant select { max-width: 180px; padding: 7px; color: #f2e9d0; border: 1px solid #72866b; background: #24392d; }
 .ebony-options { color: #bac9b9; font-size: 10px; line-height: 1.4; }
@@ -334,8 +336,8 @@ button:focus-visible { outline: 2px solid #f4cc63; outline-offset: 3px; }
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  min-height: 42px;
-  padding: 5px 9px;
+  min-height: 35px;
+  padding: 2px 7px;
   border: 1px solid rgba(195, 217, 186, .16);
   background: rgba(30, 49, 38, .72);
 }

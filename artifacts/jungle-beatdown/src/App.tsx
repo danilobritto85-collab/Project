@@ -19,11 +19,14 @@ import {
   STATE_ROXY_OFFER,
   STATE_ROXY_CHALLENGE,
   STATE_ROXY_SMOTHER,
+  STATE_KARATE_OFFER,
+  STATE_KARATE_CHALLENGE,
   useJungleGame,
   type FightConfig,
 } from './game/useJungleGame';
 
-type OpponentCountKey = 'amazonas' | 'ebony' | 'ninjas' | 'roxy';
+type OpponentCountKey =
+  | 'amazonas' | 'ebony' | 'ninjas' | 'roxy' | 'karateBlonde' | 'karateEbony';
 
 function formatScore(score: number) {
   return Math.max(0, score).toString().padStart(6, '0');
@@ -123,6 +126,8 @@ function App() {
     chooseRoxyChallenge,
     exitRoxyChallenge,
     exitEbonyVictory,
+    chooseKarateChallenge,
+    exitKarateChallenge,
   } = useJungleGame(canvasRef, fightConfig);
   const hpPercent = Math.max(0, Math.min(100, (snapshot.heroHp / snapshot.maxHeroHp) * 100));
   const escapePercent = Math.max(0, Math.min(100, snapshot.escapeProgress * 100));
@@ -133,12 +138,15 @@ function App() {
   const isRoxyOffer = snapshot.phase === STATE_ROXY_OFFER;
   const isRoxyChallenge = snapshot.phase === STATE_ROXY_CHALLENGE;
   const isRoxySmother = snapshot.phase === STATE_ROXY_SMOTHER;
+  const isKarateOffer = snapshot.phase === STATE_KARATE_OFFER;
+  const isKarateChallenge = snapshot.phase === STATE_KARATE_CHALLENGE;
   const isGroupDefeat = snapshot.phase === 'group-defeat';
   const isPlaying = snapshot.phase === 'playing';
   const isDefeatSequence = isSpecialDefeat || isNinjaFootsmother || isRoxySmother || isGroupDefeat ||
     snapshot.phase === 'ebony-victory';
   const showRetry = isDefeatSequence || snapshot.phase === 'game-over';
-  const fightCount = fightConfig.amazonas + fightConfig.ebony + fightConfig.ninjas + fightConfig.roxy;
+  const fightCount = fightConfig.amazonas + fightConfig.ebony + fightConfig.ninjas + fightConfig.roxy +
+    fightConfig.karateBlonde + fightConfig.karateEbony;
   const handleOpponentCountChange = (kind: OpponentCountKey, value: number) => {
     if (!Number.isSafeInteger(value) || value < 0) return;
     setFightConfig((current) => ({
@@ -148,7 +156,7 @@ function App() {
   };
   const sequencePercent = Math.max(0, Math.min(100,
     (snapshot.defeatSecondsLeft /
-      (isSpecialDefeat || isNinjaFootsmother || isRoxySmother
+      (isSpecialDefeat || isNinjaFootsmother || isRoxySmother || isKarateChallenge
         ? NINJA_FOOTSMOTHER_DURATION : 20)) * 100));
 
   return (
@@ -243,6 +251,12 @@ function App() {
                       <OpponentCounter label="Roxy" kind="roxy"
                         value={fightConfig.roxy}
                         onChange={handleOpponentCountChange} />
+                      <OpponentCounter label="Karateka loira" kind="karateBlonde"
+                        value={fightConfig.karateBlonde}
+                        onChange={handleOpponentCountChange} />
+                      <OpponentCounter label="Karateka Ebony" kind="karateEbony"
+                        value={fightConfig.karateEbony}
+                        onChange={handleOpponentCountChange} />
                     </div>
                     {fightConfig.ebony > 0 && (
                       <div className="ebony-options">
@@ -270,6 +284,12 @@ function App() {
                       <p className="roxy-special-help">Roxy não participa desta luta.</p>
                     ) : (
                       <p className="roxy-special-help">Selecione ao menos uma adversária para começar.</p>
+                    )}
+                    {(fightConfig.karateBlonde > 0 || fightConfig.karateEbony > 0) && (
+                      <p className="roxy-special-help">
+                        As cenas especiais das karatecas são opcionais: ao ser derrotada por uma delas,
+                        você poderá aceitar, recusar ou encerrar a sequência.
+                      </p>
                     )}
                     <button className="start-button" type="button"
                       onClick={() => startGame(fightConfig)}
@@ -402,6 +422,48 @@ function App() {
                   data-testid="button-roxy-stop">
                   {snapshot.defeatSecondsLeft > 0 ? 'Parar a cena' : 'Voltar ao combate'} <kbd>Esc</kbd>
                 </button>
+              </div>
+            </section>
+          )}
+
+          {isKarateOffer && (
+            <section className="roxy-choice-panel" role="dialog" aria-modal="true"
+              aria-labelledby="karate-choice-title" data-testid="karate-consent-offer">
+              <div className="roxy-choice-copy">
+                <h2 id="karate-choice-title">
+                  Desafio opcional {snapshot.karateOfferOpponent === 'duo'
+                    ? 'das duas karatecas'
+                    : `da Karateka ${snapshot.karateOfferOpponent === 'ebony' ? 'Ebony' : 'loira'}`}
+                </h2>
+                <p>
+                  Esta sequência especial só começa com seu aceite. Você pode recusar e ver a
+                  derrota comum, ou encerrar a cena depois que ela começar.
+                </p>
+              </div>
+              <div className="roxy-choice-actions">
+                <button type="button" className="roxy-choice-accept"
+                  onClick={() => chooseKarateChallenge(true)} data-testid="button-karate-accept">
+                  Aceitar sequência <kbd>Y</kbd>
+                </button>
+                <button type="button" onClick={() => chooseKarateChallenge(false)}
+                  data-testid="button-karate-decline" autoFocus>
+                  Recusar · derrota comum <kbd>N</kbd>
+                </button>
+              </div>
+            </section>
+          )}
+
+          {isKarateChallenge && (
+            <section className="roxy-choice-panel roxy-voluntary-panel" role="dialog"
+              aria-modal="true" aria-labelledby="karate-scene-title"
+              data-testid="karate-consensual-scene">
+              <div className="roxy-choice-copy">
+                <h2 id="karate-scene-title">Sequência especial aceita</h2>
+                <p>Você pode encerrar a qualquer momento; a cena termina na derrota comum.</p>
+              </div>
+              <div className="roxy-choice-actions">
+                <button type="button" onClick={exitKarateChallenge}
+                  data-testid="button-karate-stop">Encerrar sequência</button>
               </div>
             </section>
           )}
