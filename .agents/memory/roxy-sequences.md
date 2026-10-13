@@ -20,3 +20,9 @@ Roxy's movement sheet has irregular artwork boundaries, not equal-sized pose cel
 **Why:** Cropping at equal cell boundaries cut the feet off. Repeating the single supplied walking pose without leg movement made her appear planted in the floor.
 
 **How to apply:** Verify each sheet's dimensions independently, use its actual pose boundaries, and preserve existing transparent alpha. Do not change the separate paired-scene coordinates to match the movement sheet.
+
+Roxy's paired sheets are storyboards, not continuous animation cycles. A solo preparation panel must not alternate with a completed two-character pose.
+
+**Why:** Alternating these panels made the heroine disappear repeatedly and the victory look like blinking.
+
+**How to apply:** Progress through the introductory poses once, then keep the complete final pair visible. Any subtle motion should preserve that composition.

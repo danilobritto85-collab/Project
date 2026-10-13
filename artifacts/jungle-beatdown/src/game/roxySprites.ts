@@ -72,6 +72,10 @@ type Point = readonly [number, number];
 // polygons left pieces of the original legs behind, producing duplicate feet.
 const BACK_LEG: Point[] = [[0,129],[73,129],[75,169],[83,193],[80,269],[0,269]];
 const FRONT_LEG: Point[] = [[73,129],[161,129],[161,269],[80,269],[83,193],[75,169]];
+// The hanging white tunic belongs to the torso, not the rotating rear leg.
+const TUNIC: Point[] = [[43,127],[71,127],[77,179],[76,204],[53,208],[45,191]];
+const BACK_HIP: Point = [61, 140];
+const FRONT_HIP: Point = [80, 140];
 
 function path(context: CanvasRenderingContext2D, points: readonly Point[]) {
   context.beginPath();
@@ -94,10 +98,15 @@ function makeRig(sheet: HTMLCanvasElement) {
   for (const [canvas, polygon] of [[back, BACK_LEG], [front, FRONT_LEG]] as const) {
     const ctx = canvas.getContext('2d')!;
     ctx.save(); path(ctx, polygon); ctx.clip(); ctx.drawImage(source, 0, 0); ctx.restore();
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    path(ctx, TUNIC); ctx.fill(); ctx.restore();
   }
   // The fixed upper body overlaps the animated joints slightly, without
   // retaining a second, stationary copy of the boots.
-  bodyCtx.clearRect(0, 140, body.width, body.height - 140);
+  bodyCtx.clearRect(0, 129, body.width, body.height - 129);
+  bodyCtx.save(); path(bodyCtx, TUNIC); bodyCtx.clip();
+  bodyCtx.drawImage(source, 0, 0); bodyCtx.restore();
   const rig = { body, back, front }; rigs.set(sheet, rig);
   return rig;
 }
@@ -111,23 +120,25 @@ export function drawRoxyFrame(
   const scale = .72;
   const moving = state === 'walk' || state === 'run';
   const rect = moving ? ROXY_FRAMES.walk : frame;
-  const angle = moving ? Math.sin(stride) * (state === 'run' ? .2 : .14) : 0;
-  const hip: Point = [73, 132];
-  const footY = (foot: Point, rotation: number) => hip[1] +
+  const angle = moving ? Math.sin(stride) * (state === 'run' ? .16 : .11) : 0;
+  const footY = (foot: Point, hip: Point, rotation: number) => hip[1] +
     (foot[0] - hip[0]) * Math.sin(rotation) + (foot[1] - hip[1]) * Math.cos(rotation);
   const baseline = moving
-    ? Math.max(footY([44, 263], -angle), footY([152, 267], angle)) : rect.baseline;
+    ? Math.max(
+      footY([4, 263], BACK_HIP, -angle), footY([68, 263], BACK_HIP, -angle),
+      footY([99, 267], FRONT_HIP, angle), footY([158, 267], FRONT_HIP, angle),
+    ) : rect.baseline;
   context.save();
   if (flipped) { context.translate(x * 2, 0); context.scale(-1, 1); }
   context.translate(x - rect.anchorX * scale, groundY + 7 - lift - baseline * scale);
   context.scale(scale, scale);
   if (moving) {
     const rig = makeRig(sheet);
-    const leg = (image: HTMLCanvasElement, rotation: number) => {
+    const leg = (image: HTMLCanvasElement, hip: Point, rotation: number) => {
       context.save(); context.translate(...hip); context.rotate(rotation);
       context.translate(-hip[0], -hip[1]); context.drawImage(image, 0, 0); context.restore();
     };
-    leg(rig.back, -angle); leg(rig.front, angle);
+    leg(rig.back, BACK_HIP, -angle); leg(rig.front, FRONT_HIP, angle);
     context.drawImage(rig.body, 0, 0);
   } else context.drawImage(isolateFrame(sheet, rect), 0, 0);
   context.restore();

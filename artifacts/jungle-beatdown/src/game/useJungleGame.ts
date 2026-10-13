@@ -1502,18 +1502,14 @@ function drawWorld(
       frames.length - 1,
       Math.floor((elapsed / introDuration) * frames.length),
     );
-    // The first two poses are only shown after consent; the scene then cycles
-    // the two foot-kiss poses from the final row.
+    // These are distinct story poses, not interchangeable animation frames:
+    // pose 2 has Roxy alone. Hold the complete final pair instead of making
+    // the heroine disappear on every other frame.
     const loopIndex = roxyVoluntarySequence
       ? elapsed < ROXY_HYPNOSIS_DURATION
         ? Math.min(1, Math.floor(elapsed / ROXY_HYPNOSIS_FRAME_DURATION))
-        : 2 + (
-          Math.floor(
-            (elapsed - ROXY_HYPNOSIS_DURATION) /
-              ROXY_HYPNOSIS_FRAME_DURATION,
-          ) % 2
-        )
-      : elapsed < introDuration ? introIndex : [2, 3][Math.floor(now / 420) % 2];
+        : 3
+      : elapsed < introDuration ? introIndex : 3;
     const voluntaryMotion = roxyVoluntarySequence;
     drawRoxyDefeatFrame(
       context,
@@ -1986,9 +1982,8 @@ function updateEnemies(world: World, dt: number, now: number) {
 
   const activeEnemies = world.enemies.filter((enemy) => enemy.hp > 0 && enemy.active);
   for (const enemy of activeEnemies) {
-    if (enemy.state === 'walk' || enemy.state === 'run') {
-      enemy.stride += Math.hypot(enemy.vx, enemy.vy) * dt * Math.PI * 2 / 60;
-    }
+    const previousX = enemy.x;
+    const previousY = enemy.y;
     enemy.stateTimer = Math.max(0, enemy.stateTimer - dt);
     enemy.attackCooldown = Math.max(0, enemy.attackCooldown - dt);
     if (enemy.stateTimer <= 0 &&
@@ -2012,6 +2007,7 @@ function updateEnemies(world: World, dt: number, now: number) {
         enemy.x += (perimeterX - enemy.x) * Math.min(1, dt * 4);
         enemy.y += (perimeterY - enemy.y) * Math.min(1, dt * 4);
         enemy.state = Math.hypot(perimeterX - enemy.x, perimeterY - enemy.y) > 3 ? 'walk' : 'idle';
+        enemy.stride += Math.hypot(enemy.x - previousX, enemy.y - previousY) * Math.PI * 2 / 60;
       }
       continue;
     }
@@ -2101,6 +2097,9 @@ function updateEnemies(world: World, dt: number, now: number) {
     }
     enemy.x = clamp(enemy.x, -24, WIDTH + 24);
     enemy.y = clamp(enemy.y, FLOOR_MIN, FLOOR_MAX);
+    if (enemy.state === 'walk' || enemy.state === 'run') {
+      enemy.stride += Math.hypot(enemy.x - previousX, enemy.y - previousY) * Math.PI * 2 / 60;
+    }
     if ((enemy.x <= -24 && enemy.vx < 0) || (enemy.x >= WIDTH + 24 && enemy.vx > 0)) {
       enemy.vx = 0;
     }
