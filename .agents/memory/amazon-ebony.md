@@ -15,11 +15,11 @@ Ebony victory scenes are optional, require explicit opt-in, and are consensual.
 
 **How to apply:** Keep the scenes disabled by default and allow them to be ended. Do not frame them as forced participation.
 
-Ebony's stomp can trigger at any heroine HP and deals heavy damage. It remains separate from the optional victory scene; if it knocks the heroine out, use generic defeat rather than automatically starting Ebony's special victory scene.
+Ebony can trigger an instant KO chance on any successful close attack regardless of the heroine's HP, and her stomp has a separate chance to activate at any HP while dealing heavy damage. The victory scene remains opt-in.
 
-**Why:** The user clarified that Ebony's stomp should be available at any time and remove a lot of HP, while keeping the stomp itself separate from the ending.
+**Why:** The user selected a random KO chance on any Ebony hit, regardless of HP, after requesting that the stomp also be available at any time and deal substantial damage.
 
-**How to apply:** Do not gate the stomp on low HP. Keep its damage substantial across its impacts. Return to combat if the heroine survives; on a KO, use generic defeat and keep the opt-in victory scene separate.
+**How to apply:** Keep the KO chance and stomp trigger independent of HP. If an Ebony attack KOs the heroine, start the special victory scene only when its explicit consent option is enabled.
 
 Ebony's defeat scenes should have ongoing movement and the heroine's deep breathing, rather than a static series of long-held cards.
 

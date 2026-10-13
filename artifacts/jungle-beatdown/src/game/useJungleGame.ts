@@ -342,6 +342,8 @@ const GRAPPLE_DURATION = 5;
 const SPECIAL_DEFEAT_DURATION = 10;
 export const NINJA_FOOTSMOTHER_DURATION = 10;
 const ROXY_DEFEAT_DURATION = 10;
+const EBONY_FINISHER_KO_CHANCE = 0.25;
+const EBONY_STOMP_CHANCE = 0.25;
 const ROXY_HYPNOSIS_DURATION = 2.4;
 const ROXY_HYPNOSIS_FRAME_DURATION = 1.2;
 const NINJA_FOOTSMOTHER_ENDING_DURATION = 1.5;
@@ -2071,8 +2073,18 @@ function updateEnemies(world: World, dt: number, now: number) {
           beginGenericDefeat(world, enemy);
           continue;
         }
-        const specialCanTrigger = enemy.ebony || world.heroHp <= 42;
-        if (specialCanTrigger && random(world) < 0.25) {
+        if (enemy.ebony) {
+          const specialRoll = random(world);
+          if (specialRoll < EBONY_FINISHER_KO_CHANCE) {
+            world.heroHp = 0;
+            beginGenericDefeat(world, enemy);
+            continue;
+          }
+          if (specialRoll < EBONY_FINISHER_KO_CHANCE + EBONY_STOMP_CHANCE) {
+            beginSpecialGrapple(world, enemy);
+            continue;
+          }
+        } else if (world.heroHp <= 42 && random(world) < 0.25) {
           beginSpecialGrapple(world, enemy);
           continue;
         }
@@ -2156,9 +2168,10 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
     for (const index of [3, 4, 5]) {
       if (world.ebonyElapsed >= index * EBONY_STOMP_DURATION / 6 && world.ebonyHitFrame < index) {
         world.ebonyHitFrame = index;
-        // Three heavy impacts make the stomp dangerous, but its optional
-        // victory scene remains separate from this combat attack.
+        // Three heavy impacts make the stomp dangerous; any impact may also
+        // trigger Ebony's instant-finisher chance.
         world.heroHp = Math.max(0, world.heroHp - 24);
+        if (random(world) < EBONY_FINISHER_KO_CHANCE) world.heroHp = 0;
         playStomp(world);
         playClip(world, 'amazonKick', .56, 120);
         playClip(world, 'heroineHurt', .48, 300);
@@ -2166,9 +2179,8 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
     }
     if (world.ebonyElapsed >= EBONY_STOMP_DURATION) {
       if (world.heroHp <= 0) {
-        // Keep this a generic defeat; the stomp never starts the opted-in
-        // victory scene automatically.
-        beginGenericDefeat(world);
+        const attacker = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
+        beginGenericDefeat(world, attacker);
       } else {
         world.phase = 'playing';
         world.isGrappleActive = false;

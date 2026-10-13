@@ -254,9 +254,9 @@ function App() {
                             }))} />
                           Incluir cenas consentidas de vitória Ebony
                         </label>
-                        <p>Stomp automático: em qualquer faixa de HP, ataques próximos da Ebony têm
-                          25% de chance de iniciar o combo. São três impactos pesados (até 72 HP);
-                          a cena consentida de vitória é separada e opcional.</p>
+                        <p>Acertos próximos da Ebony: 25% de chance de KO em qualquer HP; o stomp
+                          tem 25% de chance adicional. A cena consentida de vitória continua
+                          opcional.</p>
                       </div>
                     )}
                     {fightConfig.roxy > 0 ? (
