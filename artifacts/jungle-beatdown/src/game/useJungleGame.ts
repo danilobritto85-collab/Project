@@ -1330,7 +1330,7 @@ function drawEnemySprite(
   atlas: SpriteAtlas,
   enemy: Enemy,
   frame: SpriteRect,
-  height = 180,
+  height = 190,
   lift = 0,
   groundOffset = 7,
   anchorX = enemy.x,
@@ -1342,7 +1342,8 @@ function drawEnemySprite(
   }
   if (enemy.ebony) {
     drawEbonyFrame(context, atlas.ebony, frame as EbonyFrame,
-      anchorX, enemy.y, enemy.direction < 0, lift);
+      anchorX, enemy.y, enemy.direction < 0, lift, undefined,
+      height >= 180 ? 1.04 : 1);
     return;
   }
   const width = Math.max(126, (height * frame.w) / frame.h);
@@ -1604,7 +1605,7 @@ function drawWorld(
         80,
         world.facing < 0,
       );
-      drawEnemySprite(context, atlas, grappler, NINJA_FRAMES.special, 180, 0, 7);
+          drawEnemySprite(context, atlas, grappler, NINJA_FRAMES.special, 190, 0, 7);
     } else {
       // Amazon grapples use the paired pose sheets; they already contain both fighters.
       drawAtlasSprite(
@@ -1667,7 +1668,7 @@ function drawWorld(
         // heroine at the same depth.
         y: enemy.y + (enemy.kind === 'roxy' && enemy.state === 'attack' ? 0.5 : 0),
         draw: () =>
-          drawEnemySprite(context, atlas, enemy, rect, defeated ? 120 : 180, 0, 7),
+          drawEnemySprite(context, atlas, enemy, rect, defeated ? 120 : 190, 0, 7),
       });
     }
 
@@ -2149,33 +2150,31 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
       beginGenericDefeat(world);
     }
   } else if (world.phase === 'ebony-stomp') {
-    const attacker = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
     world.ebonyElapsed = Math.min(EBONY_STOMP_DURATION, world.ebonyElapsed + dt);
     // Process each impact once, including slow frames that cross a boundary.
     for (const index of [3, 4, 5]) {
       if (world.ebonyElapsed >= index * EBONY_STOMP_DURATION / 6 && world.ebonyHitFrame < index) {
         world.ebonyHitFrame = index;
-        world.heroHp = Math.max(0, world.heroHp - 6);
+        // The stomp is an interruptible combat special, not a defeat finisher.
+        world.heroHp = Math.max(1, world.heroHp - 6);
         playStomp(world);
         playClip(world, 'amazonKick', .56, 120);
         playClip(world, 'heroineHurt', .48, 300);
       }
     }
     if (world.ebonyElapsed >= EBONY_STOMP_DURATION) {
-      if (world.heroHp <= 0) beginGenericDefeat(world, attacker);
-      else {
-        world.phase = 'playing';
-        world.isGrappleActive = false;
-        world.currentGrappler = null;
-        world.heroHitCooldown = 2;
-        world.heroAction = 'idle';
-        world.enemies.forEach((enemy) => {
-          enemy.state = 'idle';
-          enemy.attackCooldown = Math.max(enemy.attackCooldown, 2);
-          enemy.vx = 0;
-          enemy.vy = 0;
-        });
-      }
+      world.phase = 'playing';
+      world.isGrappleActive = false;
+      world.currentGrappler = null;
+      world.defeatSecondsLeft = 0;
+      world.heroHitCooldown = 2;
+      world.heroAction = 'idle';
+      world.enemies.forEach((enemy) => {
+        enemy.state = 'idle';
+        enemy.attackCooldown = Math.max(enemy.attackCooldown, 2);
+        enemy.vx = 0;
+        enemy.vy = 0;
+      });
     }
   } else if (world.phase === 'ebony-victory') {
     world.ebonyElapsed = Math.min(EBONY_VICTORY_DURATION, world.ebonyElapsed + dt);

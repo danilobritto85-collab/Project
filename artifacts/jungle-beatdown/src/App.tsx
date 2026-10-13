@@ -255,8 +255,8 @@ function App() {
                           Incluir cenas consentidas de vitória Ebony
                         </label>
                         <p>Stomp automático: com 42 HP ou menos, ataques próximos têm 25% de chance
-                          de iniciar o combo de 6 quadros. As cenas finais são opcionais
-                          e podem ser encerradas a qualquer momento.</p>
+                          de iniciar o combo. Ele termina e devolve a luta ao combate; as cenas
+                          consentidas de vitória são separadas, opcionais e podem ser encerradas.</p>
                       </div>
                     )}
                     {fightConfig.roxy > 0 ? (

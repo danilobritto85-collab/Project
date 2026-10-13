@@ -85,10 +85,10 @@ export function prepareEbonySheet(
 export function drawEbonyFrame(
   context: CanvasRenderingContext2D, image: HTMLCanvasElement | null,
   frame: EbonyFrame, x: number, groundY: number, flipped: boolean, lift = 0,
-  motionTime?: number,
+  motionTime?: number, scaleMultiplier = 1,
 ) {
   if (!image) return;
-  const scale = frame.scale ?? 1;
+  const scale = (frame.scale ?? 1) * scaleMultiplier;
   context.save();
   if (flipped) { context.translate(x * 2, 0); context.scale(-1, 1); }
   const dx = x - frame.anchorX * scale;

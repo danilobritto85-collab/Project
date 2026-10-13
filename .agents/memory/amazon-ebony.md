@@ -15,6 +15,12 @@ Ebony victory scenes are optional, require explicit opt-in, and are consensual.
 
 **How to apply:** Keep the scenes disabled by default and allow them to be ended. Do not frame them as forced participation.
 
+Ebony's stomp is a standalone combat combo: it must return to the fight without ending the round, even when the heroine is low on HP. Only the separate, opted-in victory scene may run after a later defeat.
+
+**Why:** The user asked for Ebony to do the stomp without it automatically continuing into an ending.
+
+**How to apply:** Keep stomp damage from reducing HP below 1, always return to combat when its frames finish, and keep victory scenes on their separate opt-in path.
+
 Ebony's defeat scenes should have ongoing movement and the heroine's deep breathing, rather than a static series of long-held cards.
 
 **Why:** The user requested “anime mais e movimente” and “Adicione respiração profunda da heroina.”
