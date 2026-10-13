@@ -2071,7 +2071,8 @@ function updateEnemies(world: World, dt: number, now: number) {
           beginGenericDefeat(world, enemy);
           continue;
         }
-        if (world.heroHp <= 42 && random(world) < 0.25) {
+        const specialCanTrigger = enemy.ebony || world.heroHp <= 42;
+        if (specialCanTrigger && random(world) < 0.25) {
           beginSpecialGrapple(world, enemy);
           continue;
         }
@@ -2155,26 +2156,33 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
     for (const index of [3, 4, 5]) {
       if (world.ebonyElapsed >= index * EBONY_STOMP_DURATION / 6 && world.ebonyHitFrame < index) {
         world.ebonyHitFrame = index;
-        // The stomp is an interruptible combat special, not a defeat finisher.
-        world.heroHp = Math.max(1, world.heroHp - 6);
+        // Three heavy impacts make the stomp dangerous, but its optional
+        // victory scene remains separate from this combat attack.
+        world.heroHp = Math.max(0, world.heroHp - 24);
         playStomp(world);
         playClip(world, 'amazonKick', .56, 120);
         playClip(world, 'heroineHurt', .48, 300);
       }
     }
     if (world.ebonyElapsed >= EBONY_STOMP_DURATION) {
-      world.phase = 'playing';
-      world.isGrappleActive = false;
-      world.currentGrappler = null;
-      world.defeatSecondsLeft = 0;
-      world.heroHitCooldown = 2;
-      world.heroAction = 'idle';
-      world.enemies.forEach((enemy) => {
-        enemy.state = 'idle';
-        enemy.attackCooldown = Math.max(enemy.attackCooldown, 2);
-        enemy.vx = 0;
-        enemy.vy = 0;
-      });
+      if (world.heroHp <= 0) {
+        // Keep this a generic defeat; the stomp never starts the opted-in
+        // victory scene automatically.
+        beginGenericDefeat(world);
+      } else {
+        world.phase = 'playing';
+        world.isGrappleActive = false;
+        world.currentGrappler = null;
+        world.defeatSecondsLeft = 0;
+        world.heroHitCooldown = 2;
+        world.heroAction = 'idle';
+        world.enemies.forEach((enemy) => {
+          enemy.state = 'idle';
+          enemy.attackCooldown = Math.max(enemy.attackCooldown, 2);
+          enemy.vx = 0;
+          enemy.vy = 0;
+        });
+      }
     }
   } else if (world.phase === 'ebony-victory') {
     world.ebonyElapsed = Math.min(EBONY_VICTORY_DURATION, world.ebonyElapsed + dt);
