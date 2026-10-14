@@ -15,6 +15,12 @@ The karateka offer, accepted sequence, and transition into defeat should show on
 
 **How to apply:** Treat the offer, accepted scene, and its defeat transition as isolated compositions; do not draw the ordinary fight roster over them.
 
+Nas finalizações das duas karatekas, caso a heroína perca, manter a animação, não ir para a derrota genérica.
+
+**Why:** The user explicitly changed the ending behavior after repeatedly seeing unrelated Amazonas and broken transitions.
+
+**How to apply:** Defeat preserves the karateka's own animated ending. Explicitly stopping an optional scene must still leave the scene.
+
 Karateka Ebony should periodically sit and wave the heroine over; approaching while she is taunting opens the opt-in prompt. Accept begins the grab sequence, while decline resumes combat.
 
 **Why:** The supplied Karateka specification defines this bait-and-grab behavior, and the user had already chosen opt-in for special scenes.

@@ -11,7 +11,7 @@ import {
   KARATE_BLONDE, KARATE_BLONDE_ATTACKS, KARATE_BLONDE_WALK,
   KARATE_EBONY, KARATE_EBONY_ATTACKS, KARATE_EBONY_WALK,
   karateBlondeSequenceFrames, karateEbonySequenceFrames, karateDuoSequenceFrames,
-  extractKarateEbonyTaunt, prepareKarateSheet, removeStoryboardHeadings,
+  extractKarateEbonyTaunt, extractKarateCombatPose, prepareKarateSheet, removeStoryboardHeadings,
 } from './karateSprites';
 
 import amazonSheetUrl from '@assets/amazon_1791470375689.png';
@@ -34,6 +34,8 @@ import heroineBreathingAudioUrl from '@assets/generated_audio/heroine_deep_breat
 import enemyLaughAudioUrl from '@assets/generated_audio/enemy_laugh.mp3';
 import heroineFaintSighAudioUrl from '@assets/generated_audio/heroine_faint_sigh.mp3';
 import roxyKickAudioUrl from '@assets/generated_audio/roxy_kick.mp3';
+import karateBlondeKickAudioUrl from '@assets/generated_audio/karate_blonde_kick.mp3';
+import karateEbonyKickAudioUrl from '@assets/generated_audio/karate_ebony_kick.mp3';
 import roxyDialogueAudioUrl from '@assets/generated_audio/roxy_voluntary_dialogue.mp3';
 import ebonySheetUrl from '@assets/amazon_ebony_clean.png';
 import ebonyStompUrl from '@assets/amazon_ebony_stomp_clean.png';
@@ -132,9 +134,11 @@ interface SpriteAtlas {
   ebonyVictory: HTMLCanvasElement | null;
   ebonyDuoVictory: HTMLCanvasElement | null;
   karateBlonde: HTMLCanvasElement | null;
+  karateBlondeCombat: HTMLCanvasElement[];
   karateBlondeAttackOne: HTMLCanvasElement | null;
   karateBlondeAttackTwo: HTMLCanvasElement | null;
   karateEbony: HTMLCanvasElement | null;
+  karateEbonyCombat: HTMLCanvasElement[];
   karateEbonyTaunt: HTMLCanvasElement | null;
   karateEbonyAttackOne: HTMLCanvasElement | null;
   karateEbonyAttackTwo: HTMLCanvasElement | null;
@@ -234,6 +238,8 @@ interface World {
 
 type SoundCue =
   | 'amazonKick'
+  | 'karateBlondeKick'
+  | 'karateEbonyKick'
   | 'ninjaKick'
   | 'heroineHurt'
   | 'heroineStruggle'
@@ -250,7 +256,6 @@ type SoundEngine = {
   active: Set<HTMLAudioElement>;
   lastPlayed: Partial<Record<SoundCue, number>>;
   lastNinjaKiai: number;
-  lastKarateKiai: Record<'blonde' | 'ebony', number>;
 };
 
 const spriteBoundsCache = new WeakMap<HTMLCanvasElement, Map<string, SpriteRect>>();
@@ -528,7 +533,6 @@ function createWorld(
       active: new Set<HTMLAudioElement>(),
       lastPlayed: {},
       lastNinjaKiai: -Infinity,
-      lastKarateKiai: { blonde: -Infinity, ebony: -Infinity },
     },
     particles: [],
     smokeTimer: 0,
@@ -1198,55 +1202,7 @@ function playKarateAttackVoice(
   fighter: 'blonde' | 'ebony',
   volume: number,
 ) {
-  const context = ensureSound(world);
-  if (!context) return;
-  const now = context.currentTime;
-  if ((now - world.sound.lastKarateKiai[fighter]) * 1000 < 180) return;
-  world.sound.lastKarateKiai[fighter] = now;
-
-  // Distinct synthesized shouts: Blonde is brighter and higher, Ebony is
-  // lower and rougher. They use the normal AudioContext mute state and a
-  // deliberately restrained gain so the voices stay beneath the impacts.
-  const blonde = fighter === 'blonde';
-  const duration = blonde ? 0.29 : 0.32;
-  const base = blonde ? 218 + random(world) * 24 : 154 + random(world) * 18;
-  const voice = context.createOscillator();
-  const envelope = context.createGain();
-  voice.type = blonde ? 'triangle' : 'sawtooth';
-  voice.frequency.setValueAtTime(base, now);
-  voice.frequency.linearRampToValueAtTime(base * (blonde ? 1.85 : 1.55), now + 0.075);
-  voice.frequency.linearRampToValueAtTime(base * (blonde ? 1.28 : 1.12), now + duration);
-  envelope.gain.setValueAtTime(0.001, now);
-  envelope.gain.linearRampToValueAtTime(volume, now + 0.025);
-  envelope.gain.setValueAtTime(volume * 0.78, now + duration * 0.42);
-  envelope.gain.exponentialRampToValueAtTime(0.001, now + duration);
-
-  const firstFormant = context.createBiquadFilter();
-  firstFormant.type = 'bandpass';
-  firstFormant.Q.value = blonde ? 2.2 : 2.8;
-  firstFormant.frequency.setValueAtTime(blonde ? 470 : 390, now);
-  firstFormant.frequency.linearRampToValueAtTime(blonde ? 820 : 650, now + 0.1);
-  firstFormant.frequency.linearRampToValueAtTime(blonde ? 690 : 530, now + duration);
-
-  const secondFormant = context.createBiquadFilter();
-  secondFormant.type = 'bandpass';
-  secondFormant.Q.value = blonde ? 1.8 : 2.1;
-  secondFormant.frequency.setValueAtTime(blonde ? 1980 : 1250, now);
-  secondFormant.frequency.linearRampToValueAtTime(blonde ? 1450 : 980, now + 0.13);
-
-  const firstGain = context.createGain();
-  const secondGain = context.createGain();
-  firstGain.gain.value = blonde ? 0.72 : 0.82;
-  secondGain.gain.value = blonde ? 0.38 : 0.27;
-  voice.connect(firstFormant);
-  voice.connect(secondFormant);
-  firstFormant.connect(firstGain);
-  secondFormant.connect(secondGain);
-  firstGain.connect(envelope);
-  secondGain.connect(envelope);
-  envelope.connect(context.destination);
-  voice.start(now);
-  voice.stop(now + duration + 0.02);
+  playClip(world, fighter === 'blonde' ? 'karateBlondeKick' : 'karateEbonyKick', volume, 180);
 }
 
 function stopClips(world: World) {
@@ -1460,10 +1416,12 @@ function drawKarateSequenceFrame(
   groundY: number,
   targetHeight: number,
   flipped: boolean,
+  motionTime = 0,
 ) {
   if (!image) return;
   const visible = getCompositeVisibleBounds(image, frame);
-  const scale = targetHeight / Math.max(1, visible.h);
+  const scale = targetHeight / frame.h;
+  const breath = 1 + Math.sin(motionTime * 2.2) * 0.006;
   context.save();
   if (flipped) {
     context.translate(centerX, 0);
@@ -1481,9 +1439,9 @@ function drawKarateSequenceFrame(
     visible.w,
     visible.h,
     centerX - visible.w * scale / 2,
-    groundY + 7 - visible.h * scale,
+    groundY + 7 - visible.h * scale * breath,
     visible.w * scale,
-    visible.h * scale,
+    visible.h * scale * breath,
   );
   context.restore();
 }
@@ -1501,7 +1459,7 @@ function drawKarateBaseSprite(
 ) {
   if (!image) return;
   const visible = getKarateVisibleBounds(image, frame);
-  const scaleX = targetHeight / frame.h;
+  const scaleX = targetHeight / Math.max(1, visible.h);
   const scaleY = scaleX;
   context.save();
   if (flipped) {
@@ -1515,7 +1473,7 @@ function drawKarateBaseSprite(
     frame.y + visible.y,
     visible.w,
     visible.h,
-    centerX - frame.w * scaleX / 2 + visible.x * scaleX,
+    centerX - visible.w * scaleX / 2,
     groundY - lift - visible.h * scaleY + groundOffset,
     visible.w * scaleX,
     visible.h * scaleY,
@@ -1600,15 +1558,21 @@ function drawEnemySprite(
     return;
   }
   if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') {
+    const combatPoses = enemy.kind === 'karateBlonde'
+      ? atlas.karateBlondeCombat : atlas.karateEbonyCombat;
+    const isolatedPose = enemy.state === 'attack'
+      ? combatPoses[enemy.attackPoseIndex % combatPoses.length] : undefined;
+    const attackMotion = enemy.state === 'attack'
+      ? Math.sin(Math.min(1, Math.max(0, (0.48 - enemy.stateTimer) / 0.48)) * Math.PI) : 0;
     drawKarateBaseSprite(
       context,
-      atlas[enemy.kind],
-      frame,
-      anchorX,
+      isolatedPose ?? atlas[enemy.kind],
+      isolatedPose ? { x: 0, y: 0, w: isolatedPose.width, h: isolatedPose.height } : frame,
+      anchorX + enemy.direction * attackMotion * 7,
       enemy.y,
       height,
       enemy.direction < 0,
-      lift,
+      lift + attackMotion * 2,
       groundOffset,
     );
     return;
@@ -1743,8 +1707,7 @@ function drawWorld(
     }
   } else if (karateDefeatSequence) {
     const sequence = world.karateSequence ?? 'blonde';
-    const elapsed = world.phase === STATE_KARATE_CHALLENGE
-      ? world.karateDefeatElapsed : KARATE_DEFEAT_DURATION;
+    const elapsed = world.karateDefeatElapsed;
     if (sequence === 'duo' && atlas.karateEbonyAttackOne) {
       const frames = karateDuoSequenceFrames(
         atlas.karateEbonyAttackOne.width,
@@ -1753,7 +1716,7 @@ function drawWorld(
       const index = Math.min(frames.length - 1,
         Math.floor((elapsed / KARATE_DEFEAT_DURATION) * frames.length));
       drawKarateSequenceFrame(context, atlas.karateEbonyAttackOne,
-        frames[Math.max(0, index)], WIDTH / 2, world.heroY, 250, false);
+        frames[Math.max(0, index)], WIDTH / 2, world.heroY, 250, false, elapsed);
     } else if (sequence === 'ebony' && atlas.karateEbonyAttackTwo) {
       const frames = karateEbonySequenceFrames(
         atlas.karateEbonyAttackTwo.width,
@@ -1762,7 +1725,7 @@ function drawWorld(
       const index = Math.min(frames.length - 1,
         Math.floor((elapsed / KARATE_DEFEAT_DURATION) * frames.length));
       drawKarateSequenceFrame(context, atlas.karateEbonyAttackTwo,
-        frames[Math.max(0, index)], WIDTH / 2, world.heroY, 260, false);
+        frames[Math.max(0, index)], WIDTH / 2, world.heroY, 260, false, elapsed);
     } else if (atlas.karateBlondeAttackOne && atlas.karateBlondeAttackTwo) {
       const first = karateBlondeSequenceFrames(
         atlas.karateBlondeAttackOne.width,
@@ -1771,13 +1734,13 @@ function drawWorld(
       const ending = karateBlondeSequenceFrames(
         atlas.karateBlondeAttackTwo.width,
         atlas.karateBlondeAttackTwo.height,
-      ).slice(3, 6);
+      ).filter((_, index) => index < 4);
       const frames = [...first, ...ending];
       const index = Math.min(frames.length - 1,
         Math.floor((elapsed / KARATE_DEFEAT_DURATION) * frames.length));
       const sheet = index < first.length ? atlas.karateBlondeAttackOne : atlas.karateBlondeAttackTwo;
       const pose = index < first.length ? frames[index] : ending[index - first.length];
-      drawKarateSequenceFrame(context, sheet, pose, WIDTH / 2, world.heroY, 265, false);
+      drawKarateSequenceFrame(context, sheet, pose, WIDTH / 2, world.heroY, 265, false, elapsed);
     }
   } else if (ninjaFootsmotherSequence) {
     const grappler = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
@@ -1945,7 +1908,7 @@ function drawWorld(
         world.facing < 0,
       );
           drawEnemySprite(context, atlas, grappler, NINJA_FRAMES.special, 190, 0, 7);
-    } else {
+    } else if (grappler?.kind === 'amazon') {
       // Amazon grapples use the paired pose sheets; they already contain both fighters.
       drawAtlasSprite(
         context,
@@ -2230,13 +2193,19 @@ function respondToKarateOffer(world: World, accepted: boolean) {
 function endKarateChallenge(world: World) {
   if (world.phase !== STATE_KARATE_CHALLENGE) return;
   stopClips(world);
-  const selectedKaratekaId = world.currentGrappler;
-  world.currentGrappler = null;
-  world.karateSequence = null;
-  beginGenericDefeat(world, undefined, selectedKaratekaId);
+  world.karateDefeatElapsed = Math.max(KARATE_DEFEAT_DURATION, world.karateDefeatElapsed);
+  world.defeatKind = 'karate-victory';
+  world.heroHp = 0;
+  enterGameOver(world);
 }
 
 function beginSpecialGrapple(world: World, enemy: Enemy) {
+  // Karatekas never enter the generic grapple renderer: its paired sheets
+  // contain an Amazon. Keep every karate special behind its own opt-in.
+  if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') {
+    beginKarateOffer(world, enemy);
+    return;
+  }
   if (enemy.ebony) {
     world.phase = 'ebony-stomp';
     world.isGrappleActive = true;
@@ -2447,7 +2416,8 @@ function updateEnemies(world: World, dt: number, now: number) {
 
     // Let Roxy finish the current pose before pursuing again. Otherwise the
     // next AI tick replaces her kick/hit pose with a walk and slides her legs.
-    if (enemy.kind === 'roxy' && enemy.stateTimer > 0 &&
+    if ((enemy.kind === 'roxy' || enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') &&
+        enemy.stateTimer > 0 &&
         (enemy.state === 'attack' || enemy.state === 'hurt' || enemy.state === 'down')) {
       enemy.vx = 0;
       enemy.vy = 0;
@@ -2503,7 +2473,7 @@ function updateEnemies(world: World, dt: number, now: number) {
         playKarateAttackVoice(
           world,
           enemy.kind === 'karateBlonde' ? 'blonde' : 'ebony',
-          0.09,
+          0.6,
         );
       } else {
         playClip(
@@ -2743,16 +2713,16 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
       playClip(world, 'roxyDialogue', 0.65, 1000);
     }
     if (wasRunning && world.defeatSecondsLeft <= 0) stopClips(world);
-  } else if (world.phase === STATE_KARATE_CHALLENGE) {
-    world.karateDefeatElapsed = Math.min(
-      KARATE_DEFEAT_DURATION,
-      world.karateDefeatElapsed + dt,
-    );
+  } else if (world.phase === STATE_KARATE_CHALLENGE ||
+    (world.phase === 'game-over' && world.defeatKind === 'karate-victory')) {
+    world.karateDefeatElapsed += dt;
     world.defeatSecondsLeft = Math.max(
       0,
       KARATE_DEFEAT_DURATION - world.karateDefeatElapsed,
     );
-    if (world.defeatSecondsLeft <= 0) endKarateChallenge(world);
+    if (world.phase === STATE_KARATE_CHALLENGE && world.defeatSecondsLeft <= 0) {
+      endKarateChallenge(world);
+    }
   } else if (world.phase === STATE_ROXY_SMOTHER ||
     (world.phase === 'game-over' && world.defeatKind === 'roxy-smother')) {
     world.roxyDefeatElapsed += dt;
@@ -2898,10 +2868,10 @@ export function useJungleGame(
   }, []);
 
   const exitKarateChallenge = useCallback(() => {
-    endKarateChallenge(worldRef.current);
-    pressedRef.current.clear();
-    setSnapshot(publishSnapshot(worldRef.current));
-  }, []);
+    // Explicitly stopping an optional scene must really leave it. Automatic
+    // defeat completion instead keeps the karateka's own animated ending.
+    resetGame('title');
+  }, [resetGame]);
 
   const pressVirtualControl = useCallback((code: string) => {
     const world = worldRef.current;
@@ -2994,9 +2964,11 @@ export function useJungleGame(
       ebonyVictory: null,
       ebonyDuoVictory: null,
       karateBlonde: null,
+      karateBlondeCombat: [],
       karateBlondeAttackOne: null,
       karateBlondeAttackTwo: null,
       karateEbony: null,
+      karateEbonyCombat: [],
       karateEbonyTaunt: null,
       karateEbonyAttackOne: null,
       karateEbonyAttackTwo: null,
@@ -3011,6 +2983,8 @@ export function useJungleGame(
     };
     const soundUrls: Record<SoundCue, string> = {
       amazonKick: amazonKickAudioUrl,
+      karateBlondeKick: karateBlondeKickAudioUrl,
+      karateEbonyKick: karateEbonyKickAudioUrl,
       ninjaKick: ninjaKickAudioUrl,
       heroineHurt: heroineHurtAudioUrl,
       heroineStruggle: heroineStruggleAudioUrl,
@@ -3035,7 +3009,7 @@ export function useJungleGame(
       if (scene === 'karate-blonde' || scene === 'karate-ebony') {
         const blonde = scene === 'karate-blonde';
         const config: FightConfig = {
-          amazonas: 0,
+          amazonas: params.get('_amazon') === '1' ? 1 : 0,
           ebony: 0,
           ninjas: 0,
           roxy: 0,
@@ -3052,7 +3026,8 @@ export function useJungleGame(
           sound: oldSound,
           soundEnabled: false,
         });
-        const karateka = world.enemies[0];
+        const karateka = world.enemies.find((enemy) =>
+          enemy.kind === (blonde ? 'karateBlonde' : 'karateEbony'));
         if (karateka) {
           karateka.x = 650;
           karateka.y = 510;
@@ -3062,6 +3037,7 @@ export function useJungleGame(
             : params.get('_action') === 'taunt' ? 'taunt' : 'walk';
           karateka.stateTimer = karateka.state === 'taunt' ? 20 : 0;
           karateka.attackPoseIndex = clamp(Number(params.get('_pose') ?? 2), 0, 4);
+          if (params.get('_grapple') === '1') beginSpecialGrapple(world, karateka);
         }
         freezePreview = params.get('_freeze') === '1';
         setSnapshot(publishSnapshot(world));
@@ -3103,11 +3079,7 @@ export function useJungleGame(
           grappler.stateTimer = 0;
         }
         if (params.get('_ending') === '1' && grappler) {
-          world.phase = 'group-defeat';
-          world.defeatKind = 'group';
-          world.defeatSecondsLeft = GROUP_DEFEAT_DURATION;
-          world.actionTimer = 0;
-          world.isolatedDefeatOpponentId = grappler.id;
+          endKarateChallenge(world);
         }
         freezePreview = params.get('_freeze') === '1';
         setSnapshot(publishSnapshot(world));
@@ -3343,6 +3315,8 @@ export function useJungleGame(
       karateEbonyAttackTwo,
     ]) => {
       if (disposed) return;
+      const blondeBase = prepareKarateSheet(karateBlonde);
+      const ebonyBase = prepareKarateSheet(karateEbony);
       atlas = {
         background,
         hero: removeCheckerboard(hero),
@@ -3351,13 +3325,14 @@ export function useJungleGame(
         ebonyStomp: withRedToenails(prepareEbonySheet(ebonyStomp, EBONY_STOMP), 'ebonyStomp'),
         ebonyVictory: withRedToenails(prepareEbonySheet(ebonyVictory, EBONY_VICTORY), 'ebonyVictory'),
         ebonyDuoVictory: withRedToenails(prepareEbonySheet(ebonyDuoVictory, EBONY_DUO_VICTORY, 572), 'ebonyDuoVictory'),
-        karateBlonde: prepareKarateSheet(karateBlonde),
+        karateBlonde: blondeBase,
+        karateBlondeCombat: KARATE_BLONDE_ATTACKS.map((pose) => extractKarateCombatPose(blondeBase, pose)),
         karateBlondeAttackOne: (() => {
           const sheet = prepareKarateSheet(karateBlondeAttackOne, true);
           removeStoryboardHeadings(
             sheet,
             karateBlondeSequenceFrames(sheet.width, sheet.height),
-            24,
+            76,
           );
           return sheet;
         })(),
@@ -3366,18 +3341,18 @@ export function useJungleGame(
           removeStoryboardHeadings(
             sheet,
             karateBlondeSequenceFrames(sheet.width, sheet.height),
-            24,
+            76,
           );
           return sheet;
         })(),
-        karateEbony: prepareKarateSheet(karateEbony),
+        karateEbony: ebonyBase,
+        karateEbonyCombat: KARATE_EBONY_ATTACKS.map((pose) => extractKarateCombatPose(ebonyBase, pose)),
         karateEbonyTaunt: (() => {
           const sheet = prepareKarateSheet(karateEbonyAttackTwo);
           removeStoryboardHeadings(
             sheet,
             karateEbonySequenceFrames(sheet.width, sheet.height),
-            48,
-            28,
+            70,
           );
           return extractKarateEbonyTaunt(sheet);
         })(),
@@ -3395,8 +3370,7 @@ export function useJungleGame(
           removeStoryboardHeadings(
             sheet,
             karateEbonySequenceFrames(sheet.width, sheet.height),
-            48,
-            28,
+            70,
           );
           return sheet;
         })(),

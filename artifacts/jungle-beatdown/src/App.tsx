@@ -462,7 +462,7 @@ function App() {
               data-testid="karate-consensual-scene">
               <div className="roxy-choice-copy">
                 <h2 id="karate-scene-title">Sequência especial aceita</h2>
-                <p>Você pode encerrar a qualquer momento; a cena termina na derrota comum.</p>
+                <p>Você pode encerrar a qualquer momento e voltar ao menu. Na derrota, a finalização da karateka permanece animada.</p>
               </div>
               <div className="roxy-choice-actions">
                 <button type="button" onClick={exitKarateChallenge}

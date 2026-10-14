@@ -19,44 +19,44 @@ export const KARATE_BLONDE_WALK = cells(765, 0, 265);
 export const KARATE_EBONY_WALK = cells(748, 0, 265);
 
 export const KARATE_BLONDE = {
-  idle: { x: 0, y: 265, w: 153, h: 282 },
+  idle: { x: 0, y: 265, w: 153, h: 260 },
   walk: KARATE_BLONDE_WALK[0],
   run: KARATE_BLONDE_WALK[2],
-  punch: { x: 612, y: 265, w: 153, h: 282 },
-  hurt: { x: 306, y: 265, w: 153, h: 282 },
-  down: { x: 306, y: 265, w: 153, h: 282 },
-  defeated: { x: 306, y: 265, w: 153, h: 282 },
-  kick: { x: 0, y: 540, w: 465, h: 484 },
-  spin: { x: 264, y: 687, w: 254, h: 322 },
-  highKick: { x: 477, y: 540, w: 288, h: 484 },
+  punch: { x: 612, y: 265, w: 153, h: 260 },
+  hurt: { x: 306, y: 265, w: 153, h: 260 },
+  down: { x: 306, y: 265, w: 153, h: 260 },
+  defeated: { x: 306, y: 265, w: 153, h: 260 },
+  kick: { x: 0, y: 535, w: 460, h: 489 },
+  spin: { x: 265, y: 775, w: 200, h: 249 },
+  highKick: { x: 465, y: 535, w: 300, h: 489 },
 };
 
 export const KARATE_EBONY = {
-  idle: { x: 0, y: 265, w: 150, h: 274 },
+  idle: { x: 0, y: 265, w: 150, h: 245 },
   walk: KARATE_EBONY_WALK[0],
   run: KARATE_EBONY_WALK[2],
-  punch: { x: 598, y: 265, w: 150, h: 274 },
-  hurt: { x: 298, y: 265, w: 150, h: 274 },
-  down: { x: 298, y: 265, w: 150, h: 274 },
-  defeated: { x: 298, y: 265, w: 150, h: 274 },
-  kick: { x: 0, y: 530, w: 383, h: 470 },
-  spin: { x: 244, y: 684, w: 268, h: 316 },
-  highKick: { x: 451, y: 530, w: 297, h: 470 },
+  punch: { x: 598, y: 265, w: 150, h: 245 },
+  hurt: { x: 298, y: 265, w: 150, h: 245 },
+  down: { x: 298, y: 265, w: 150, h: 245 },
+  defeated: { x: 298, y: 265, w: 150, h: 245 },
+  kick: { x: 0, y: 510, w: 453, h: 490 },
+  spin: { x: 242, y: 737, w: 239, h: 263 },
+  highKick: { x: 451, y: 505, w: 297, h: 495 },
 };
 
 export const KARATE_BLONDE_ATTACKS = [
   KARATE_BLONDE.punch,
-  { x: 459, y: 265, w: 153, h: 282 },
+  { x: 459, y: 265, w: 153, h: 260 },
   KARATE_BLONDE.kick,
   KARATE_BLONDE.spin,
-  KARATE_BLONDE.highKick,
+  KARATE_BLONDE.kick,
 ];
 export const KARATE_EBONY_ATTACKS = [
   KARATE_EBONY.punch,
-  { x: 448, y: 265, w: 150, h: 274 },
+  { x: 448, y: 265, w: 150, h: 245 },
   KARATE_EBONY.kick,
   KARATE_EBONY.spin,
-  KARATE_EBONY.highKick,
+  KARATE_EBONY.kick,
 ];
 
 function gridFrames(
@@ -81,7 +81,7 @@ function gridFrames(
 
 export function karateBlondeSequenceFrames(width: number, height: number): KaratePose[] {
   const cellWidth = width / 3;
-  const titleInset = 60;
+  const titleInset = 0;
   const x = [0, 1, 2].map((column) => Math.round(column * cellWidth));
   const right = [1, 2, 3].map((column) => Math.round(column * cellWidth));
   const top: KaratePose[] = x.map((left, index) => ({
@@ -96,7 +96,55 @@ export function karateBlondeSequenceFrames(width: number, height: number): Karat
 }
 
 export function karateEbonySequenceFrames(width: number, height: number): KaratePose[] {
-  return gridFrames(2, 4, width, height, 0);
+  // The storyboard is not an evenly spaced grid: the third row's heads
+  // begin above y=500. Uniform 250px cells cut those heads off.
+  const rows = [0, 230, 475, 710, 1000].map((y) => Math.round(y * height / 1000));
+  return rows.slice(0, -1).flatMap((y, row) => [0, 1].map((column) => ({
+    x: Math.round(column * width / 2),
+    y,
+    w: Math.round((column + 1) * width / 2) - Math.round(column * width / 2),
+    h: rows[row + 1] - y,
+  })));
+}
+
+/** Isolate a single combat pose, never an adjacent figure in the collage. */
+export function extractKarateCombatPose(sheet: HTMLCanvasElement, frame: KaratePose) {
+  const canvas = document.createElement('canvas');
+  canvas.width = frame.w;
+  canvas.height = frame.h;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) throw new Error('Canvas 2D indisponível para recortar o golpe.');
+  context.drawImage(sheet, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
+  const image = context.getImageData(0, 0, frame.w, frame.h);
+  const visited = new Uint8Array(frame.w * frame.h);
+  let largest: number[] = [];
+  for (let seed = 0; seed < visited.length; seed++) {
+    if (visited[seed] || image.data[seed * 4 + 3] < 32) continue;
+    visited[seed] = 1;
+    const component: number[] = [];
+    const stack = [seed];
+    while (stack.length) {
+      const point = stack.pop()!;
+      component.push(point);
+      const x = point % frame.w, y = Math.floor(point / frame.w);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= frame.w || ny >= frame.h) continue;
+        const neighbor = ny * frame.w + nx;
+        if (visited[neighbor]) continue;
+        visited[neighbor] = 1;
+        if (image.data[neighbor * 4 + 3] >= 32) stack.push(neighbor);
+      }
+    }
+    if (component.length > largest.length) largest = component;
+  }
+  const keep = new Uint8Array(visited.length);
+  largest.forEach((point) => { keep[point] = 1; });
+  for (let point = 0; point < keep.length; point++) {
+    if (!keep[point]) image.data[point * 4 + 3] = 0;
+  }
+  context.putImageData(image, 0, 0);
+  return canvas;
 }
 
 export function extractKarateEbonyTaunt(sheet: HTMLCanvasElement): HTMLCanvasElement {
@@ -159,7 +207,7 @@ export function prepareKarateSheet(image: HTMLImageElement, checkerboard = false
         const index = (y * canvas.width + x) * 4;
         const r = pixels[index], g = pixels[index + 1], b = pixels[index + 2];
         const min = Math.min(r, g, b), max = Math.max(r, g, b);
-        if (min < 8 || max > 125 || max - min > 38) continue;
+        if (min < 12 || max > 125 || max - min > 10) continue;
         const bucket = [r, g, b].map((value) => Math.floor(value / 8)).join(':');
         const color = palette.get(bucket) ?? { r: 0, g: 0, b: 0, count: 0 };
         color.r += r;
@@ -181,46 +229,21 @@ export function prepareKarateSheet(image: HTMLImageElement, checkerboard = false
   }
 
   const matchesBackground = (pixel: number) =>
-    pixels[pixel + 3] > 0 && backgroundTones.some(([br, bg, bb]) =>
-      Math.hypot(pixels[pixel] - br, pixels[pixel + 1] - bg, pixels[pixel + 2] - bb) < 25);
-  if (checkerboard) {
-    for (let pixel = 0; pixel < pixels.length; pixel += 4) {
-      if (matchesBackground(pixel)) pixels[pixel + 3] = 0;
-    }
-  } else {
-    const visited = new Uint8Array(canvas.width * canvas.height);
-    const stack: number[] = [];
-    const pushIfBackground = (x: number, y: number) => {
-      const point = y * canvas.width + x;
-      if (visited[point]) return;
-      visited[point] = 1;
-      const pixel = point * 4;
-      if (matchesBackground(pixel)) stack.push(point);
-    };
-    for (let x = 0; x < canvas.width; x += 1) {
-      pushIfBackground(x, 0);
-      pushIfBackground(x, canvas.height - 1);
-    }
-    for (let y = 0; y < canvas.height; y += 1) {
-      pushIfBackground(0, y);
-      pushIfBackground(canvas.width - 1, y);
-    }
-    while (stack.length) {
-      const point = stack.pop()!;
-      pixels[point * 4 + 3] = 0;
-      const x = point % canvas.width;
-      const y = Math.floor(point / canvas.width);
-      for (let dy = -1; dy <= 1; dy += 1) {
-        for (let dx = -1; dx <= 1; dx += 1) {
-          if (!dx && !dy) continue;
-          const nx = x + dx, ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= canvas.width || ny >= canvas.height) continue;
-          pushIfBackground(nx, ny);
-        }
-      }
-    }
+    pixels[pixel + 3] > 0 &&
+    Math.max(pixels[pixel], pixels[pixel + 1], pixels[pixel + 2]) -
+      Math.min(pixels[pixel], pixels[pixel + 1], pixels[pixel + 2]) <= 12 &&
+    backgroundTones.some(([br, bg, bb]) =>
+      Math.hypot(pixels[pixel] - br, pixels[pixel + 1] - bg, pixels[pixel + 2] - bb) < 14);
+  for (let pixel = 0; pixel < pixels.length; pixel += 4) {
+    if (matchesBackground(pixel)) pixels[pixel + 3] = 0;
   }
   context.putImageData(sheet, 0, 0);
+  // Some uploaded JPEG sheets have a white one-pixel outer border.
+  // It is not part of any pose and otherwise becomes a tall floating line.
+  context.clearRect(0, 0, 2, canvas.height);
+  context.clearRect(canvas.width - 2, 0, 2, canvas.height);
+  context.clearRect(0, 0, canvas.width, 2);
+  context.clearRect(0, canvas.height - 2, canvas.width, 2);
   return canvas;
 }
 
@@ -280,7 +303,16 @@ export function removeStoryboardHeadings(
         }
         const inHeadingBand = lowestY < headerHeight;
         const inFooterBand = footerHeight > 0 && highestY >= height - footerHeight;
-        if (inHeadingBand || inFooterBand) {
+        const colorfulPixels = component.reduce((count, localIndex) => {
+          const x = localIndex % width, y = Math.floor(localIndex / width);
+          const pixel = ((startY + y) * canvas.width + startX + x) * 4;
+          const colors = [pixels[pixel], pixels[pixel + 1], pixels[pixel + 2]];
+          return count + (Math.max(...colors) - Math.min(...colors) > 18 ? 1 : 0);
+        }, 0);
+        // JPEG ringing around the checkerboard leaves small neutral islands.
+        // Preserve the large paired silhouettes and colored effects, not debris.
+        const neutralDebris = component.length < 180 && colorfulPixels < component.length * 0.12;
+        if (inHeadingBand || inFooterBand || component.length < 20 || neutralDebris) {
           for (const localIndex of component) {
             const x = localIndex % width;
             const y = Math.floor(localIndex / width);

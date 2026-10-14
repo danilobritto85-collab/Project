@@ -77,3 +77,17 @@ uri = "file://attached_assets/generated_audio/roxy_voluntary_dialogue.mp3"
 type = "audio"
 title = "Roxy voluntary challenge dialogue"
 description = "Text-to-speech audio: Beija meus pés... Isso... boa menina."
+
+[[outputs]]
+id = "hk0pxbENjj54WISQ3N4XD"
+uri = "file://attached_assets/generated_audio/karate_ebony_kick.mp3"
+type = "audio"
+title = "Ebony karate human kiai"
+description = "Generated sound effect: One adult female martial artist performing a single sharp natural karate kiai shout: Yah! Authentic human voice, warm lower mid pitch, strong athletic exertion, dry studio rec…"
+
+[[outputs]]
+id = "rpdEc13KLfDauEwxqihh3"
+uri = "file://attached_assets/generated_audio/karate_blonde_kick.mp3"
+type = "audio"
+title = "Blonde karate human kiai"
+description = "Generated sound effect: One adult female martial artist performing a single sharp natural karate kiai shout: Hah! Authentic human voice, bright mid pitch, forceful athletic exertion, dry studio recor…"
