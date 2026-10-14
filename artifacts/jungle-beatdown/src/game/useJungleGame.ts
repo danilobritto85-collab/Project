@@ -251,6 +251,7 @@ type SoundEngine = {
 const spriteBoundsCache = new WeakMap<HTMLCanvasElement, Map<string, SpriteRect>>();
 const spriteFrameCache = new WeakMap<HTMLCanvasElement, Map<string, HTMLCanvasElement>>();
 const compositeBoundsCache = new WeakMap<HTMLCanvasElement, Map<string, SpriteRect>>();
+const karateBoundsCache = new WeakMap<HTMLCanvasElement, Map<string, SpriteRect>>();
 
 const HERO_FRAMES = {
   idle: { x: 28, y: 83, w: 105, h: 178 },
@@ -1019,6 +1020,39 @@ function getCompositeVisibleBounds(image: HTMLCanvasElement, rect: SpriteRect): 
   return visible;
 }
 
+function getKarateVisibleBounds(image: HTMLCanvasElement, rect: SpriteRect): SpriteRect {
+  let cache = karateBoundsCache.get(image);
+  if (!cache) {
+    cache = new Map();
+    karateBoundsCache.set(image, cache);
+  }
+  const key = `${rect.x},${rect.y},${rect.w},${rect.h}`;
+  const cached = cache.get(key);
+  if (cached) return cached;
+
+  const context = image.getContext('2d', { willReadFrequently: true });
+  if (!context) return { x: 0, y: 0, w: rect.w, h: rect.h };
+  const pixels = context.getImageData(rect.x, rect.y, rect.w, rect.h).data;
+  let minX = rect.w;
+  let minY = rect.h;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < rect.h; y += 1) {
+    for (let x = 0; x < rect.w; x += 1) {
+      if (pixels[(y * rect.w + x) * 4 + 3] < 32) continue;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+  const bounds = maxX < 0
+    ? { x: 0, y: 0, w: rect.w, h: rect.h }
+    : { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+  cache.set(key, bounds);
+  return bounds;
+}
+
 function ensureSound(world: World) {
   if (!world.sound.enabled) return null;
   if (world.sound.context) {
@@ -1443,6 +1477,41 @@ function drawKarateSequenceFrame(
   context.restore();
 }
 
+function drawKarateBaseSprite(
+  context: CanvasRenderingContext2D,
+  image: HTMLCanvasElement | null,
+  frame: SpriteRect,
+  centerX: number,
+  groundY: number,
+  targetHeight: number,
+  flipped: boolean,
+  lift = 0,
+  groundOffset = 7,
+) {
+  if (!image) return;
+  const visible = getKarateVisibleBounds(image, frame);
+  const scaleX = targetHeight / frame.h;
+  const scaleY = scaleX;
+  context.save();
+  if (flipped) {
+    context.translate(centerX, 0);
+    context.scale(-1, 1);
+    context.translate(-centerX, 0);
+  }
+  context.drawImage(
+    image,
+    frame.x + visible.x,
+    frame.y + visible.y,
+    visible.w,
+    visible.h,
+    centerX - frame.w * scaleX / 2 + visible.x * scaleX,
+    groundY - lift - visible.h * scaleY + groundOffset,
+    visible.w * scaleX,
+    visible.h * scaleY,
+  );
+  context.restore();
+}
+
 function enemyAnimationFrame(enemy: Enemy, now: number): SpriteRect {
   if (enemy.ebony) {
     if (enemy.state === 'walk') {
@@ -1503,6 +1572,20 @@ function drawEnemySprite(
   if (enemy.kind === 'roxy') {
     drawRoxyFrame(context, atlas.roxy, frame as RoxyFrame,
       enemy.x, enemy.y, enemy.direction < 0, enemy.state, enemy.stride, lift);
+    return;
+  }
+  if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') {
+    drawKarateBaseSprite(
+      context,
+      atlas[enemy.kind],
+      frame,
+      anchorX,
+      enemy.y,
+      height,
+      enemy.direction < 0,
+      lift,
+      groundOffset,
+    );
     return;
   }
   if (enemy.ebony) {
@@ -1602,9 +1685,32 @@ function drawWorld(
   const roxySmotherSequence = world.phase === STATE_ROXY_SMOTHER ||
     (world.phase === 'game-over' && world.defeatKind === 'roxy-smother');
   const roxyDefeatSequence = roxyVoluntarySequence || roxySmotherSequence;
+  const karateOfferSequence = world.phase === STATE_KARATE_OFFER;
   const karateDefeatSequence = world.phase === STATE_KARATE_CHALLENGE ||
     (world.phase === 'game-over' && world.defeatKind === 'karate-victory');
-  if (karateDefeatSequence) {
+  if (karateOfferSequence) {
+    const attacker = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
+    const groundY = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
+    drawAtlasSprite(
+      context,
+      atlas.hero,
+      HERO_FRAMES.defeated,
+      world.heroX,
+      groundY,
+      230,
+      80,
+      world.facing < 0,
+    );
+    if (attacker && (attacker.kind === 'karateBlonde' || attacker.kind === 'karateEbony')) {
+      const attackerX = clamp(
+        world.heroX + (attacker.direction === 1 ? -150 : 150),
+        100,
+        WIDTH - 100,
+      );
+      const idlePose = attacker.kind === 'karateEbony' ? KARATE_EBONY.idle : KARATE_BLONDE.idle;
+      drawEnemySprite(context, atlas, attacker, idlePose, 205, 0, 7, attackerX);
+    }
+  } else if (karateDefeatSequence) {
     const sequence = world.karateSequence ?? 'blonde';
     const elapsed = world.phase === STATE_KARATE_CHALLENGE
       ? world.karateDefeatElapsed : KARATE_DEFEAT_DURATION;
@@ -1755,7 +1861,9 @@ function drawWorld(
       drawEbonyFrame(context, sheet, frames[index], world.heroX, world.heroY, flipped,
         0, now / 1000);
     }
-  } else if (karateDefeatSequence || ninjaFootsmotherSequence || roxyDefeatSequence) {
+  } else if (
+    karateOfferSequence || karateDefeatSequence || ninjaFootsmotherSequence || roxyDefeatSequence
+  ) {
     // The paired sprite sheet already contains both fighters; skip the regular actor pass.
   } else if (specialSequence || world.phase === 'grapple') {
     const isStruggle = specialSequence;
@@ -2877,7 +2985,7 @@ export function useJungleGame(
         const duo = scene === 'karate-duo';
         const blonde = params.get('_opponent') === 'blonde' || duo;
         const config: FightConfig = {
-          amazonas: 0,
+          amazonas: scene === 'karate-offer' ? 3 : 0,
           ebony: 0,
           ninjas: 0,
           roxy: 0,
@@ -2900,7 +3008,9 @@ export function useJungleGame(
           karateDefeatElapsed: Number(params.get('_elapsed') ?? 3),
           defeatSecondsLeft: KARATE_DEFEAT_DURATION,
         });
-        world.currentGrappler = world.enemies[0]?.id ?? null;
+        const grapplerKind = blonde ? 'karateBlonde' : 'karateEbony';
+        world.currentGrappler =
+          world.enemies.find((enemy) => enemy.kind === grapplerKind)?.id ?? null;
         freezePreview = params.get('_freeze') === '1';
         setSnapshot(publishSnapshot(world));
       }
