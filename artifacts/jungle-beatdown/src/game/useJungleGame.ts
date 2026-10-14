@@ -245,6 +245,7 @@ type SoundEngine = {
   active: Set<HTMLAudioElement>;
   lastPlayed: Partial<Record<SoundCue, number>>;
   lastNinjaKiai: number;
+  lastKarateKiai: Record<'blonde' | 'ebony', number>;
 };
 
 const spriteBoundsCache = new WeakMap<HTMLCanvasElement, Map<string, SpriteRect>>();
@@ -517,6 +518,7 @@ function createWorld(
       active: new Set<HTMLAudioElement>(),
       lastPlayed: {},
       lastNinjaKiai: -Infinity,
+      lastKarateKiai: { blonde: -Infinity, ebony: -Infinity },
     },
     particles: [],
     smokeTimer: 0,
@@ -1141,6 +1143,62 @@ function playNinjaKiai(world: World) {
   iGain.connect(envelope);
   openGain.connect(envelope);
   upperGain.connect(envelope);
+  envelope.connect(context.destination);
+  voice.start(now);
+  voice.stop(now + duration + 0.02);
+}
+
+function playKarateAttackVoice(
+  world: World,
+  fighter: 'blonde' | 'ebony',
+  volume: number,
+) {
+  const context = ensureSound(world);
+  if (!context) return;
+  const now = context.currentTime;
+  if ((now - world.sound.lastKarateKiai[fighter]) * 1000 < 180) return;
+  world.sound.lastKarateKiai[fighter] = now;
+
+  // Distinct synthesized shouts: Blonde is brighter and higher, Ebony is
+  // lower and rougher. They use the normal AudioContext mute state and a
+  // deliberately restrained gain so the voices stay beneath the impacts.
+  const blonde = fighter === 'blonde';
+  const duration = blonde ? 0.29 : 0.32;
+  const base = blonde ? 218 + random(world) * 24 : 154 + random(world) * 18;
+  const voice = context.createOscillator();
+  const envelope = context.createGain();
+  voice.type = blonde ? 'triangle' : 'sawtooth';
+  voice.frequency.setValueAtTime(base, now);
+  voice.frequency.linearRampToValueAtTime(base * (blonde ? 1.85 : 1.55), now + 0.075);
+  voice.frequency.linearRampToValueAtTime(base * (blonde ? 1.28 : 1.12), now + duration);
+  envelope.gain.setValueAtTime(0.001, now);
+  envelope.gain.linearRampToValueAtTime(volume, now + 0.025);
+  envelope.gain.setValueAtTime(volume * 0.78, now + duration * 0.42);
+  envelope.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+  const firstFormant = context.createBiquadFilter();
+  firstFormant.type = 'bandpass';
+  firstFormant.Q.value = blonde ? 2.2 : 2.8;
+  firstFormant.frequency.setValueAtTime(blonde ? 470 : 390, now);
+  firstFormant.frequency.linearRampToValueAtTime(blonde ? 820 : 650, now + 0.1);
+  firstFormant.frequency.linearRampToValueAtTime(blonde ? 690 : 530, now + duration);
+
+  const secondFormant = context.createBiquadFilter();
+  secondFormant.type = 'bandpass';
+  secondFormant.Q.value = blonde ? 1.8 : 2.1;
+  secondFormant.frequency.setValueAtTime(blonde ? 1980 : 1250, now);
+  secondFormant.frequency.linearRampToValueAtTime(blonde ? 1450 : 980, now + 0.13);
+
+  const firstGain = context.createGain();
+  const secondGain = context.createGain();
+  firstGain.gain.value = blonde ? 0.72 : 0.82;
+  secondGain.gain.value = blonde ? 0.38 : 0.27;
+  voice.connect(firstFormant);
+  voice.connect(secondFormant);
+  firstFormant.connect(firstGain);
+  secondFormant.connect(secondGain);
+  firstGain.connect(envelope);
+  secondGain.connect(envelope);
   envelope.connect(context.destination);
   voice.start(now);
   voice.stop(now + duration + 0.02);
@@ -2252,13 +2310,21 @@ function updateEnemies(world: World, dt: number, now: number) {
       enemy.attackCooldown =
         (enemy.kind === 'ninja' ? 1.08 : enemy.kind === 'roxy' ? 1.18 : 1.3) +
         random(world) * 0.75;
-      playClip(
-        world,
-        enemy.kind === 'ninja' ? 'ninjaKick'
-          : enemy.kind === 'roxy' ? 'roxyKick' : 'amazonKick',
-        enemy.kind === 'ninja' ? 0.48 : enemy.kind === 'roxy' ? 0.52 : 0.56,
-        120,
-      );
+      if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') {
+        playKarateAttackVoice(
+          world,
+          enemy.kind === 'karateBlonde' ? 'blonde' : 'ebony',
+          0.09,
+        );
+      } else {
+        playClip(
+          world,
+          enemy.kind === 'ninja' ? 'ninjaKick'
+            : enemy.kind === 'roxy' ? 'roxyKick' : 'amazonKick',
+          enemy.kind === 'ninja' ? 0.48 : enemy.kind === 'roxy' ? 0.52 : 0.56,
+          120,
+        );
+      }
       if (enemy.kind === 'ninja') playNinjaKiai(world);
       if (distance < 106 && world.heroHitCooldown <= 0) {
         world.heroHp = Math.max(0, world.heroHp - (7 + Math.floor(random(world) * 4)));
