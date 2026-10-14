@@ -14,6 +14,14 @@ import {
   clearStoryboardHeaderBands, extractKarateEbonyTaunt, extractKarateCombatPose,
   prepareKarateSheet, prepareKarateDuoSheet, removeStoryboardHeadings,
 } from './karateSprites';
+import {
+  PANTERA_ATTACK_FRAMES,
+  PANTERA_FRAMES,
+  PANTERA_IDLE_FRAMES,
+  PANTERA_RUN_FRAMES,
+  PANTERA_WALK_FRAMES,
+  preparePanteraSheet,
+} from './panteraSprites';
 
 import amazonSheetUrl from '@assets/amazon_1791470375689.png';
 import backgroundUrl from '@assets/background_1791470375690.png';
@@ -48,6 +56,7 @@ import karateBlondeAttackTwoUrl from '@assets/karate_blonde_atk_2_1791929279636.
 import karateEbonySheetUrl from '@assets/karate_ebony_1791929279637.png';
 import karateEbonyAttackOneUrl from '@assets/karate_ebony_atk_1_1791929279637.png';
 import karateEbonyAttackTwoUrl from '@assets/karate_ebony_atk_2_1791929279638.png';
+import panteraSheetUrl from '@assets/image_1792014912583.png';
 
 const WIDTH = 1024;
 const HEIGHT = 576;
@@ -64,6 +73,7 @@ export interface FightConfig {
   roxy: number;
   karateBlonde: number;
   karateEbony: number;
+  pantera: number;
   ebonyVictory: boolean;
 }
 
@@ -74,6 +84,7 @@ export const DEFAULT_FIGHT_CONFIG: FightConfig = {
   roxy: 1,
   karateBlonde: 0,
   karateEbony: 0,
+  pantera: 0,
   ebonyVictory: false,
 };
 
@@ -144,6 +155,7 @@ interface SpriteAtlas {
   karateEbonyAttackOne: HTMLCanvasElement | null;
   karateEbonyAttackTwo: HTMLCanvasElement | null;
   ninja: HTMLCanvasElement | null;
+  pantera: HTMLCanvasElement | null;
   ninjaFootsmother: HTMLCanvasElement | null;
   ninjaFootsmotherEnding: HTMLCanvasElement | null;
   roxy: HTMLCanvasElement | null;
@@ -153,7 +165,7 @@ interface SpriteAtlas {
   pinExtended: HTMLCanvasElement | null;
 }
 
-type EnemyKind = 'amazon' | 'ninja' | 'roxy' | 'karateBlonde' | 'karateEbony';
+type EnemyKind = 'amazon' | 'ninja' | 'roxy' | 'karateBlonde' | 'karateEbony' | 'pantera';
 type EnemyState = 'idle' | 'walk' | 'run' | 'taunt' | 'attack' | 'hurt' | 'down';
 
 interface Enemy {
@@ -359,6 +371,7 @@ const ATTACK_FRAMES: Record<EnemyKind, SpriteRect[]> = {
   roxy: [ROXY_FRAMES.kick, ROXY_FRAMES.spin],
   karateBlonde: KARATE_BLONDE_ATTACKS,
   karateEbony: KARATE_EBONY_ATTACKS,
+  pantera: PANTERA_ATTACK_FRAMES,
 };
 const ENEMY_FRAMES = {
   amazon: AMAZON_FRAMES,
@@ -366,6 +379,7 @@ const ENEMY_FRAMES = {
   roxy: ROXY_FRAMES,
   karateBlonde: KARATE_BLONDE,
   karateEbony: KARATE_EBONY,
+  pantera: PANTERA_FRAMES,
 };
 
 const GROUP_AMAZON_OFFSETS = [
@@ -443,18 +457,19 @@ function createFightLineup(config: FightConfig): OpponentKind[] {
     roxy: config.roxy,
     karateBlonde: config.karateBlonde,
     karateEbony: config.karateEbony,
+    pantera: config.pantera,
   };
   if (Object.values(counts).some((count) => !Number.isSafeInteger(count) || count < 0)) {
     throw new RangeError('As quantidades de adversárias devem ser números inteiros não negativos.');
   }
   if (counts.amazon === 5 && counts.ninja === 3 && counts.roxy === 1 && counts.ebony === 0 &&
-      counts.karateBlonde === 0 && counts.karateEbony === 0) {
+      counts.karateBlonde === 0 && counts.karateEbony === 0 && counts.pantera === 0) {
     return [...STARTING_ENEMY_KINDS];
   }
 
   const lineup: OpponentKind[] = [];
   const order: OpponentKind[] = [
-    'amazon', 'ebony', 'ninja', 'roxy', 'karateBlonde', 'karateEbony',
+    'amazon', 'ebony', 'ninja', 'roxy', 'karateBlonde', 'karateEbony', 'pantera',
   ];
   while (order.some((kind) => counts[kind] > 0)) {
     for (const kind of order) {
@@ -1501,6 +1516,21 @@ function enemyAnimationFrame(enemy: Enemy, now: number): SpriteRect {
     if (enemy.state === 'down') return EBONY_FRAMES.down;
     return EBONY_FRAMES.idle;
   }
+  if (enemy.kind === 'pantera') {
+    if (enemy.state === 'walk') {
+      return PANTERA_WALK_FRAMES[Math.floor(now / 145 + enemy.id * 0.61) % PANTERA_WALK_FRAMES.length];
+    }
+    if (enemy.state === 'run') {
+      return PANTERA_RUN_FRAMES[Math.floor(now / 105 + enemy.id * 0.61) % PANTERA_RUN_FRAMES.length];
+    }
+    if (enemy.state === 'attack') {
+      return PANTERA_ATTACK_FRAMES[enemy.attackPoseIndex % PANTERA_ATTACK_FRAMES.length];
+    }
+    const idleIndex = Math.floor(now / 820 + enemy.id * 0.47) % PANTERA_IDLE_FRAMES.length;
+    return enemy.state === 'hurt' || enemy.state === 'down'
+      ? PANTERA_FRAMES.hurt
+      : PANTERA_IDLE_FRAMES[idleIndex];
+  }
   if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') {
     const karate = enemy.kind === 'karateBlonde' ? KARATE_BLONDE : KARATE_EBONY;
     const walkCycle = enemy.kind === 'karateBlonde' ? KARATE_BLONDE_WALK : KARATE_EBONY_WALK;
@@ -2493,6 +2523,8 @@ function updateEnemies(world: World, dt: number, now: number) {
           enemy.kind === 'karateBlonde' ? 'blonde' : 'ebony',
           0.6,
         );
+      } else if (enemy.kind === 'pantera') {
+        playHit(world);
       } else {
         playClip(
           world,
@@ -3015,6 +3047,7 @@ export function useJungleGame(
       background: null,
       hero: null,
       amazon: null,
+      pantera: null,
       ebony: null,
       ebonyStomp: null,
       ebonyVictory: null,
@@ -3071,6 +3104,7 @@ export function useJungleGame(
           roxy: 0,
           karateBlonde: blonde ? 1 : 0,
           karateEbony: blonde ? 0 : 1,
+          pantera: 0,
           ebonyVictory: false,
         };
         const world = worldRef.current;
@@ -3109,6 +3143,7 @@ export function useJungleGame(
           roxy: 0,
           karateBlonde: blonde ? 1 : 0,
           karateEbony: !blonde || duo ? 1 : 0,
+          pantera: 0,
           ebonyVictory: false,
         };
         const world = worldRef.current;
@@ -3147,6 +3182,7 @@ export function useJungleGame(
           karateBlonde: 0,
           karateEbony: 0,
           ebony: duo ? 2 : 1,
+          pantera: 0,
           ebonyVictory: true,
         };
         const world = worldRef.current;
@@ -3173,6 +3209,41 @@ export function useJungleGame(
             : params.get('_action') === 'run' ? 'run'
             : params.get('_action') === 'hurt' ? 'hurt' : 'attack';
           enemy.attackPoseIndex = pose % 3;
+        }
+        freezePreview = params.get('_freeze') === '1';
+        setSnapshot(publishSnapshot(world));
+      }
+      if (scene === 'pantera') {
+        const config: FightConfig = {
+          amazonas: 0,
+          ebony: 0,
+          ninjas: 0,
+          roxy: 0,
+          karateBlonde: 0,
+          karateEbony: 0,
+          pantera: 1,
+          ebonyVictory: false,
+        };
+        const world = worldRef.current;
+        const oldSound = world.sound;
+        Object.assign(world, createWorld(createFightLineup(config), config), {
+          phase: 'playing',
+          heroX: 300,
+          heroY: 510,
+          sound: oldSound,
+          soundEnabled: false,
+        });
+        const pantera = world.enemies.find((enemy) => enemy.kind === 'pantera');
+        if (pantera) {
+          pantera.x = 660;
+          pantera.y = 510;
+          pantera.direction = -1;
+          const action = params.get('_action');
+          pantera.state = action === 'attack' ? 'attack'
+            : action === 'run' ? 'run' : action === 'hurt' ? 'hurt' : 'walk';
+          pantera.stateTimer = action === 'attack' ? 20 : 0;
+          pantera.attackPoseIndex = Math.floor(clamp(Number(params.get('_pose') ?? '0'),
+            0, PANTERA_ATTACK_FRAMES.length - 1));
         }
         freezePreview = params.get('_freeze') === '1';
         setSnapshot(publishSnapshot(world));
@@ -3347,6 +3418,7 @@ export function useJungleGame(
       loadImage(karateEbonySheetUrl),
       loadImage(karateEbonyAttackOneUrl),
       loadImage(karateEbonyAttackTwoUrl),
+      loadImage(panteraSheetUrl),
     ]).then(([
       background,
       hero,
@@ -3369,6 +3441,7 @@ export function useJungleGame(
       karateEbony,
       karateEbonyAttackOne,
       karateEbonyAttackTwo,
+      panteraImage,
     ]) => {
       if (disposed) return;
       const blondeBase = prepareKarateSheet(karateBlonde);
@@ -3377,6 +3450,7 @@ export function useJungleGame(
         background,
         hero: removeCheckerboard(hero),
         amazon: withRedToenails(removeCheckerboard(amazon), 'amazon'),
+        pantera: preparePanteraSheet(panteraImage),
         ebony: withRedToenails(prepareEbonySheet(ebony, EBONY_BASE_CROPS), 'ebony'),
         ebonyStomp: withRedToenails(prepareEbonySheet(ebonyStomp, EBONY_STOMP), 'ebonyStomp'),
         ebonyVictory: withRedToenails(prepareEbonySheet(ebonyVictory, EBONY_VICTORY), 'ebonyVictory'),

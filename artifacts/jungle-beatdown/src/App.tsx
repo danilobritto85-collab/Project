@@ -27,7 +27,7 @@ import {
 } from './game/useJungleGame';
 
 type OpponentCountKey =
-  | 'amazonas' | 'ebony' | 'ninjas' | 'roxy' | 'karateBlonde' | 'karateEbony';
+  | 'amazonas' | 'ebony' | 'ninjas' | 'roxy' | 'karateBlonde' | 'karateEbony' | 'pantera';
 
 function formatScore(score: number) {
   return Math.max(0, score).toString().padStart(6, '0');
@@ -147,7 +147,7 @@ function App() {
     snapshot.phase === 'ebony-victory';
   const showRetry = isDefeatSequence || snapshot.phase === 'game-over';
   const fightCount = fightConfig.amazonas + fightConfig.ebony + fightConfig.ninjas + fightConfig.roxy +
-    fightConfig.karateBlonde + fightConfig.karateEbony;
+    fightConfig.karateBlonde + fightConfig.karateEbony + fightConfig.pantera;
   const handleOpponentCountChange = (kind: OpponentCountKey, value: number) => {
     if (!Number.isSafeInteger(value) || value < 0) return;
     setFightConfig((current) => ({
@@ -258,6 +258,9 @@ function App() {
                         onChange={handleOpponentCountChange} />
                       <OpponentCounter label="Karateka Ebony" kind="karateEbony"
                         value={fightConfig.karateEbony}
+                        onChange={handleOpponentCountChange} />
+                      <OpponentCounter label="Pantera" kind="pantera"
+                        value={fightConfig.pantera}
                         onChange={handleOpponentCountChange} />
                     </div>
                     {fightConfig.ebony > 0 && (
