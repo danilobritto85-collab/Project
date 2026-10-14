@@ -9,8 +9,14 @@ The special sequences for Karate Blonde and Karate Ebony must start only after t
 
 **How to apply:** Keep the consent prompt ahead of any special-scene animation or effects, and provide a clear decline and exit action.
 
-The karateka offer and accepted sequence should show only the selected karateka and the heroine, not unrelated opponents.
+The karateka offer, accepted sequence, and transition into defeat should show only the selected karateka and the heroine, not unrelated opponents.
 
-**Why:** The user reported Amazonas appearing in a Karateka scene and the Ebony sprite looking wrong.
+**Why:** The user reported Amazonas appearing in Karateka scenes, including the Blonde's finisher.
 
-**How to apply:** Treat the offer and accepted sequence as dedicated scene compositions; do not draw the ordinary fight roster over them.
+**How to apply:** Treat the offer, accepted scene, and its defeat transition as isolated compositions; do not draw the ordinary fight roster over them.
+
+Karateka Ebony should periodically sit and wave the heroine over; approaching while she is taunting opens the opt-in prompt. Accept begins the grab sequence, while decline resumes combat.
+
+**Why:** The supplied Karateka specification defines this bait-and-grab behavior, and the user had already chosen opt-in for special scenes.
+
+**How to apply:** Keep the bait as a separate visible pose and gate the grab sequence behind acceptance; refusal must not cause defeat.

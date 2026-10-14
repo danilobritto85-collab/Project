@@ -99,6 +99,23 @@ export function karateEbonySequenceFrames(width: number, height: number): Karate
   return gridFrames(2, 4, width, height, 0);
 }
 
+export function extractKarateEbonyTaunt(sheet: HTMLCanvasElement): HTMLCanvasElement {
+  const cellWidth = Math.round(sheet.width / 2);
+  const cellHeight = Math.round(sheet.height / 4);
+  const topInset = Math.round(cellHeight * 0.2);
+  const width = Math.min(Math.round(cellWidth * 0.65), cellWidth);
+  const height = Math.max(1, cellHeight - topInset);
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Canvas 2D indisponível para a provocação da Ebony.');
+  // The first storyboard cell contains both fighters. Crop its left side so the
+  // taunt is a standalone Ebony sprite rather than a miniature pair scene.
+  context.drawImage(sheet, 0, topInset, width, height, 0, 0, width, height);
+  return canvas;
+}
+
 export function karateDuoSequenceFrames(width: number, height: number): KaratePose[] {
   return gridFrames(2, 2, width, height, 0);
 }

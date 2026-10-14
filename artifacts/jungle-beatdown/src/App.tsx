@@ -438,8 +438,9 @@ function App() {
                     : `da Karateka ${snapshot.karateOfferOpponent === 'ebony' ? 'Ebony' : 'loira'}`}
                 </h2>
                 <p>
-                  Esta sequência especial só começa com seu aceite. Você pode recusar e ver a
-                  derrota comum, ou encerrar a cena depois que ela começar.
+                  {snapshot.karateOfferIsApproach
+                    ? 'Ebony está chamando a heroína para um desafio. Aceitar inicia o agarrão e a sequência; recusar mantém a luta.'
+                    : 'Esta sequência especial só começa com seu aceite. Você pode recusar e ver a derrota comum, ou encerrar a cena depois que ela começar.'}
                 </p>
               </div>
               <div className="roxy-choice-actions">
@@ -449,7 +450,7 @@ function App() {
                 </button>
                 <button type="button" onClick={() => chooseKarateChallenge(false)}
                   data-testid="button-karate-decline" autoFocus>
-                  Recusar · derrota comum <kbd>N</kbd>
+                  {snapshot.karateOfferIsApproach ? 'Recusar · continuar luta' : 'Recusar · derrota comum'} <kbd>N</kbd>
                 </button>
               </div>
             </section>

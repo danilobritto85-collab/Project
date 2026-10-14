@@ -11,7 +11,7 @@ import {
   KARATE_BLONDE, KARATE_BLONDE_ATTACKS, KARATE_BLONDE_WALK,
   KARATE_EBONY, KARATE_EBONY_ATTACKS, KARATE_EBONY_WALK,
   karateBlondeSequenceFrames, karateEbonySequenceFrames, karateDuoSequenceFrames,
-  prepareKarateSheet, removeStoryboardHeadings,
+  extractKarateEbonyTaunt, prepareKarateSheet, removeStoryboardHeadings,
 } from './karateSprites';
 
 import amazonSheetUrl from '@assets/amazon_1791470375689.png';
@@ -112,6 +112,7 @@ export interface GameSnapshot {
   roxyChallengeElapsed: number;
   ebonyVictoryActive: boolean;
   karateOfferOpponent: 'blonde' | 'ebony' | 'duo' | null;
+  karateOfferIsApproach: boolean;
   karateSceneActive: boolean;
 }
 
@@ -134,6 +135,7 @@ interface SpriteAtlas {
   karateBlondeAttackOne: HTMLCanvasElement | null;
   karateBlondeAttackTwo: HTMLCanvasElement | null;
   karateEbony: HTMLCanvasElement | null;
+  karateEbonyTaunt: HTMLCanvasElement | null;
   karateEbonyAttackOne: HTMLCanvasElement | null;
   karateEbonyAttackTwo: HTMLCanvasElement | null;
   ninja: HTMLCanvasElement | null;
@@ -147,7 +149,7 @@ interface SpriteAtlas {
 }
 
 type EnemyKind = 'amazon' | 'ninja' | 'roxy' | 'karateBlonde' | 'karateEbony';
-type EnemyState = 'idle' | 'walk' | 'run' | 'attack' | 'hurt' | 'down';
+type EnemyState = 'idle' | 'walk' | 'run' | 'taunt' | 'attack' | 'hurt' | 'down';
 
 interface Enemy {
   id: number;
@@ -164,6 +166,7 @@ interface Enemy {
   stateTimer: number;
   attackPoseIndex: number;
   attackCooldown: number;
+  tauntCooldown: number;
   respawnAt: number;
   hue: number;
   stride: number;
@@ -215,6 +218,8 @@ interface World {
   roxyDefeatElapsed: number;
   roxyDialoguePlayed: boolean;
   karateSequence: KarateSequenceKind | null;
+  karateOfferIsApproach: boolean;
+  isolatedDefeatOpponentId: number | null;
   karateDefeatElapsed: number;
   footstepTimer: number;
   soundEnabled: boolean;
@@ -413,6 +418,7 @@ const initialSnapshot: GameSnapshot = {
   roxyChallengeElapsed: 0,
   ebonyVictoryActive: false,
   karateOfferOpponent: null,
+  karateOfferIsApproach: false,
   karateSceneActive: false,
 };
 
@@ -468,6 +474,7 @@ function createEnemy(id: number, index: number, opponent: OpponentKind, lineupSi
     stateTimer: 0,
     attackPoseIndex: index % 3,
     attackCooldown: 1.3 + (index % 9) * 0.32,
+    tauntCooldown: opponent === 'karateEbony' ? 0.8 : 0,
     respawnAt: 0,
     hue: kind === 'amazon' && index > 0 ? ((index * 19) % 41) - 20 : 0,
   };
@@ -509,6 +516,8 @@ function createWorld(
     roxyDefeatElapsed: 0,
     roxyDialoguePlayed: false,
     karateSequence: null,
+    karateOfferIsApproach: false,
+    isolatedDefeatOpponentId: null,
     karateDefeatElapsed: 0,
     footstepTimer: 0,
     soundEnabled: true,
@@ -558,6 +567,8 @@ function publishSnapshot(world: World): GameSnapshot {
     karateOfferOpponent: world.phase === STATE_KARATE_OFFER
       ? world.karateSequence ?? 'blonde'
       : null,
+    karateOfferIsApproach:
+      world.phase === STATE_KARATE_OFFER && world.karateOfferIsApproach,
     karateSceneActive: world.phase === STATE_KARATE_CHALLENGE ||
       (world.phase === 'game-over' && world.defeatKind === 'karate-victory'),
   };
@@ -1574,6 +1585,20 @@ function drawEnemySprite(
       enemy.x, enemy.y, enemy.direction < 0, enemy.state, enemy.stride, lift);
     return;
   }
+  if (enemy.kind === 'karateEbony' && enemy.state === 'taunt' && atlas.karateEbonyTaunt) {
+    drawKarateBaseSprite(
+      context,
+      atlas.karateEbonyTaunt,
+      { x: 0, y: 0, w: atlas.karateEbonyTaunt.width, h: atlas.karateEbonyTaunt.height },
+      anchorX,
+      enemy.y,
+      190,
+      enemy.direction < 0,
+      lift,
+      groundOffset,
+    );
+    return;
+  }
   if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') {
     drawKarateBaseSprite(
       context,
@@ -1691,16 +1716,22 @@ function drawWorld(
   if (karateOfferSequence) {
     const attacker = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
     const groundY = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
-    drawAtlasSprite(
-      context,
-      atlas.hero,
-      HERO_FRAMES.defeated,
-      world.heroX,
-      groundY,
-      230,
-      80,
-      world.facing < 0,
-    );
+    if (world.karateOfferIsApproach) {
+      drawAtlasSprite(
+        context, atlas.hero, HERO_FRAMES.idle, world.heroX, groundY, 116, 164, world.facing < 0,
+      );
+    } else {
+      drawAtlasSprite(
+        context,
+        atlas.hero,
+        HERO_FRAMES.defeated,
+        world.heroX,
+        groundY,
+        230,
+        80,
+        world.facing < 0,
+      );
+    }
     if (attacker && (attacker.kind === 'karateBlonde' || attacker.kind === 'karateEbony')) {
       const attackerX = clamp(
         world.heroX + (attacker.direction === 1 ? -150 : 150),
@@ -1950,7 +1981,8 @@ function drawWorld(
       ),
     }];
     world.enemies
-      .filter((enemy) => enemy.hp > 0 && enemy.active)
+      .filter((enemy) => enemy.hp > 0 && enemy.active &&
+        (!world.isolatedDefeatOpponentId || enemy.id === world.isolatedDefeatOpponentId))
       .forEach((enemy) => {
         const idlePose = enemy.ebony ? EBONY_FRAMES.idle : ENEMY_FRAMES[enemy.kind].idle;
         defeatActors.push({
@@ -2012,7 +2044,12 @@ function enterGameOver(world: World) {
   world.defeatSecondsLeft = 0;
 }
 
-function beginGenericDefeat(world: World, attacker?: Enemy) {
+function beginGenericDefeat(
+  world: World,
+  attacker?: Enemy,
+  isolatedDefeatOpponentId: number | null = null,
+) {
+  world.isolatedDefeatOpponentId = isolatedDefeatOpponentId;
   if (attacker?.ebony && world.fightConfig.ebonyVictory) {
     world.heroHp = 0;
     world.phase = 'ebony-victory';
@@ -2120,17 +2157,18 @@ function endRoxyChallenge(world: World) {
   });
 }
 
-function beginKarateOffer(world: World, enemy: Enemy) {
+function beginKarateOffer(world: World, enemy: Enemy, fromApproach = false) {
   stopClips(world);
   world.phase = STATE_KARATE_OFFER;
   world.defeatKind = null;
   world.isGrappleActive = true;
   world.currentGrappler = enemy.id;
-  world.heroHp = 0;
+  world.karateOfferIsApproach = fromApproach;
+  if (!fromApproach) world.heroHp = 0;
   world.defeatSecondsLeft = 0;
   world.karateDefeatElapsed = 0;
   world.karateSequence = enemy.kind === 'karateEbony' ? 'ebony' : 'blonde';
-  world.heroAction = 'hurt';
+  world.heroAction = fromApproach ? 'idle' : 'hurt';
   world.actionTimer = 0;
   world.heroVelocityX = 0;
   world.heroVelocityY = 0;
@@ -2149,17 +2187,39 @@ function beginKarateOffer(world: World, enemy: Enemy) {
       other.vy = 0;
     }
   });
+  if (fromApproach) enemy.state = 'taunt';
 }
 
 function respondToKarateOffer(world: World, accepted: boolean) {
   if (world.phase !== STATE_KARATE_OFFER) return;
   stopClips(world);
   if (!accepted) {
+    if (world.karateOfferIsApproach) {
+      const attacker = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
+      world.phase = 'playing';
+      world.defeatKind = null;
+      world.isGrappleActive = false;
+      world.currentGrappler = null;
+      world.karateSequence = null;
+      world.karateOfferIsApproach = false;
+      world.heroAction = 'idle';
+      world.heroHitCooldown = Math.max(world.heroHitCooldown, 1.2);
+      if (attacker) {
+        attacker.state = 'idle';
+        attacker.stateTimer = 0;
+        attacker.attackCooldown = Math.max(attacker.attackCooldown, 1.2);
+        attacker.tauntCooldown = 9;
+      }
+      return;
+    }
+    world.karateOfferIsApproach = false;
     world.currentGrappler = null;
     world.karateSequence = null;
     beginGenericDefeat(world);
     return;
   }
+  world.heroHp = 0;
+  world.karateOfferIsApproach = false;
   world.phase = STATE_KARATE_CHALLENGE;
   world.defeatKind = 'karate-victory';
   world.defeatSecondsLeft = KARATE_DEFEAT_DURATION;
@@ -2170,9 +2230,10 @@ function respondToKarateOffer(world: World, accepted: boolean) {
 function endKarateChallenge(world: World) {
   if (world.phase !== STATE_KARATE_CHALLENGE) return;
   stopClips(world);
+  const selectedKaratekaId = world.currentGrappler;
   world.currentGrappler = null;
   world.karateSequence = null;
-  beginGenericDefeat(world);
+  beginGenericDefeat(world, undefined, selectedKaratekaId);
 }
 
 function beginSpecialGrapple(world: World, enemy: Enemy) {
@@ -2352,6 +2413,11 @@ function updateEnemies(world: World, dt: number, now: number) {
     const previousY = enemy.y;
     enemy.stateTimer = Math.max(0, enemy.stateTimer - dt);
     enemy.attackCooldown = Math.max(0, enemy.attackCooldown - dt);
+    enemy.tauntCooldown = Math.max(0, enemy.tauntCooldown - dt);
+    if (enemy.state === 'taunt' && enemy.stateTimer <= 0) {
+      enemy.state = 'idle';
+      enemy.tauntCooldown = 8 + random(world) * 3;
+    }
     if (enemy.stateTimer <= 0 &&
         (enemy.state === 'hurt' || enemy.state === 'down' || enemy.state === 'attack')) {
       enemy.state = 'idle';
@@ -2392,6 +2458,23 @@ function updateEnemies(world: World, dt: number, now: number) {
     const dy = world.heroY - enemy.y;
     const distance = Math.hypot(dx, dy);
     enemy.direction = dx < 0 ? -1 : 1;
+
+    if (enemy.kind === 'karateEbony') {
+      if (enemy.state === 'taunt') {
+        enemy.vx = 0;
+        enemy.vy = 0;
+        if (distance <= 130) beginKarateOffer(world, enemy, true);
+        continue;
+      }
+      if (enemy.tauntCooldown <= 0 && distance > 130 && distance < 310 &&
+          (enemy.state === 'idle' || enemy.state === 'walk' || enemy.state === 'run')) {
+        enemy.vx = 0;
+        enemy.vy = 0;
+        enemy.state = 'taunt';
+        enemy.stateTimer = 2.8;
+        continue;
+      }
+    }
 
     if (distance > 78) {
       const pace = (distance > 250 ? 92 : 68) *
@@ -2914,6 +2997,7 @@ export function useJungleGame(
       karateBlondeAttackOne: null,
       karateBlondeAttackTwo: null,
       karateEbony: null,
+      karateEbonyTaunt: null,
       karateEbonyAttackOne: null,
       karateEbonyAttackTwo: null,
       ninja: null,
@@ -2973,7 +3057,10 @@ export function useJungleGame(
           karateka.x = 650;
           karateka.y = 510;
           karateka.direction = -1;
-          karateka.state = params.get('_action') === 'attack' ? 'attack' : 'walk';
+          karateka.state = params.get('_action') === 'attack'
+            ? 'attack'
+            : params.get('_action') === 'taunt' ? 'taunt' : 'walk';
+          karateka.stateTimer = karateka.state === 'taunt' ? 20 : 0;
           karateka.attackPoseIndex = clamp(Number(params.get('_pose') ?? 2), 0, 4);
         }
         freezePreview = params.get('_freeze') === '1';
@@ -2982,8 +3069,9 @@ export function useJungleGame(
       if (scene === 'karate-offer' || scene === 'karate-challenge' || scene === 'karate-duo') {
         const duo = scene === 'karate-duo';
         const blonde = params.get('_opponent') === 'blonde' || duo;
+        const approachOffer = scene === 'karate-offer' && params.get('_approach') === '1';
         const config: FightConfig = {
-          amazonas: scene === 'karate-offer' ? 3 : 0,
+          amazonas: scene === 'karate-offer' ? 3 : params.get('_amazon') === '1' ? 1 : 0,
           ebony: 0,
           ninjas: 0,
           roxy: 0,
@@ -2997,18 +3085,30 @@ export function useJungleGame(
           phase: scene === 'karate-offer' ? STATE_KARATE_OFFER : STATE_KARATE_CHALLENGE,
           heroX: WIDTH / 2,
           heroY: 510,
-          heroHp: 0,
+          heroHp: approachOffer ? 100 : 0,
           sound: oldSound,
           soundEnabled: false,
           isGrappleActive: true,
           defeatKind: scene === 'karate-offer' ? null : 'karate-victory',
+          karateOfferIsApproach: approachOffer,
           karateSequence: duo ? 'duo' : blonde ? 'blonde' : 'ebony',
           karateDefeatElapsed: Number(params.get('_elapsed') ?? 3),
           defeatSecondsLeft: KARATE_DEFEAT_DURATION,
         });
         const grapplerKind = blonde ? 'karateBlonde' : 'karateEbony';
-        world.currentGrappler =
-          world.enemies.find((enemy) => enemy.kind === grapplerKind)?.id ?? null;
+        const grappler = world.enemies.find((enemy) => enemy.kind === grapplerKind);
+        world.currentGrappler = grappler?.id ?? null;
+        if (approachOffer && grappler) {
+          grappler.state = 'taunt';
+          grappler.stateTimer = 0;
+        }
+        if (params.get('_ending') === '1' && grappler) {
+          world.phase = 'group-defeat';
+          world.defeatKind = 'group';
+          world.defeatSecondsLeft = GROUP_DEFEAT_DURATION;
+          world.actionTimer = 0;
+          world.isolatedDefeatOpponentId = grappler.id;
+        }
         freezePreview = params.get('_freeze') === '1';
         setSnapshot(publishSnapshot(world));
       }
@@ -3271,6 +3371,16 @@ export function useJungleGame(
           return sheet;
         })(),
         karateEbony: prepareKarateSheet(karateEbony),
+        karateEbonyTaunt: (() => {
+          const sheet = prepareKarateSheet(karateEbonyAttackTwo);
+          removeStoryboardHeadings(
+            sheet,
+            karateEbonySequenceFrames(sheet.width, sheet.height),
+            48,
+            28,
+          );
+          return extractKarateEbonyTaunt(sheet);
+        })(),
         karateEbonyAttackOne: (() => {
           const sheet = prepareKarateSheet(karateEbonyAttackOne, true);
           removeStoryboardHeadings(
