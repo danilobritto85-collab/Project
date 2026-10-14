@@ -247,6 +247,78 @@ export function prepareKarateSheet(image: HTMLImageElement, checkerboard = false
   return canvas;
 }
 
+/**
+ * The Ebony duo storyboard uses an olive/charcoal checkerboard rather than
+ * the neutral gray used by the other karate sheets. Flood-fill the muted
+ * checker colors from each frame edge so the key does not eat the figures.
+ */
+export function prepareKarateDuoSheet(image: HTMLImageElement, frames: KaratePose[]) {
+  const canvas = document.createElement('canvas');
+  canvas.width = image.naturalWidth || image.width;
+  canvas.height = image.naturalHeight || image.height;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) throw new Error('Canvas 2D indisponível para a folha em dupla da Ebony.');
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const pixels = imageData.data;
+  const pixelCount = canvas.width * canvas.height;
+  const candidates = new Uint8Array(pixelCount);
+  const visited = new Uint8Array(pixelCount);
+  const queue = new Uint32Array(pixelCount);
+  for (let pixel = 0; pixel < pixelCount; pixel += 1) {
+    const offset = pixel * 4;
+    const red = pixels[offset], green = pixels[offset + 1], blue = pixels[offset + 2];
+    const nearCheckerTone = (
+      tone: readonly [number, number, number],
+      tolerance: number,
+    ) => Math.hypot(red - tone[0], green - tone[1], blue - tone[2]) < tolerance;
+    // The source uses olive-brown (#403420) and near-black green (#0c0c08)
+    // squares, plus JPEG blends at their boundaries. Pure black sprite
+    // outlines are intentionally outside these ranges.
+    candidates[pixel] = Number(
+      nearCheckerTone([12, 12, 8], 12) ||
+      nearCheckerTone([36, 32, 16], 14) ||
+      nearCheckerTone([64, 52, 32], 17),
+    );
+  }
+
+  let tail = 0;
+  const enqueueIfBackground = (x: number, y: number) => {
+    const pixel = y * canvas.width + x;
+    if (!visited[pixel] && pixels[pixel * 4 + 3] >= 20 && candidates[pixel]) {
+      visited[pixel] = 1;
+      queue[tail++] = pixel;
+    }
+  };
+  for (const frame of frames) {
+    const left = Math.max(0, Math.round(frame.x));
+    const top = Math.max(0, Math.round(frame.y));
+    const right = Math.min(canvas.width - 1, Math.round(frame.x + frame.w) - 1);
+    const bottom = Math.min(canvas.height - 1, Math.round(frame.y + frame.h) - 1);
+    for (let x = left; x <= right; x += 1) {
+      enqueueIfBackground(x, top);
+      enqueueIfBackground(x, bottom);
+    }
+    for (let y = top + 1; y < bottom; y += 1) {
+      enqueueIfBackground(left, y);
+      enqueueIfBackground(right, y);
+    }
+  }
+
+  for (let head = 0; head < tail; head += 1) {
+    const pixel = queue[head];
+    const x = pixel % canvas.width;
+    if (x > 0) enqueueIfBackground(x - 1, Math.floor(pixel / canvas.width));
+    if (x + 1 < canvas.width) enqueueIfBackground(x + 1, Math.floor(pixel / canvas.width));
+    if (pixel >= canvas.width) enqueueIfBackground(x, Math.floor(pixel / canvas.width) - 1);
+    if (pixel + canvas.width < pixelCount) enqueueIfBackground(x, Math.floor(pixel / canvas.width) + 1);
+    pixels[pixel * 4 + 3] = 0;
+  }
+  context.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
 export function removeStoryboardHeadings(
   canvas: HTMLCanvasElement,
   frames: KaratePose[],
@@ -324,4 +396,16 @@ export function removeStoryboardHeadings(
     }
   }
   context.putImageData(image, 0, 0);
+}
+
+export function clearStoryboardHeaderBands(
+  canvas: HTMLCanvasElement,
+  frames: KaratePose[],
+  headerHeight: number,
+) {
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Canvas 2D indisponível para limpar as faixas de título.');
+  for (const frame of frames) {
+    context.clearRect(frame.x, frame.y, frame.w, Math.min(frame.h, headerHeight));
+  }
 }

@@ -32,3 +32,9 @@ Karateka Ebony has an automatic close-range heavy spin kick as a separate combat
 **Why:** The user requested more than one special attack for Karateka Ebony.
 
 **How to apply:** Preserve both the cooldown-based spin kick and the explicit accept/decline prompt for her custom sequence.
+
+Use the Karateka Ebony `atk_1` duo storyboard only when both Karateka Blonde and Karateka Ebony are active in the fight. Remove the headings baked into its frames.
+
+**Why:** The user requested the duo artwork only when both karatekas participate and asked for the printed frame titles to be removed.
+
+**How to apply:** Resolve duo mode from the live fight roster when opening the consent offer; retain the standard solo sequence otherwise, and keep the opt-in prompt.

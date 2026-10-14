@@ -11,7 +11,8 @@ import {
   KARATE_BLONDE, KARATE_BLONDE_ATTACKS, KARATE_BLONDE_WALK,
   KARATE_EBONY, KARATE_EBONY_ATTACKS, KARATE_EBONY_WALK,
   karateBlondeSequenceFrames, karateEbonySequenceFrames, karateDuoSequenceFrames,
-  extractKarateEbonyTaunt, extractKarateCombatPose, prepareKarateSheet, removeStoryboardHeadings,
+  clearStoryboardHeaderBands, extractKarateEbonyTaunt, extractKarateCombatPose,
+  prepareKarateSheet, prepareKarateDuoSheet, removeStoryboardHeadings,
 } from './karateSprites';
 
 import amazonSheetUrl from '@assets/amazon_1791470375689.png';
@@ -2129,6 +2130,12 @@ function endRoxyChallenge(world: World) {
 
 function beginKarateOffer(world: World, enemy: Enemy, fromApproach = false) {
   stopClips(world);
+  const activeKaratekaKinds = new Set(world.enemies
+    .filter((opponent) => opponent.active && opponent.hp > 0 &&
+      (opponent.kind === 'karateBlonde' || opponent.kind === 'karateEbony'))
+    .map((opponent) => opponent.kind));
+  const bothKaratekasParticipating =
+    activeKaratekaKinds.has('karateBlonde') && activeKaratekaKinds.has('karateEbony');
   world.phase = STATE_KARATE_OFFER;
   world.defeatKind = null;
   world.isGrappleActive = true;
@@ -2137,7 +2144,9 @@ function beginKarateOffer(world: World, enemy: Enemy, fromApproach = false) {
   if (!fromApproach) world.heroHp = 0;
   world.defeatSecondsLeft = 0;
   world.karateDefeatElapsed = 0;
-  world.karateSequence = enemy.kind === 'karateEbony' ? 'ebony' : 'blonde';
+  world.karateSequence = bothKaratekasParticipating
+    ? 'duo'
+    : enemy.kind === 'karateEbony' ? 'ebony' : 'blonde';
   world.heroAction = fromApproach ? 'idle' : 'hurt';
   world.actionTimer = 0;
   world.heroVelocityX = 0;
@@ -3404,12 +3413,13 @@ export function useJungleGame(
           return extractKarateEbonyTaunt(sheet);
         })(),
         karateEbonyAttackOne: (() => {
-          const sheet = prepareKarateSheet(karateEbonyAttackOne, true);
-          removeStoryboardHeadings(
-            sheet,
-            karateDuoSequenceFrames(sheet.width, sheet.height),
-            48,
+          const frames = karateDuoSequenceFrames(
+            karateEbonyAttackOne.naturalWidth || karateEbonyAttackOne.width,
+            karateEbonyAttackOne.naturalHeight || karateEbonyAttackOne.height,
           );
+          const sheet = prepareKarateDuoSheet(karateEbonyAttackOne, frames);
+          removeStoryboardHeadings(sheet, frames, 48);
+          clearStoryboardHeaderBands(sheet, frames, 48);
           return sheet;
         })(),
         karateEbonyAttackTwo: (() => {
