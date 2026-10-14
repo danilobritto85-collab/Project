@@ -170,6 +170,8 @@ interface Enemy {
   stateTimer: number;
   attackPoseIndex: number;
   attackCooldown: number;
+  specialAttackCooldown: number;
+  nextEbonySpecial: 'stomp' | 'spin';
   tauntCooldown: number;
   respawnAt: number;
   hue: number;
@@ -396,6 +398,9 @@ export const NINJA_FOOTSMOTHER_DURATION = 10;
 const ROXY_DEFEAT_DURATION = 10;
 const EBONY_FINISHER_KO_CHANCE = 0.25;
 const EBONY_STOMP_CHANCE = 0.25;
+const EBONY_SPIN_CHANCE = 0.25;
+const EBONY_SPIN_DAMAGE = 18;
+const KARATE_EBONY_SPIN_DAMAGE = 13;
 const ROXY_HYPNOSIS_DURATION = 2.4;
 const ROXY_HYPNOSIS_FRAME_DURATION = 1.2;
 const NINJA_FOOTSMOTHER_ENDING_DURATION = 1.5;
@@ -479,6 +484,8 @@ function createEnemy(id: number, index: number, opponent: OpponentKind, lineupSi
     stateTimer: 0,
     attackPoseIndex: index % 3,
     attackCooldown: 1.3 + (index % 9) * 0.32,
+    specialAttackCooldown: 2.5 + (index % 3),
+    nextEbonySpecial: 'stomp',
     tauntCooldown: opponent === 'karateEbony' ? 0.8 : 0,
     respawnAt: 0,
     hue: kind === 'amazon' && index > 0 ? ((index * 19) % 41) - 20 : 0,
@@ -2382,6 +2389,7 @@ function updateEnemies(world: World, dt: number, now: number) {
     const previousY = enemy.y;
     enemy.stateTimer = Math.max(0, enemy.stateTimer - dt);
     enemy.attackCooldown = Math.max(0, enemy.attackCooldown - dt);
+    enemy.specialAttackCooldown = Math.max(0, enemy.specialAttackCooldown - dt);
     enemy.tauntCooldown = Math.max(0, enemy.tauntCooldown - dt);
     if (enemy.state === 'taunt' && enemy.stateTimer <= 0) {
       enemy.state = 'idle';
@@ -2416,7 +2424,8 @@ function updateEnemies(world: World, dt: number, now: number) {
 
     // Let Roxy finish the current pose before pursuing again. Otherwise the
     // next AI tick replaces her kick/hit pose with a walk and slides her legs.
-    if ((enemy.kind === 'roxy' || enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') &&
+    if ((enemy.kind === 'roxy' || enemy.ebony ||
+      enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') &&
         enemy.stateTimer > 0 &&
         (enemy.state === 'attack' || enemy.state === 'hurt' || enemy.state === 'down')) {
       enemy.vx = 0;
@@ -2507,13 +2516,51 @@ function updateEnemies(world: World, dt: number, now: number) {
             beginGenericDefeat(world, enemy);
             continue;
           }
-          if (specialRoll < EBONY_FINISHER_KO_CHANCE + EBONY_STOMP_CHANCE) {
-            beginSpecialGrapple(world, enemy);
-            continue;
+          if (specialRoll < EBONY_FINISHER_KO_CHANCE + EBONY_STOMP_CHANCE + EBONY_SPIN_CHANCE) {
+            const specialMove = enemy.nextEbonySpecial;
+            enemy.nextEbonySpecial = specialMove === 'stomp' ? 'spin' : 'stomp';
+            if (specialMove === 'stomp') {
+              beginSpecialGrapple(world, enemy);
+              continue;
+            }
+
+            // Give Amazon Ebony a second close-range special so her enhanced
+            // attacks alternate between the heavy stomp and a spinning kick.
+            enemy.attackPoseIndex = EBONY_ATTACKS.indexOf(EBONY_FRAMES.spin);
+            enemy.stateTimer = 0.72;
+            enemy.specialAttackCooldown = 4.5;
+            world.heroHp = Math.max(0, world.heroHp - EBONY_SPIN_DAMAGE);
+            world.heroHitCooldown = 0.8;
+            world.heroAction = 'hurt';
+            world.actionTimer = 0.42;
+            world.heroX = clamp(world.heroX - enemy.direction * 42, 48, WIDTH - 48);
+            playStomp(world);
+            if (world.heroHp <= 0) {
+              beginGenericDefeat(world, enemy);
+              continue;
+            }
           }
         } else if (world.heroHp <= 42 && random(world) < 0.25) {
           beginSpecialGrapple(world, enemy);
           continue;
+        }
+        if (enemy.kind === 'karateEbony' &&
+            enemy.specialAttackCooldown <= 0) {
+          // A heavy spin kick is a combat special. It is separate from the
+          // taunt-triggered, opt-in scene and uses Ebony's dedicated spin pose.
+          enemy.attackPoseIndex = 3;
+          enemy.stateTimer = 0.72;
+          enemy.specialAttackCooldown = 6;
+          world.heroHp = Math.max(0, world.heroHp - KARATE_EBONY_SPIN_DAMAGE);
+          world.heroHitCooldown = 0.8;
+          world.heroAction = 'hurt';
+          world.actionTimer = 0.42;
+          world.heroX = clamp(world.heroX - enemy.direction * 36, 48, WIDTH - 48);
+          playStomp(world);
+          if (world.heroHp <= 0) {
+            beginKarateOffer(world, enemy);
+            continue;
+          }
         }
       }
     } else {

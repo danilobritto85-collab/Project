@@ -26,3 +26,9 @@ Karateka Ebony should periodically sit and wave the heroine over; approaching wh
 **Why:** The supplied Karateka specification defines this bait-and-grab behavior, and the user had already chosen opt-in for special scenes.
 
 **How to apply:** Keep the bait as a separate visible pose and gate the grab sequence behind acceptance; refusal must not cause defeat.
+
+Karateka Ebony has an automatic close-range heavy spin kick as a separate combat special; it does not replace or bypass the opt-in taunt scene.
+
+**Why:** The user requested more than one special attack for Karateka Ebony.
+
+**How to apply:** Preserve both the cooldown-based spin kick and the explicit accept/decline prompt for her custom sequence.

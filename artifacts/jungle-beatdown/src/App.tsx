@@ -270,9 +270,9 @@ function App() {
                             }))} />
                           Incluir cenas consentidas de vitória Ebony
                         </label>
-                        <p>Acertos próximos da Ebony: 25% de chance de KO em qualquer HP; o stomp
-                          tem 25% de chance adicional. A cena consentida de vitória continua
-                          opcional.</p>
+                        <p>Em acertos próximos, há 25% de chance de KO em qualquer HP. Os especiais
+                          stomp e giro pesado têm 25% de chance cada e alternam entre si; a cena
+                          consentida de vitória continua opcional.</p>
                       </div>
                     )}
                     {fightConfig.roxy > 0 ? (
@@ -291,6 +291,8 @@ function App() {
                       <p className="roxy-special-help">
                         As cenas especiais das karatecas são opcionais: ao ser derrotada por uma delas,
                         você poderá aceitar, recusar ou encerrar a sequência.
+                        {fightConfig.karateEbony > 0 &&
+                          ' A Karateka Ebony também usa um giro pesado automático, no máximo uma vez a cada 6 segundos.'}
                       </p>
                     )}
                     <button className="start-button" type="button"

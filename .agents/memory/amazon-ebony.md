@@ -26,3 +26,9 @@ Ebony's defeat scenes should have ongoing movement and the heroine's deep breath
 **Why:** The user requested “anime mais e movimente” and “Adicione respiração profunda da heroina.”
 
 **How to apply:** Keep movement grounded, respect the sound switch, and stop scene audio when leaving or ending the sequence.
+
+Amazon Ebony's heavy stomp and spinning kick are separate combat specials and alternate on successive special triggers; her close-hit KO chance and optional victory scene remain.
+
+**Why:** The user requested more than one special attack for Amazon Ebony after seeing only one.
+
+**How to apply:** Keep both special animations in combat, alternate them, and retain the separate KO chance and victory consent setting.
