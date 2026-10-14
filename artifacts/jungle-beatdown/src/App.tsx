@@ -14,6 +14,7 @@ import {
 import jungleBackground from '@assets/background_1791470375690.png';
 import {
   DEFAULT_FIGHT_CONFIG,
+  KARATE_DEFEAT_DURATION,
   NINJA_FOOTSMOTHER_DURATION,
   STATE_NINJA_FOOTSMOTHER,
   STATE_ROXY_OFFER,
@@ -156,8 +157,9 @@ function App() {
   };
   const sequencePercent = Math.max(0, Math.min(100,
     (snapshot.defeatSecondsLeft /
-      (isSpecialDefeat || isNinjaFootsmother || isRoxySmother || isKarateChallenge
-        ? NINJA_FOOTSMOTHER_DURATION : 20)) * 100));
+      (isKarateChallenge ? KARATE_DEFEAT_DURATION
+        : isSpecialDefeat || isNinjaFootsmother || isRoxySmother
+          ? NINJA_FOOTSMOTHER_DURATION : 20)) * 100));
 
   return (
     <main className="game-shell">

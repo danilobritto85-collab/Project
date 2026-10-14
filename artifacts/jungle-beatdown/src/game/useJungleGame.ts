@@ -391,7 +391,7 @@ const ROXY_HYPNOSIS_FRAME_DURATION = 1.2;
 const NINJA_FOOTSMOTHER_ENDING_DURATION = 1.5;
 const NINJA_FOOTSMOTHER_FRAME_RATE = 6;
 const GROUP_DEFEAT_DURATION = 20;
-const KARATE_DEFEAT_DURATION = 10;
+export const KARATE_DEFEAT_DURATION = 10;
 
 function sequenceFrame(frames: SpriteRect[], elapsed: number, duration: number) {
   const index = Math.min(frames.length - 1, Math.floor((elapsed / duration) * frames.length));
@@ -2170,11 +2170,9 @@ function respondToKarateOffer(world: World, accepted: boolean) {
 function endKarateChallenge(world: World) {
   if (world.phase !== STATE_KARATE_CHALLENGE) return;
   stopClips(world);
-  playClip(world, 'heroineFaintSigh', 0.68, 3500);
-  world.phase = 'game-over';
-  world.defeatKind = 'karate-victory';
-  world.defeatSecondsLeft = 0;
-  world.isGrappleActive = false;
+  world.currentGrappler = null;
+  world.karateSequence = null;
+  beginGenericDefeat(world);
 }
 
 function beginSpecialGrapple(world: World, enemy: Enemy) {
