@@ -22,6 +22,7 @@ import {
   PANTERA_WALK_FRAMES,
   preparePanteraSheet,
 } from './panteraSprites';
+import { PANTERA_COMBO_DURATION, PANTERA_COMBO_HITS, panteraComboPose } from './panteraCombo';
 
 import amazonSheetUrl from '@assets/amazon_1791470375689.png';
 import backgroundUrl from '@assets/background_1791470375690.png';
@@ -99,6 +100,7 @@ export const STATE_KARATE_CHALLENGE = 'karate-challenge' as const;
 export type GamePhase =
   | 'title'
   | 'playing'
+  | 'pantera-combo'
   | 'ebony-stomp'
   | 'ebony-victory'
   | 'grapple'
@@ -210,8 +212,10 @@ type KarateSequenceKind = 'blonde' | 'ebony' | 'duo';
 
 interface World {
   phase: GamePhase;
-  defeatKind: 'special' | 'group' | 'ninja-footsmother' | 'roxy-smother' | 'ebony-victory' | 'karate-victory' | null;
+  defeatKind: 'special' | 'group' | 'ninja-footsmother' | 'roxy-smother' | 'ebony-victory' | 'karate-victory' | 'pantera-combo' | null;
   fightConfig: FightConfig;
+  panteraElapsed: number;
+  panteraHitIndex: number;
   ebonyElapsed: number;
   ebonyHitFrame: number;
   ebonyPartnerId: number | null;
@@ -522,6 +526,8 @@ function createWorld(
   return {
     phase: 'title',
     defeatKind: null,
+    panteraElapsed: 0,
+    panteraHitIndex: -1,
     fightConfig: { ...fightConfig },
     ebonyElapsed: 0,
     ebonyHitFrame: -1,
@@ -1665,6 +1671,41 @@ function drawWorld(
   context.fillStyle = floorTint;
   context.fillRect(0, 408, WIDTH, HEIGHT - 408);
 
+  if (world.phase === 'pantera-combo' ||
+      (world.phase === 'game-over' && world.defeatKind === 'pantera-combo')) {
+    const attacker = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
+    if (!attacker || attacker.kind !== 'pantera') return;
+    const pose = panteraComboPose(world.panteraElapsed);
+    const centerX = clamp(world.heroX, 230, WIDTH - 230);
+    const groundY = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
+    context.save();
+    context.globalAlpha = .35;
+    for (const enemy of world.enemies.filter((enemy) =>
+      enemy.id !== attacker.id && enemy.active && enemy.hp > 0)) {
+      drawEnemySprite(context, atlas, enemy, enemy.ebony ? EBONY_FRAMES.idle : ENEMY_FRAMES[enemy.kind].idle);
+    }
+    context.restore();
+    const fallen = pose.hero === 'defeated';
+    drawAtlasSprite(context, atlas.hero, HERO_FRAMES[pose.hero],
+      centerX + pose.heroX, groundY, fallen ? 230 : pose.hero === 'down' ? 180 : 116,
+      fallen ? 80 : 164, false, 0, pose.heroLift);
+    drawEnemySprite(context, atlas, { ...attacker, x: centerX + pose.x,
+      y: groundY + pose.groundOffset, direction: 1 },
+    pose.frame, 190, pose.lift);
+    if (pose.impact > 0) {
+      context.save();
+      context.globalAlpha = pose.impact * .8;
+      context.fillStyle = '#bfa879';
+      for (let i = 0; i < 9; i++) {
+        const spread = (1 - pose.impact) * 34;
+        context.fillRect(centerX + 40 + (i - 4) * (5 + spread / 5),
+          groundY - 20 - Math.sin(i * 2.4) * spread / 2, 5, 3);
+      }
+      context.restore();
+    }
+    return;
+  }
+
   const ninjaFootsmotherSequence = world.phase === STATE_NINJA_FOOTSMOTHER ||
     (world.phase === 'game-over' && world.defeatKind === 'ninja-footsmother');
   const roxyVoluntarySequence = world.phase === STATE_ROXY_CHALLENGE;
@@ -2005,11 +2046,33 @@ function enterGameOver(world: World) {
   world.defeatSecondsLeft = 0;
 }
 
+function beginPanteraCombo(world: World, attacker: Enemy) {
+  stopClips(world);
+  world.phase = 'pantera-combo';
+  world.defeatKind = 'pantera-combo';
+  world.currentGrappler = attacker.id;
+  world.isGrappleActive = true;
+  world.panteraElapsed = 0;
+  world.panteraHitIndex = -1;
+  world.defeatSecondsLeft = PANTERA_COMBO_DURATION;
+  world.heroX = clamp(world.heroX, 230, WIDTH - 230);
+  world.heroY = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
+  world.heroVelocityX = world.heroVelocityY = 0;
+  world.jumpOffset = world.jumpVelocity = 0;
+  world.particles = [];
+  attacker.vx = attacker.vy = 0;
+  attacker.specialAttackCooldown = 8;
+}
+
 function beginGenericDefeat(
   world: World,
   attacker?: Enemy,
   isolatedDefeatOpponentId: number | null = null,
 ) {
+  if (attacker?.kind === 'pantera') {
+    beginPanteraCombo(world, attacker);
+    return;
+  }
   world.isolatedDefeatOpponentId = isolatedDefeatOpponentId;
   if (attacker?.ebony && world.fightConfig.ebonyVictory) {
     world.heroHp = 0;
@@ -2356,6 +2419,8 @@ function handleMovement(world: World, pressed: Set<string>, dt: number) {
 }
 
 function updateEnemies(world: World, dt: number, now: number) {
+  if (world.phase === 'pantera-combo' ||
+      (world.phase === 'game-over' && world.defeatKind === 'pantera-combo')) return;
   if (world.phase === STATE_ROXY_OFFER || world.phase === STATE_ROXY_CHALLENGE ||
       world.phase === STATE_KARATE_OFFER || world.phase === STATE_KARATE_CHALLENGE) return;
   if (world.phase === 'playing') {
@@ -2384,6 +2449,8 @@ function updateEnemies(world: World, dt: number, now: number) {
 
   const activeEnemies = world.enemies.filter((enemy) => enemy.hp > 0 && enemy.active);
   for (const enemy of activeEnemies) {
+    // A combo started by the previous actor owns the rest of this frame too.
+    if (world.defeatKind === 'pantera-combo') return;
     const previousX = enemy.x;
     const previousY = enemy.y;
     enemy.stateTimer = Math.max(0, enemy.stateTimer - dt);
@@ -2510,6 +2577,11 @@ function updateEnemies(world: World, dt: number, now: number) {
           }
           continue;
         }
+        if (enemy.kind === 'pantera' && enemy.specialAttackCooldown <= 0 &&
+            random(world) < .3) {
+          beginPanteraCombo(world, enemy);
+          continue;
+        }
         if (enemy.ebony) {
           const specialRoll = random(world);
           if (specialRoll < EBONY_FINISHER_KO_CHANCE) {
@@ -2543,7 +2615,7 @@ function updateEnemies(world: World, dt: number, now: number) {
               continue;
             }
           }
-        } else if (world.heroHp <= 42 && random(world) < 0.25) {
+        } else if (enemy.kind !== 'pantera' && world.heroHp <= 42 && random(world) < 0.25) {
           beginSpecialGrapple(world, enemy);
           continue;
         }
@@ -2641,6 +2713,39 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
 
     if (world.heroHp <= 0) {
       beginGenericDefeat(world);
+    }
+  } else if (world.phase === 'pantera-combo') {
+    world.panteraElapsed = Math.min(PANTERA_COMBO_DURATION, world.panteraElapsed + dt);
+    world.defeatSecondsLeft = Math.max(0, PANTERA_COMBO_DURATION - world.panteraElapsed);
+    PANTERA_COMBO_HITS.forEach((hit, index) => {
+      if (world.panteraElapsed >= hit.time && world.panteraHitIndex < index) {
+        world.panteraHitIndex = index;
+        world.heroHp = Math.max(0, world.heroHp - hit.damage);
+        if (index < 2) playHit(world);
+        else playStomp(world);
+        if (world.heroHp > 0) playClip(world, 'heroineHurt', .45, 350);
+      }
+    });
+    if (world.panteraElapsed >= PANTERA_COMBO_DURATION) {
+      if (world.heroHp <= 0 || world.defeatedPreviewActive) {
+        enterGameOver(world);
+      } else {
+        const attacker = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
+        if (attacker) {
+          attacker.x = world.heroX - 110;
+          attacker.y = world.heroY;
+          attacker.state = 'idle';
+          attacker.stateTimer = 0;
+        }
+        world.heroX = clamp(world.heroX + 105, 48, WIDTH - 48);
+        world.phase = 'playing';
+        world.defeatKind = null;
+        world.currentGrappler = null;
+        world.isGrappleActive = false;
+        world.heroAction = 'idle';
+        world.heroHitCooldown = 1.5;
+        world.enemies.forEach((enemy) => { enemy.attackCooldown = Math.max(2, enemy.attackCooldown); });
+      }
     }
   } else if (world.phase === 'ebony-stomp') {
     world.ebonyElapsed = Math.min(EBONY_STOMP_DURATION, world.ebonyElapsed + dt);
@@ -2926,7 +3031,9 @@ export function useJungleGame(
     attacker.y = world.heroY;
     attacker.direction = 1;
 
-    if (kind === 'ninja') {
+    if (kind === 'pantera') {
+      beginPanteraCombo(world, attacker);
+    } else if (kind === 'ninja') {
       world.phase = STATE_NINJA_FOOTSMOTHER;
       world.defeatKind = 'ninja-footsmother';
       world.isGrappleActive = true;
@@ -3291,6 +3398,13 @@ export function useJungleGame(
           pantera.stateTimer = action === 'attack' ? 20 : 0;
           pantera.attackPoseIndex = Math.floor(clamp(Number(params.get('_pose') ?? '0'),
             0, PANTERA_ATTACK_FRAMES.length - 1));
+          if (action === 'combo') {
+            world.heroX = WIDTH / 2;
+            beginPanteraCombo(world, pantera);
+            world.panteraElapsed = clamp(Number(params.get('_elapsed') ?? 0), 0, PANTERA_COMBO_DURATION);
+            world.panteraHitIndex = PANTERA_COMBO_HITS.length - 1;
+            world.heroHp = 0;
+          }
         }
         freezePreview = params.get('_freeze') === '1';
         setSnapshot(publishSnapshot(world));

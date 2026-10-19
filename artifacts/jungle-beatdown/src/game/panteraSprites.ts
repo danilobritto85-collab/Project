@@ -36,6 +36,8 @@ const PANTERA_COMBAT_ROW: PanteraFrame[] = [
   { x: 739, y: 205, w: 141, h: 177 },
 ];
 
+export const PANTERA_VICTORY_FRAME = PANTERA_COMBAT_ROW[5];
+
 const PANTERA_KICK_FRAMES: PanteraFrame[] = [
   { x: 226, y: 380, w: 154, h: 186 },
   { x: 380, y: 380, w: 222, h: 186 },

@@ -158,9 +158,10 @@ function App() {
     pantera: 'Pantera',
   };
   const isDefeatSequence = isSpecialDefeat || isNinjaFootsmother || isRoxySmother || isGroupDefeat ||
-    snapshot.phase === 'ebony-victory';
+    snapshot.phase === 'ebony-victory' || snapshot.phase === 'pantera-combo';
   const showRetry = !snapshot.defeatedPreviewActive &&
-    (isDefeatSequence || snapshot.phase === 'game-over');
+    ((isDefeatSequence && (snapshot.phase !== 'pantera-combo' || snapshot.heroHp <= 0)) ||
+      snapshot.phase === 'game-over');
   const fightCount = fightConfig.amazonas + fightConfig.ebony + fightConfig.ninjas + fightConfig.roxy +
     fightConfig.karateBlonde + fightConfig.karateEbony + fightConfig.pantera;
   const handleOpponentCountChange = (kind: OpponentCountKey, value: number) => {
@@ -336,7 +337,8 @@ function App() {
               </div>
             )}
 
-            {isDefeatSequence && !isGroupDefeat && !snapshot.ebonyVictoryActive && (
+            {isDefeatSequence && !isGroupDefeat && !snapshot.ebonyVictoryActive &&
+              snapshot.phase !== 'pantera-combo' && (
               <div className="sequence-hud defeat-hud" role="status"
                 data-testid={isNinjaFootsmother ? 'status-ninja-footsmother'
                   : isRoxySmother ? 'status-roxy-smother'
@@ -393,6 +395,9 @@ function App() {
                 onClick={exitDefeatedPreview} data-testid="button-exit-defeated-preview">
                 <X aria-hidden="true" /> Voltar à luta
               </button>
+            )}
+            {snapshot.phase === 'pantera-combo' && (
+              <div className="phase-chip" role="status">Combo de combate · Pantera</div>
             )}
 
           </div>

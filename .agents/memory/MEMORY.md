@@ -1,8 +1,9 @@
 - [Uploaded game art](uploaded-game-art.md) — verify dimensions, preserve paired silhouettes, and anchor scale to bodies rather than smoke bounds.
 - [Defeat sequences](sequence-visibility.md) — generic defeats have no timer card and static enemies; Ninja and Amazon custom struggles use audio.
 - [Amazon styling](amazon-styling.md) — Amazon toenails are red, including paired scenes and palette variants.
-- [Roxy sequences](roxy-sequences.md) — ninth opponent; foot-kiss scene requires explicit opt-in, no hypnosis or HP drain, and an option to stop.
+- [Roxy sequences](roxy-sequences.md) — hypnosis and foot-kiss scenes require explicit opt-in, no HP drain, and an option to stop.
 - [Amazon Ebony](amazon-ebony.md) — selectable Amazon variant; the user defines her optional victory scenes as consensual.
 - [Fight configuration](fight-configuration.md) — opponent quantities are freely chosen, including multiple Roxys; no fixed category caps.
 - [Karate sequences](karate-sequences.md) — Karate Blonde and Ebony special scenes require an accept/decline prompt before they begin.
 - [Defeeated preview](defeeated-preview.md) — previews heroine defeat scenes from active opponents without changing the fight; optional scenes still require consent.
+- [Workspace verification tools](workspace-verification-tools.md) — run test tools in the artifact package; root commands may not find installed binaries.
