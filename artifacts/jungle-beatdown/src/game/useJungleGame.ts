@@ -37,6 +37,7 @@ import roxyHypnoUrl from '@assets/roxy_hypno_1791553456528.png';
 import roxySmotherUrl from '@assets/roxy_smother_1791553456529.png';
 import amazonKickAudioUrl from '@assets/generated_audio/amazon_kick.mp3';
 import ninjaKickAudioUrl from '@assets/generated_audio/ninja_kick.mp3';
+import ninjaKiaiAudioUrl from '@assets/generated_audio/ninja_kiai_vocal.mp3';
 import heroineHurtAudioUrl from '@assets/generated_audio/heroine_hurt.mp3';
 import heroineStruggleAudioUrl from '@assets/generated_audio/heroine_struggle_soft.mp3';
 import heroineBreathingAudioUrl from '@assets/generated_audio/heroine_deep_breath.mp3';
@@ -128,6 +129,8 @@ export interface GameSnapshot {
   karateOfferOpponent: 'blonde' | 'ebony' | 'duo' | null;
   karateOfferIsApproach: boolean;
   karateSceneActive: boolean;
+  defeatedPreviewActive: boolean;
+  activeOpponentKinds: OpponentKind[];
 }
 
 interface SpriteRect {
@@ -248,6 +251,7 @@ interface World {
   heartTimer: number;
   struggleVoiceTimer: number;
   nextStruggleBreath: boolean;
+  defeatedPreviewActive: boolean;
   randomSeed: number;
 }
 
@@ -256,6 +260,7 @@ type SoundCue =
   | 'karateBlondeKick'
   | 'karateEbonyKick'
   | 'ninjaKick'
+  | 'ninjaKiai'
   | 'heroineHurt'
   | 'heroineStruggle'
   | 'heroineBreathing'
@@ -445,6 +450,8 @@ const initialSnapshot: GameSnapshot = {
   karateOfferOpponent: null,
   karateOfferIsApproach: false,
   karateSceneActive: false,
+  defeatedPreviewActive: false,
+  activeOpponentKinds: [],
 };
 
 type OpponentKind = EnemyKind | 'ebony';
@@ -562,6 +569,7 @@ function createWorld(
     heartTimer: 0,
     struggleVoiceTimer: 0,
     nextStruggleBreath: false,
+    defeatedPreviewActive: false,
     randomSeed: 3917,
   };
 }
@@ -576,6 +584,9 @@ function random(world: World) {
 }
 
 function publishSnapshot(world: World): GameSnapshot {
+  const activeOpponentKinds = Array.from(new Set(world.enemies
+    .filter((enemy) => enemy.active && enemy.hp > 0)
+    .map((enemy): OpponentKind => enemy.ebony ? 'ebony' : enemy.kind)));
   return {
     phase: world.phase,
     heroHp: Math.max(0, Math.ceil(world.heroHp)),
@@ -598,6 +609,8 @@ function publishSnapshot(world: World): GameSnapshot {
       world.phase === STATE_KARATE_OFFER && world.karateOfferIsApproach,
     karateSceneActive: world.phase === STATE_KARATE_CHALLENGE ||
       (world.phase === 'game-over' && world.defeatKind === 'karate-victory'),
+    defeatedPreviewActive: world.defeatedPreviewActive,
+    activeOpponentKinds,
   };
 }
 
@@ -1160,64 +1173,10 @@ function playClip(world: World, cue: SoundCue, volume = 1, cooldownMs = 0) {
 }
 
 function playNinjaKiai(world: World) {
-  const context = ensureSound(world);
-  if (!context) return;
-  const now = context.currentTime;
-  if ((now - world.sound.lastNinjaKiai) * 1000 < 420) return;
+  const now = performance.now();
+  if (now - world.sound.lastNinjaKiai < 420) return;
   world.sound.lastNinjaKiai = now;
-
-  // A short formant-shaped "yā!" gives the existing kick impact a clear,
-  // voice-like Kunoichi battle cry without another network-loaded sound.
-  const duration = 0.34;
-  const base = 170 + random(world) * 40;
-  const voice = context.createOscillator();
-  const envelope = context.createGain();
-  voice.type = 'sawtooth';
-  voice.frequency.setValueAtTime(base, now);
-  voice.frequency.linearRampToValueAtTime(base * 1.7, now + 0.09);
-  voice.frequency.linearRampToValueAtTime(base * 1.18, now + duration);
-  envelope.gain.setValueAtTime(0.001, now);
-  envelope.gain.linearRampToValueAtTime(0.12, now + 0.035);
-  envelope.gain.setValueAtTime(0.095, now + 0.16);
-  envelope.gain.exponentialRampToValueAtTime(0.001, now + duration);
-
-  const iVowel = context.createBiquadFilter();
-  iVowel.type = 'bandpass';
-  iVowel.Q.value = 2.4;
-  iVowel.frequency.setValueAtTime(340, now);
-  iVowel.frequency.linearRampToValueAtTime(760, now + 0.11);
-  iVowel.frequency.linearRampToValueAtTime(650, now + duration);
-
-  const openVowel = context.createBiquadFilter();
-  openVowel.type = 'bandpass';
-  openVowel.Q.value = 1.7;
-  openVowel.frequency.setValueAtTime(2380, now);
-  openVowel.frequency.linearRampToValueAtTime(1320, now + 0.13);
-
-  const upperHarmonics = context.createBiquadFilter();
-  upperHarmonics.type = 'bandpass';
-  upperHarmonics.Q.value = 1.2;
-  upperHarmonics.frequency.value = 2900;
-
-  const iGain = context.createGain();
-  const openGain = context.createGain();
-  const upperGain = context.createGain();
-  iGain.gain.value = 0.65;
-  openGain.gain.value = 0.32;
-  upperGain.gain.value = 0.11;
-
-  voice.connect(iVowel);
-  voice.connect(openVowel);
-  voice.connect(upperHarmonics);
-  iVowel.connect(iGain);
-  openVowel.connect(openGain);
-  upperHarmonics.connect(upperGain);
-  iGain.connect(envelope);
-  openGain.connect(envelope);
-  upperGain.connect(envelope);
-  envelope.connect(context.destination);
-  voice.start(now);
-  voice.stop(now + duration + 0.02);
+  playClip(world, 'ninjaKiai', 0.68, 400);
 }
 
 function playKarateAttackVoice(
@@ -1847,12 +1806,13 @@ function drawWorld(
     // pose 2 has Roxy alone. Hold the complete final pair instead of making
     // the heroine disappear on every other frame.
     const loopIndex = roxyVoluntarySequence
-      ? elapsed < ROXY_HYPNOSIS_DURATION
-        ? Math.min(1, Math.floor(elapsed / ROXY_HYPNOSIS_FRAME_DURATION))
-        : 3
+      ? Math.min(
+        ROXY_HYPNO_FRAMES.length - 1,
+        Math.floor(elapsed / ROXY_HYPNOSIS_FRAME_DURATION),
+      )
       : elapsed < introDuration ? introIndex : 3;
     const finalPose = roxyVoluntarySequence
-      ? elapsed >= ROXY_HYPNOSIS_DURATION
+      ? elapsed >= ROXY_HYPNOSIS_FRAME_DURATION * (ROXY_HYPNO_FRAMES.length - 1)
       : elapsed >= introDuration;
     const poseBreath = finalPose ? Math.sin(elapsed * 2.2) * 0.02 : 0;
     drawRoxyDefeatFrame(
@@ -2557,10 +2517,12 @@ function updateEnemies(world: World, dt: number, now: number) {
             beginGenericDefeat(world, enemy);
             continue;
           }
-          if (specialRoll < EBONY_FINISHER_KO_CHANCE + EBONY_STOMP_CHANCE + EBONY_SPIN_CHANCE) {
+          if (enemy.specialAttackCooldown <= 0 &&
+              specialRoll < EBONY_FINISHER_KO_CHANCE + EBONY_STOMP_CHANCE + EBONY_SPIN_CHANCE) {
             const specialMove = enemy.nextEbonySpecial;
             enemy.nextEbonySpecial = specialMove === 'stomp' ? 'spin' : 'stomp';
             if (specialMove === 'stomp') {
+              enemy.specialAttackCooldown = 4.5;
               beginSpecialGrapple(world, enemy);
               continue;
             }
@@ -2894,6 +2856,16 @@ export function useJungleGame(
   const [snapshot, setSnapshot] = useState<GameSnapshot>(initialSnapshot);
   const [heroPortrait, setHeroPortrait] = useState<string | null>(null);
   const pressedRef = useRef<Set<string>>(new Set());
+  const defeatedPreviewBackupRef = useRef<World | null>(null);
+
+  const cloneWorldForPreview = useCallback((world: World): World => ({
+    ...world,
+    fightConfig: { ...world.fightConfig },
+    enemyLineup: [...world.enemyLineup],
+    enemies: world.enemies.map((enemy) => ({ ...enemy })),
+    particles: world.particles.map((particle) => ({ ...particle })),
+    sound: world.sound,
+  }), []);
 
   const startGame = useCallback((config: FightConfig = selectedConfigRef.current) => {
     const world = worldRef.current;
@@ -2932,6 +2904,72 @@ export function useJungleGame(
   const restartGame = useCallback(() => resetGame('title'), [resetGame]);
   const retryGame = useCallback(() => resetGame('playing'), [resetGame]);
 
+  const previewDefeat = useCallback((kind: OpponentKind) => {
+    const world = worldRef.current;
+    if (world.phase !== 'playing' || world.defeatedPreviewActive) return;
+    const attacker = world.enemies.find((enemy) =>
+      enemy.active && enemy.hp > 0 && (enemy.ebony ? kind === 'ebony' : enemy.kind === kind));
+    if (!attacker) return;
+
+    defeatedPreviewBackupRef.current = cloneWorldForPreview(world);
+    stopClips(world);
+    world.defeatedPreviewActive = true;
+    world.currentGrappler = attacker.id;
+    world.isolatedDefeatOpponentId = attacker.id;
+    world.heroVelocityX = 0;
+    world.heroVelocityY = 0;
+    world.jumpOffset = 0;
+    world.jumpVelocity = 0;
+    world.heroX = clamp(world.heroX, 220, WIDTH - 220);
+    world.heroY = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
+    attacker.x = clamp(world.heroX - 92, 80, WIDTH - 80);
+    attacker.y = world.heroY;
+    attacker.direction = 1;
+
+    if (kind === 'ninja') {
+      world.phase = STATE_NINJA_FOOTSMOTHER;
+      world.defeatKind = 'ninja-footsmother';
+      world.isGrappleActive = true;
+      world.defeatStartHp = Math.max(1, world.heroHp);
+      world.defeatSecondsLeft = NINJA_FOOTSMOTHER_DURATION;
+      world.ninjaFootsmotherElapsed = 0;
+    } else if (kind === 'roxy') {
+      beginRoxyOffer(world, attacker);
+      world.defeatedPreviewActive = true;
+    } else if (kind === 'karateBlonde' || kind === 'karateEbony') {
+      beginKarateOffer(world, attacker);
+      world.defeatedPreviewActive = true;
+    } else if (kind === 'ebony' && world.fightConfig.ebonyVictory) {
+      beginGenericDefeat(world, attacker, attacker.id);
+      world.defeatedPreviewActive = true;
+    } else if (kind === 'amazon') {
+      world.phase = 'special-defeat';
+      world.defeatKind = 'special';
+      world.isGrappleActive = true;
+      world.defeatStartHp = Math.max(1, world.heroHp);
+      world.defeatSecondsLeft = SPECIAL_DEFEAT_DURATION;
+      world.struggleVoiceTimer = 1;
+      world.smokeTimer = 0;
+      world.heartTimer = .12;
+    } else {
+      beginGenericDefeat(world, attacker, attacker.id);
+      world.defeatedPreviewActive = true;
+    }
+    pressedRef.current.clear();
+    setSnapshot(publishSnapshot(world));
+  }, [cloneWorldForPreview]);
+
+  const exitDefeatedPreview = useCallback(() => {
+    const backup = defeatedPreviewBackupRef.current;
+    if (!backup) return;
+    const world = worldRef.current;
+    stopClips(world);
+    Object.assign(world, backup, { defeatedPreviewActive: false });
+    defeatedPreviewBackupRef.current = null;
+    pressedRef.current.clear();
+    setSnapshot(publishSnapshot(world));
+  }, []);
+
   const exitEbonyVictory = useCallback(() => {
     stopEbonyVictory(worldRef.current);
     setSnapshot(publishSnapshot(worldRef.current));
@@ -2944,10 +2982,14 @@ export function useJungleGame(
   }, []);
 
   const exitRoxyChallenge = useCallback(() => {
+    if (worldRef.current.defeatedPreviewActive) {
+      exitDefeatedPreview();
+      return;
+    }
     endRoxyChallenge(worldRef.current);
     pressedRef.current.clear();
     setSnapshot(publishSnapshot(worldRef.current));
-  }, []);
+  }, [exitDefeatedPreview]);
 
   const chooseKarateChallenge = useCallback((accepted: boolean) => {
     respondToKarateOffer(worldRef.current, accepted);
@@ -2956,10 +2998,14 @@ export function useJungleGame(
   }, []);
 
   const exitKarateChallenge = useCallback(() => {
+    if (worldRef.current.defeatedPreviewActive) {
+      exitDefeatedPreview();
+      return;
+    }
     // Explicitly stopping an optional scene must really leave it. Automatic
     // defeat completion instead keeps the karateka's own animated ending.
     resetGame('title');
-  }, [resetGame]);
+  }, [exitDefeatedPreview, resetGame]);
 
   const pressVirtualControl = useCallback((code: string) => {
     const world = worldRef.current;
@@ -3075,6 +3121,7 @@ export function useJungleGame(
       karateBlondeKick: karateBlondeKickAudioUrl,
       karateEbonyKick: karateEbonyKickAudioUrl,
       ninjaKick: ninjaKickAudioUrl,
+      ninjaKiai: ninjaKiaiAudioUrl,
       heroineHurt: heroineHurtAudioUrl,
       heroineStruggle: heroineStruggleAudioUrl,
       heroineBreathing: heroineBreathingAudioUrl,
@@ -3601,6 +3648,8 @@ export function useJungleGame(
     startGame,
     restartGame,
     retryGame,
+    previewDefeat,
+    exitDefeatedPreview,
     exitEbonyVictory,
     toggleSound,
     chooseRoxyChallenge,

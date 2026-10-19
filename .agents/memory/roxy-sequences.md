@@ -25,4 +25,4 @@ Roxy's paired sheets are storyboards, not continuous animation cycles. A solo pr
 
 **Why:** Alternating these panels made the heroine disappear repeatedly and the victory look like blinking.
 
-**How to apply:** Progress through the introductory poses once, then keep the complete final pair visible. Any subtle motion should preserve that composition.
+**How to apply:** Progress through every supplied hypnosis pose once in order, then keep the complete final pair visible. Any subtle motion should preserve that composition.

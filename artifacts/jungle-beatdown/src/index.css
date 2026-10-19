@@ -197,6 +197,38 @@ button:focus-visible { outline: 2px solid #f4cc63; outline-offset: 3px; }
   border: 1px solid rgba(222, 221, 176, .35); background: rgba(13, 28, 22, .73);
   font: 9px var(--app-font-mono); letter-spacing: .1em; text-transform: uppercase;
 }
+.defeated-trigger, .defeated-exit {
+  position: absolute; z-index: 7; bottom: 14px;
+  min-height: 34px; padding: 0 11px; display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid rgba(229, 202, 112, .42); background: rgba(12, 25, 20, .82);
+  color: #f0d677; cursor: pointer; font: 9px var(--app-font-mono);
+  letter-spacing: .08em; text-transform: uppercase;
+}
+.defeated-trigger { right: 14px; }
+.defeated-exit { right: 14px; color: #eee7d3; }
+.defeated-trigger:hover, .defeated-exit:hover { background: #20382b; border-color: #e5ca70; }
+.defeated-trigger:focus-visible, .defeated-exit:focus-visible { outline: 2px solid #f2d77c; outline-offset: 2px; }
+.defeated-trigger svg, .defeated-exit svg { width: 14px; height: 14px; }
+.defeated-menu {
+  padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  border-top: 1px solid rgba(229, 202, 112, .35); background: #14271f; color: #eee7d3;
+}
+.defeated-menu h2 { margin: 2px 0 5px; color: #f0d677; font: 700 15px var(--app-font-mono); text-transform: uppercase; }
+.defeated-menu p { margin: 0; color: #bac9b9; font-size: 11px; line-height: 1.45; }
+.defeated-kicker { color: #8fa18e; font: 8px var(--app-font-mono); letter-spacing: .14em; text-transform: uppercase; }
+.defeated-options { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 7px; }
+.defeated-options button {
+  min-height: 36px; padding: 7px 10px; border: 1px solid rgba(229, 202, 112, .42);
+  background: #21372b; color: #eee7d3; cursor: pointer; font: 9px var(--app-font-mono);
+}
+.defeated-options button:hover { border-color: #e5ca70; }
+.defeated-options .defeated-cancel { color: #aebcab; border-color: rgba(174, 188, 171, .28); }
+@media (max-width: 700px) {
+  .defeated-menu { align-items: stretch; flex-direction: column; }
+  .defeated-options { justify-content: stretch; }
+  .defeated-options button { flex: 1 1 calc(50% - 7px); }
+  .defeated-trigger, .defeated-exit { bottom: 10px; right: 10px; }
+}
 .retry-corner {
   position: absolute; z-index: 6; top: 108px; right: 14px;
   min-height: 34px; padding: 0 10px; display: inline-flex; align-items: center; gap: 7px;

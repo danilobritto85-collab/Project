@@ -91,3 +91,10 @@ uri = "file://attached_assets/generated_audio/karate_blonde_kick.mp3"
 type = "audio"
 title = "Blonde karate human kiai"
 description = "Generated sound effect: One adult female martial artist performing a single sharp natural karate kiai shout: Hah! Authentic human voice, bright mid pitch, forceful athletic exertion, dry studio recor…"
+
+[[outputs]]
+id = "RVxO7cRf2elrKMbdBghKE"
+uri = "file://attached_assets/generated_audio/ninja_kiai_vocal.mp3"
+type = "audio"
+title = "ninja kiai vocal"
+description = "Generated sound effect: A single short original natural adult female martial-arts kiai vocal for a fictional arcade fighter kicking: crisp 'Hah! Yah!' with a grounded human voice, energetic and confi…"

@@ -9,6 +9,8 @@ import {
   Plus,
   Minus,
   RotateCcw,
+  Eye,
+  X,
   Swords,
 } from 'lucide-react';
 import jungleBackground from '@assets/background_1791470375690.png';
@@ -121,6 +123,8 @@ function App() {
     startGame,
     restartGame,
     retryGame,
+    previewDefeat,
+    exitDefeatedPreview,
     toggleSound,
     pressVirtualControl,
     releaseVirtualControl,
@@ -130,6 +134,7 @@ function App() {
     chooseKarateChallenge,
     exitKarateChallenge,
   } = useJungleGame(canvasRef, fightConfig);
+  const [defeatedMenuOpen, setDefeatedMenuOpen] = useState(false);
   const hpPercent = Math.max(0, Math.min(100, (snapshot.heroHp / snapshot.maxHeroHp) * 100));
   const escapePercent = Math.max(0, Math.min(100, snapshot.escapeProgress * 100));
   const isTitle = snapshot.phase === 'title';
@@ -143,9 +148,19 @@ function App() {
   const isKarateChallenge = snapshot.phase === STATE_KARATE_CHALLENGE;
   const isGroupDefeat = snapshot.phase === 'group-defeat';
   const isPlaying = snapshot.phase === 'playing';
+  const opponentLabels: Record<string, string> = {
+    amazon: 'Amazona',
+    ebony: 'Amazon Ebony',
+    ninja: 'Ninja',
+    roxy: 'Roxy',
+    karateBlonde: 'Karateka loira',
+    karateEbony: 'Karateka Ebony',
+    pantera: 'Pantera',
+  };
   const isDefeatSequence = isSpecialDefeat || isNinjaFootsmother || isRoxySmother || isGroupDefeat ||
     snapshot.phase === 'ebony-victory';
-  const showRetry = isDefeatSequence || snapshot.phase === 'game-over';
+  const showRetry = !snapshot.defeatedPreviewActive &&
+    (isDefeatSequence || snapshot.phase === 'game-over');
   const fightCount = fightConfig.amazonas + fightConfig.ebony + fightConfig.ninjas + fightConfig.roxy +
     fightConfig.karateBlonde + fightConfig.karateEbony + fightConfig.pantera;
   const handleOpponentCountChange = (kind: OpponentCountKey, value: number) => {
@@ -363,12 +378,50 @@ function App() {
             )}
 
             {isPlaying && (
-              <div className="phase-chip">
-                {`${snapshot.activeEnemies} ${snapshot.activeEnemies === 1 ? 'oponente ativo' : 'oponentes ativos'} · ${snapshot.defeatedEnemies} derrotadas`}
-              </div>
+              <>
+                <div className="phase-chip">
+                  {`${snapshot.activeEnemies} ${snapshot.activeEnemies === 1 ? 'oponente ativo' : 'oponentes ativos'} · ${snapshot.defeatedEnemies} derrotadas`}
+                </div>
+                <button className="defeated-trigger" type="button"
+                  onClick={() => setDefeatedMenuOpen(true)} data-testid="button-defeated-mode">
+                  <Eye aria-hidden="true" /> Defeeated
+                </button>
+              </>
+            )}
+            {snapshot.defeatedPreviewActive && (
+              <button className="defeated-exit" type="button"
+                onClick={exitDefeatedPreview} data-testid="button-exit-defeated-preview">
+                <X aria-hidden="true" /> Voltar à luta
+              </button>
             )}
 
           </div>
+
+          {defeatedMenuOpen && isPlaying && (
+            <section className="defeated-menu" role="dialog" aria-modal="true"
+              aria-labelledby="defeated-menu-title" data-testid="defeated-menu">
+              <div>
+                <span className="defeated-kicker">Prévia de cenas</span>
+                <h2 id="defeated-menu-title">Defeeated</h2>
+                <p>Escolha uma adversária em campo. A prévia não altera HP, pontuação ou progresso.</p>
+              </div>
+              <div className="defeated-options">
+                {snapshot.activeOpponentKinds.map((kind) => (
+                  <button type="button" key={kind}
+                    onClick={() => {
+                      setDefeatedMenuOpen(false);
+                      previewDefeat(kind);
+                    }}>
+                    {opponentLabels[kind] ?? kind}
+                  </button>
+                ))}
+                <button type="button" className="defeated-cancel"
+                  onClick={() => setDefeatedMenuOpen(false)}>
+                  Cancelar
+                </button>
+              </div>
+            </section>
+          )}
 
           {(isPlaying || isGrapple) && (
             <div className="touch-controls" role="group" aria-label="Controles de jogo">

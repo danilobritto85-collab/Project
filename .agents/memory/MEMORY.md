@@ -5,3 +5,4 @@
 - [Amazon Ebony](amazon-ebony.md) — selectable Amazon variant; the user defines her optional victory scenes as consensual.
 - [Fight configuration](fight-configuration.md) — opponent quantities are freely chosen, including multiple Roxys; no fixed category caps.
 - [Karate sequences](karate-sequences.md) — Karate Blonde and Ebony special scenes require an accept/decline prompt before they begin.
+- [Defeeated preview](defeeated-preview.md) — previews heroine defeat scenes from active opponents without changing the fight; optional scenes still require consent.
