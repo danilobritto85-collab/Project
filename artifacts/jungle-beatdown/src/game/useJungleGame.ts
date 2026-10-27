@@ -60,6 +60,7 @@ import roxyKickAudioUrl from '@assets/generated_audio/roxy_kick.mp3';
 import karateBlondeKickAudioUrl from '@assets/generated_audio/karate_blonde_kick.mp3';
 import karateEbonyKickAudioUrl from '@assets/generated_audio/karate_ebony_kick.mp3';
 import roxyDialogueAudioUrl from '@assets/generated_audio/roxy_voluntary_dialogue.mp3';
+import softKissAudioUrl from '@assets/generated_audio/soft_kiss_sfx.mp3';
 import ebonySheetUrl from '@assets/amazon_ebony_clean.png';
 import ebonyStompUrl from '@assets/amazon_ebony_stomp_clean.png';
 import ebonyVictoryUrl from '@assets/amazon_ebony_victory_clean.png';
@@ -275,6 +276,7 @@ interface World {
   karateOfferIsApproach: boolean;
   isolatedDefeatOpponentId: number | null;
   karateDefeatElapsed: number;
+  kissSoundPlayed: boolean;
   fourArmBossSceneElapsed: number;
   fourArmBossSceneComplete: boolean;
   footstepTimer: number;
@@ -301,7 +303,8 @@ type SoundCue =
   | 'enemyLaugh'
   | 'heroineFaintSigh'
   | 'roxyKick'
-  | 'roxyDialogue';
+  | 'roxyDialogue'
+  | 'softKiss';
 
 type SoundEngine = {
   context: AudioContext | null;
@@ -606,6 +609,7 @@ function createWorld(
     karateOfferIsApproach: false,
     isolatedDefeatOpponentId: null,
     karateDefeatElapsed: 0,
+    kissSoundPlayed: false,
     fourArmBossSceneElapsed: 0,
     fourArmBossSceneComplete: false,
     footstepTimer: 0,
@@ -2366,6 +2370,7 @@ function beginKarateOffer(world: World, enemy: Enemy, fromApproach = false) {
   if (!fromApproach) world.heroHp = 0;
   world.defeatSecondsLeft = 0;
   world.karateDefeatElapsed = 0;
+  world.kissSoundPlayed = false;
   world.karateSequence = bothKaratekasParticipating
     ? 'duo'
     : enemy.kind === 'karateEbony' ? 'ebony' : 'blonde';
@@ -2425,6 +2430,7 @@ function respondToKarateOffer(world: World, accepted: boolean) {
   world.defeatKind = 'karate-victory';
   world.defeatSecondsLeft = KARATE_DEFEAT_DURATION;
   world.karateDefeatElapsed = 0;
+  world.kissSoundPlayed = false;
   playSweep(world, 570, 250, 0.45, 0.022, 'sine');
 }
 
@@ -2446,6 +2452,7 @@ function beginFourArmBossOffer(world: World, boss: Enemy) {
   world.heroHp = world.defeatedPreviewActive ? world.heroHp : 0;
   world.defeatSecondsLeft = 0;
   world.fourArmBossSceneElapsed = 0;
+  world.kissSoundPlayed = false;
   world.fourArmBossSceneComplete = false;
   world.heroAction = 'hurt';
   world.actionTimer = 0;
@@ -3084,6 +3091,10 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
       FOUR_ARM_BOSS_SCENE_DURATION,
       world.fourArmBossSceneElapsed + dt,
     );
+    if (!world.kissSoundPlayed && world.fourArmBossSceneElapsed >= 6) {
+      world.kissSoundPlayed = true;
+      playClip(world, 'softKiss', 0.58);
+    }
     world.defeatSecondsLeft = Math.max(
       0,
       FOUR_ARM_BOSS_SCENE_DURATION - world.fourArmBossSceneElapsed,
@@ -3164,6 +3175,11 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
   } else if (world.phase === STATE_KARATE_CHALLENGE ||
     (world.phase === 'game-over' && world.defeatKind === 'karate-victory')) {
     world.karateDefeatElapsed += dt;
+    if (!world.kissSoundPlayed && world.karateSequence !== 'ebony' &&
+        world.karateDefeatElapsed >= 7.5) {
+      world.kissSoundPlayed = true;
+      playClip(world, 'softKiss', 0.58);
+    }
     world.defeatSecondsLeft = Math.max(
       0,
       KARATE_DEFEAT_DURATION - world.karateDefeatElapsed,
@@ -3563,6 +3579,7 @@ export function useJungleGame(
       heroineFaintSigh: heroineFaintSighAudioUrl,
       roxyKick: roxyKickAudioUrl,
       roxyDialogue: roxyDialogueAudioUrl,
+      softKiss: softKissAudioUrl,
     };
     const worldSound = worldRef.current.sound;
     for (const [cue, url] of Object.entries(soundUrls) as [SoundCue, string][]) {

@@ -98,3 +98,10 @@ uri = "file://attached_assets/generated_audio/ninja_kiai_vocal.mp3"
 type = "audio"
 title = "ninja kiai vocal"
 description = "Generated sound effect: A single short original natural adult female martial-arts kiai vocal for a fictional arcade fighter kicking: crisp 'Hah! Yah!' with a grounded human voice, energetic and confi…"
+
+[[outputs]]
+id = "aQqErDoRT8j7Zg3nIi7dD"
+uri = "file://attached_assets/generated_audio/soft_kiss_sfx.mp3"
+type = "audio"
+title = "soft kiss sound effect"
+description = "Generated sound effect: A short sequence of soft, gentle, nonverbal kiss sound effects for a consensual fantasy beat-em-up game scene: three quiet lip-smack kisses, each clearly separated by a brief …"
