@@ -6,4 +6,5 @@
 - [Fight configuration](fight-configuration.md) — opponent quantities are freely chosen, including multiple Roxys; no fixed category caps.
 - [Karate sequences](karate-sequences.md) — Karate Blonde and Ebony special scenes require an accept/decline prompt before they begin.
 - [Defeeated preview](defeeated-preview.md) — previews heroine defeat scenes from active opponents without changing the fight; optional scenes still require consent.
+- [Four-armed boss](four-armed-boss.md) — the kneeling/bowing/foot-kiss ending is opt-in, and the player can decline or stop it.
 - [Workspace verification tools](workspace-verification-tools.md) — run test tools in the artifact package; root commands may not find installed binaries.

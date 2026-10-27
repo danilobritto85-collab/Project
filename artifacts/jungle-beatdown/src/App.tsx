@@ -24,12 +24,16 @@ import {
   STATE_ROXY_SMOTHER,
   STATE_KARATE_OFFER,
   STATE_KARATE_CHALLENGE,
+  STATE_FOUR_ARM_BOSS_OFFER,
+  STATE_FOUR_ARM_BOSS_CHALLENGE,
+  FOUR_ARM_BOSS_SCENE_DURATION,
   useJungleGame,
   type FightConfig,
 } from './game/useJungleGame';
 
 type OpponentCountKey =
-  | 'amazonas' | 'ebony' | 'ninjas' | 'roxy' | 'karateBlonde' | 'karateEbony' | 'pantera';
+  | 'amazonas' | 'ebony' | 'ninjas' | 'roxy' | 'karateBlonde' | 'karateEbony'
+  | 'pantera' | 'fourArmBoss';
 
 function formatScore(score: number) {
   return Math.max(0, score).toString().padStart(6, '0');
@@ -39,10 +43,11 @@ interface OpponentCounterProps {
   label: string;
   kind: OpponentCountKey;
   value: number;
+  maximum?: number;
   onChange: (kind: OpponentCountKey, value: number) => void;
 }
 
-function OpponentCounter({ label, kind, value, onChange }: OpponentCounterProps) {
+function OpponentCounter({ label, kind, value, maximum, onChange }: OpponentCounterProps) {
   return (
     <div className="opponent-row">
       <div className="opponent-label">
@@ -55,12 +60,14 @@ function OpponentCounter({ label, kind, value, onChange }: OpponentCounterProps)
           <Minus aria-hidden="true" />
         </button>
         <input type="number" min="0" step="1" inputMode="numeric"
+          max={maximum}
           value={value} aria-label={`Quantidade de ${label}`}
           data-testid={`count-${kind}`}
           onChange={(event) => onChange(kind,
             event.currentTarget.value === '' ? 0 : event.currentTarget.valueAsNumber)} />
         <button type="button" onClick={() => onChange(kind, value + 1)}
-          disabled={!Number.isSafeInteger(value + 1)} aria-label={`Aumentar ${label}`}>
+          disabled={!Number.isSafeInteger(value + 1) || (maximum !== undefined && value >= maximum)}
+          aria-label={`Aumentar ${label}`}>
           <Plus aria-hidden="true" />
         </button>
       </div>
@@ -133,6 +140,8 @@ function App() {
     exitEbonyVictory,
     chooseKarateChallenge,
     exitKarateChallenge,
+    chooseFourArmBossChallenge,
+    exitFourArmBossChallenge,
   } = useJungleGame(canvasRef, fightConfig);
   const [defeatedMenuOpen, setDefeatedMenuOpen] = useState(false);
   const hpPercent = Math.max(0, Math.min(100, (snapshot.heroHp / snapshot.maxHeroHp) * 100));
@@ -146,6 +155,8 @@ function App() {
   const isRoxySmother = snapshot.phase === STATE_ROXY_SMOTHER;
   const isKarateOffer = snapshot.phase === STATE_KARATE_OFFER;
   const isKarateChallenge = snapshot.phase === STATE_KARATE_CHALLENGE;
+  const isFourArmBossOffer = snapshot.phase === STATE_FOUR_ARM_BOSS_OFFER;
+  const isFourArmBossChallenge = snapshot.phase === STATE_FOUR_ARM_BOSS_CHALLENGE;
   const isGroupDefeat = snapshot.phase === 'group-defeat';
   const isPlaying = snapshot.phase === 'playing';
   const opponentLabels: Record<string, string> = {
@@ -156,6 +167,7 @@ function App() {
     karateBlonde: 'Karateka loira',
     karateEbony: 'Karateka Ebony',
     pantera: 'Pantera',
+    fourArmBoss: 'Chefe Guerreira de Quatro Braços',
   };
   const isDefeatSequence = isSpecialDefeat || isNinjaFootsmother || isRoxySmother || isGroupDefeat ||
     snapshot.phase === 'ebony-victory' || snapshot.phase === 'pantera-combo';
@@ -163,9 +175,10 @@ function App() {
     ((isDefeatSequence && (snapshot.phase !== 'pantera-combo' || snapshot.heroHp <= 0)) ||
       snapshot.phase === 'game-over');
   const fightCount = fightConfig.amazonas + fightConfig.ebony + fightConfig.ninjas + fightConfig.roxy +
-    fightConfig.karateBlonde + fightConfig.karateEbony + fightConfig.pantera;
+    fightConfig.karateBlonde + fightConfig.karateEbony + fightConfig.pantera + fightConfig.fourArmBoss;
   const handleOpponentCountChange = (kind: OpponentCountKey, value: number) => {
     if (!Number.isSafeInteger(value) || value < 0) return;
+    if (kind === 'fourArmBoss' && value > 1) value = 1;
     setFightConfig((current) => ({
       ...current,
       [kind]: value,
@@ -173,7 +186,8 @@ function App() {
   };
   const sequencePercent = Math.max(0, Math.min(100,
     (snapshot.defeatSecondsLeft /
-      (isKarateChallenge ? KARATE_DEFEAT_DURATION
+        (isKarateChallenge ? KARATE_DEFEAT_DURATION
+          : isFourArmBossChallenge ? FOUR_ARM_BOSS_SCENE_DURATION
         : isSpecialDefeat || isNinjaFootsmother || isRoxySmother
           ? NINJA_FOOTSMOTHER_DURATION : 20)) * 100));
 
@@ -278,7 +292,17 @@ function App() {
                       <OpponentCounter label="Pantera" kind="pantera"
                         value={fightConfig.pantera}
                         onChange={handleOpponentCountChange} />
+                      <OpponentCounter label="Chefe de quatro braços" kind="fourArmBoss"
+                        value={fightConfig.fourArmBoss} maximum={1}
+                        onChange={handleOpponentCountChange} />
                     </div>
+                    {fightConfig.fourArmBoss > 0 && (
+                      <p className="roxy-special-help">
+                        A chefe tem mais resistência, alterna socos e chutes e pode usar um pisão pesado.
+                        A cena de encerramento com ajoelhar e beijo no pé só aparece após aceitar; você
+                        pode recusar ou encerrar a qualquer momento.
+                      </p>
+                    )}
                     {fightConfig.ebony > 0 && (
                       <div className="ebony-options">
                         <label>
@@ -530,6 +554,56 @@ function App() {
               <div className="roxy-choice-actions">
                 <button type="button" onClick={exitKarateChallenge}
                   data-testid="button-karate-stop">Encerrar sequência</button>
+              </div>
+            </section>
+          )}
+
+          {isFourArmBossOffer && (
+            <section className="roxy-choice-panel" role="dialog" aria-modal="true"
+              aria-labelledby="four-arm-boss-choice-title"
+              data-testid="four-arm-boss-consent-offer">
+              <div className="roxy-choice-copy">
+                <h2 id="four-arm-boss-choice-title">Cena opcional da Guerreira de Quatro Braços</h2>
+                <p>
+                  A sequência de ajoelhar, reverência e beijo no pé é voluntária e só começa
+                  se você aceitar. Recusar mostra a derrota comum; depois de aceitar, você
+                  pode parar a cena quando quiser.
+                </p>
+              </div>
+              <div className="roxy-choice-actions">
+                <button type="button" className="roxy-choice-accept"
+                  onClick={() => chooseFourArmBossChallenge(true)}
+                  data-testid="button-four-arm-boss-accept">
+                  Aceitar cena <kbd>Y</kbd>
+                </button>
+                <button type="button"
+                  onClick={() => chooseFourArmBossChallenge(false)}
+                  data-testid="button-four-arm-boss-decline" autoFocus>
+                  Recusar · derrota comum <kbd>N</kbd>
+                </button>
+              </div>
+            </section>
+          )}
+
+          {isFourArmBossChallenge && (
+            <section className="roxy-choice-panel roxy-voluntary-panel"
+              aria-live="polite" data-testid="four-arm-boss-consensual-scene">
+              <div className="roxy-choice-copy">
+                <h2>Cena voluntária · quadro {Math.min(
+                  4,
+                  Math.floor(snapshot.fourArmBossSceneElapsed /
+                    (FOUR_ARM_BOSS_SCENE_DURATION / 4)) + 1,
+                )} de 4</h2>
+                <p>
+                  A cena foi aceita e não reduz mais HP. O quadro final fica parado; pressione
+                  Encerrar ou Escape para sair.
+                </p>
+              </div>
+              <div className="roxy-choice-actions">
+                <button type="button" onClick={exitFourArmBossChallenge}
+                  data-testid="button-four-arm-boss-stop">
+                  {snapshot.defeatedPreviewActive ? 'Voltar à luta' : 'Encerrar cena'} <kbd>Esc</kbd>
+                </button>
               </div>
             </section>
           )}

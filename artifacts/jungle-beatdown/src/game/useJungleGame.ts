@@ -23,6 +23,18 @@ import {
   preparePanteraSheet,
 } from './panteraSprites';
 import { PANTERA_COMBO_DURATION, PANTERA_COMBO_HITS, panteraComboPose } from './panteraCombo';
+import {
+  FOUR_ARM_HIGH_KICK,
+  FOUR_ARM_IDLE,
+  FOUR_ARM_PUNCH_FRAMES,
+  FOUR_ARM_SPIN_KICK,
+  FOUR_ARM_STORY_FRAMES,
+  FOUR_ARM_WALK_FRAMES,
+  extractLargestBossPose,
+  fourArmStoryFrameIndex,
+  prepareFourArmBossSheet,
+  prepareFourArmStorySheet,
+} from './fourArmBossSprites';
 
 import amazonSheetUrl from '@assets/amazon_1791470375689.png';
 import backgroundUrl from '@assets/background_1791470375690.png';
@@ -59,6 +71,8 @@ import karateEbonySheetUrl from '@assets/karate_ebony_1791929279637.png';
 import karateEbonyAttackOneUrl from '@assets/karate_ebony_atk_1_1791929279637.png';
 import karateEbonyAttackTwoUrl from '@assets/karate_ebony_atk_2_1791929279638.png';
 import panteraSheetUrl from '@assets/image_1792014912583.png';
+import fourArmBossSheetUrl from '@assets/image_1793063368917.png';
+import fourArmBossStoryUrl from '@assets/image_1793063355742.png';
 
 const WIDTH = 1024;
 const HEIGHT = 576;
@@ -76,6 +90,7 @@ export interface FightConfig {
   karateBlonde: number;
   karateEbony: number;
   pantera: number;
+  fourArmBoss: number;
   ebonyVictory: boolean;
 }
 
@@ -87,6 +102,7 @@ export const DEFAULT_FIGHT_CONFIG: FightConfig = {
   karateBlonde: 0,
   karateEbony: 0,
   pantera: 0,
+  fourArmBoss: 0,
   ebonyVictory: false,
 };
 
@@ -96,6 +112,9 @@ export const STATE_ROXY_CHALLENGE = 'roxy-challenge' as const;
 export const STATE_ROXY_SMOTHER = 'roxy-smother' as const;
 export const STATE_KARATE_OFFER = 'karate-offer' as const;
 export const STATE_KARATE_CHALLENGE = 'karate-challenge' as const;
+export const STATE_FOUR_ARM_BOSS_OFFER = 'four-arm-boss-offer' as const;
+export const STATE_FOUR_ARM_BOSS_CHALLENGE = 'four-arm-boss-challenge' as const;
+export const FOUR_ARM_BOSS_SCENE_DURATION = 8;
 
 export type GamePhase =
   | 'title'
@@ -111,6 +130,8 @@ export type GamePhase =
   | typeof STATE_ROXY_SMOTHER
   | typeof STATE_KARATE_OFFER
   | typeof STATE_KARATE_CHALLENGE
+  | typeof STATE_FOUR_ARM_BOSS_OFFER
+  | typeof STATE_FOUR_ARM_BOSS_CHALLENGE
   | 'group-defeat'
   | 'game-over';
 
@@ -131,6 +152,8 @@ export interface GameSnapshot {
   karateOfferOpponent: 'blonde' | 'ebony' | 'duo' | null;
   karateOfferIsApproach: boolean;
   karateSceneActive: boolean;
+  fourArmBossSceneElapsed: number;
+  fourArmBossSceneComplete: boolean;
   defeatedPreviewActive: boolean;
   activeOpponentKinds: OpponentKind[];
 }
@@ -161,6 +184,10 @@ interface SpriteAtlas {
   karateEbonyAttackTwo: HTMLCanvasElement | null;
   ninja: HTMLCanvasElement | null;
   pantera: HTMLCanvasElement | null;
+  fourArmBoss: HTMLCanvasElement | null;
+  fourArmBossKick: HTMLCanvasElement | null;
+  fourArmBossSpin: HTMLCanvasElement | null;
+  fourArmBossStory: HTMLCanvasElement | null;
   ninjaFootsmother: HTMLCanvasElement | null;
   ninjaFootsmotherEnding: HTMLCanvasElement | null;
   roxy: HTMLCanvasElement | null;
@@ -170,7 +197,7 @@ interface SpriteAtlas {
   pinExtended: HTMLCanvasElement | null;
 }
 
-type EnemyKind = 'amazon' | 'ninja' | 'roxy' | 'karateBlonde' | 'karateEbony' | 'pantera';
+type EnemyKind = 'amazon' | 'ninja' | 'roxy' | 'karateBlonde' | 'karateEbony' | 'pantera' | 'fourArmBoss';
 type EnemyState = 'idle' | 'walk' | 'run' | 'taunt' | 'attack' | 'hurt' | 'down';
 
 interface Enemy {
@@ -212,7 +239,8 @@ type KarateSequenceKind = 'blonde' | 'ebony' | 'duo';
 
 interface World {
   phase: GamePhase;
-  defeatKind: 'special' | 'group' | 'ninja-footsmother' | 'roxy-smother' | 'ebony-victory' | 'karate-victory' | 'pantera-combo' | null;
+  defeatKind: 'special' | 'group' | 'ninja-footsmother' | 'roxy-smother' | 'ebony-victory' |
+    'karate-victory' | 'pantera-combo' | 'four-arm-boss' | null;
   fightConfig: FightConfig;
   panteraElapsed: number;
   panteraHitIndex: number;
@@ -247,6 +275,8 @@ interface World {
   karateOfferIsApproach: boolean;
   isolatedDefeatOpponentId: number | null;
   karateDefeatElapsed: number;
+  fourArmBossSceneElapsed: number;
+  fourArmBossSceneComplete: boolean;
   footstepTimer: number;
   soundEnabled: boolean;
   sound: SoundEngine;
@@ -381,6 +411,7 @@ const ATTACK_FRAMES: Record<EnemyKind, SpriteRect[]> = {
   karateBlonde: KARATE_BLONDE_ATTACKS,
   karateEbony: KARATE_EBONY_ATTACKS,
   pantera: PANTERA_ATTACK_FRAMES,
+  fourArmBoss: [...FOUR_ARM_PUNCH_FRAMES, FOUR_ARM_SPIN_KICK, FOUR_ARM_HIGH_KICK],
 };
 const ENEMY_FRAMES = {
   amazon: AMAZON_FRAMES,
@@ -389,6 +420,14 @@ const ENEMY_FRAMES = {
   karateBlonde: KARATE_BLONDE,
   karateEbony: KARATE_EBONY,
   pantera: PANTERA_FRAMES,
+  fourArmBoss: {
+    idle: FOUR_ARM_IDLE,
+    walk: FOUR_ARM_WALK_FRAMES[0],
+    run: FOUR_ARM_WALK_FRAMES[4],
+    hurt: FOUR_ARM_PUNCH_FRAMES[0],
+    down: FOUR_ARM_IDLE,
+    defeated: FOUR_ARM_IDLE,
+  },
 };
 
 const GROUP_AMAZON_OFFSETS = [
@@ -454,6 +493,8 @@ const initialSnapshot: GameSnapshot = {
   karateOfferOpponent: null,
   karateOfferIsApproach: false,
   karateSceneActive: false,
+  fourArmBossSceneElapsed: 0,
+  fourArmBossSceneComplete: false,
   defeatedPreviewActive: false,
   activeOpponentKinds: [],
 };
@@ -469,18 +510,23 @@ function createFightLineup(config: FightConfig): OpponentKind[] {
     karateBlonde: config.karateBlonde,
     karateEbony: config.karateEbony,
     pantera: config.pantera,
+    fourArmBoss: config.fourArmBoss,
   };
   if (Object.values(counts).some((count) => !Number.isSafeInteger(count) || count < 0)) {
     throw new RangeError('As quantidades de adversárias devem ser números inteiros não negativos.');
   }
+  if (counts.fourArmBoss > 1) {
+    throw new RangeError('A luta aceita apenas uma Chefe Guerreira de Quatro Braços.');
+  }
   if (counts.amazon === 5 && counts.ninja === 3 && counts.roxy === 1 && counts.ebony === 0 &&
-      counts.karateBlonde === 0 && counts.karateEbony === 0 && counts.pantera === 0) {
+      counts.karateBlonde === 0 && counts.karateEbony === 0 && counts.pantera === 0 &&
+      counts.fourArmBoss === 0) {
     return [...STARTING_ENEMY_KINDS];
   }
 
   const lineup: OpponentKind[] = [];
   const order: OpponentKind[] = [
-    'amazon', 'ebony', 'ninja', 'roxy', 'karateBlonde', 'karateEbony', 'pantera',
+    'amazon', 'ebony', 'ninja', 'roxy', 'karateBlonde', 'karateEbony', 'pantera', 'fourArmBoss',
   ];
   while (order.some((kind) => counts[kind] > 0)) {
     for (const kind of order) {
@@ -504,14 +550,14 @@ function createEnemy(id: number, index: number, opponent: OpponentKind, lineupSi
     y: 475 + ((index * 29) % 55),
     vx: 0,
     vy: 0,
-    hp: 3,
+    hp: opponent === 'fourArmBoss' ? 6 : 3,
     active: true,
     direction: -1,
     state: 'idle',
     stateTimer: 0,
     attackPoseIndex: index % 3,
     attackCooldown: 1.3 + (index % 9) * 0.32,
-    specialAttackCooldown: 2.5 + (index % 3),
+    specialAttackCooldown: opponent === 'fourArmBoss' ? 2.2 : 2.5 + (index % 3),
     nextEbonySpecial: 'stomp',
     tauntCooldown: opponent === 'karateEbony' ? 0.8 : 0,
     respawnAt: 0,
@@ -560,6 +606,8 @@ function createWorld(
     karateOfferIsApproach: false,
     isolatedDefeatOpponentId: null,
     karateDefeatElapsed: 0,
+    fourArmBossSceneElapsed: 0,
+    fourArmBossSceneComplete: false,
     footstepTimer: 0,
     soundEnabled: true,
     sound: {
@@ -615,6 +663,8 @@ function publishSnapshot(world: World): GameSnapshot {
       world.phase === STATE_KARATE_OFFER && world.karateOfferIsApproach,
     karateSceneActive: world.phase === STATE_KARATE_CHALLENGE ||
       (world.phase === 'game-over' && world.defeatKind === 'karate-victory'),
+    fourArmBossSceneElapsed: world.fourArmBossSceneElapsed,
+    fourArmBossSceneComplete: world.fourArmBossSceneComplete,
     defeatedPreviewActive: world.defeatedPreviewActive,
     activeOpponentKinds,
   };
@@ -1469,7 +1519,68 @@ function drawKarateBaseSprite(
   context.restore();
 }
 
+function drawFourArmStoryFrame(
+  context: CanvasRenderingContext2D,
+  sheet: HTMLCanvasElement | null,
+  frame: SpriteRect,
+  centerX: number,
+  groundY: number,
+) {
+  if (!sheet) return;
+  const visible = getCompositeVisibleBounds(sheet, frame);
+  const targetHeight = 286;
+  const scale = targetHeight / Math.max(1, visible.h);
+  context.save();
+  context.fillStyle = 'rgba(7, 13, 8, 0.28)';
+  context.beginPath();
+  context.ellipse(centerX, groundY + 7, visible.w * scale * 0.42, 7, 0, 0, Math.PI * 2);
+  context.fill();
+  context.drawImage(
+    sheet,
+    frame.x + visible.x,
+    frame.y + visible.y,
+    visible.w,
+    visible.h,
+    centerX - visible.w * scale / 2,
+    groundY + 7 - visible.h * scale,
+    visible.w * scale,
+    visible.h * scale,
+  );
+  context.restore();
+}
+
+function drawFourArmStompEffect(context: CanvasRenderingContext2D, enemy: Enemy) {
+  if (enemy.kind !== 'fourArmBoss' || enemy.state !== 'attack' ||
+      enemy.attackPoseIndex !== ATTACK_FRAMES.fourArmBoss.length - 1) return;
+  const progress = clamp(1 - enemy.stateTimer / 0.82, 0, 1);
+  const impact = clamp(1 - Math.abs(progress - 0.72) / 0.23, 0, 1);
+  if (impact <= 0) return;
+  context.save();
+  context.globalAlpha = impact * 0.7;
+  context.strokeStyle = '#ead3a0';
+  context.lineWidth = 3;
+  context.beginPath();
+  context.ellipse(enemy.x + enemy.direction * 66, enemy.y + 6,
+    42 + impact * 52, 6 + impact * 10, 0, 0, Math.PI * 2);
+  context.stroke();
+  context.restore();
+}
+
 function enemyAnimationFrame(enemy: Enemy, now: number): SpriteRect {
+  if (enemy.kind === 'fourArmBoss') {
+    if (enemy.state === 'walk') {
+      return FOUR_ARM_WALK_FRAMES[Math.floor(now / 165 + enemy.id * 0.61) % FOUR_ARM_WALK_FRAMES.length];
+    }
+    if (enemy.state === 'run') {
+      return FOUR_ARM_WALK_FRAMES[Math.floor(now / 120 + enemy.id) % FOUR_ARM_WALK_FRAMES.length];
+    }
+    if (enemy.state === 'attack') {
+      return ATTACK_FRAMES.fourArmBoss[enemy.attackPoseIndex % ATTACK_FRAMES.fourArmBoss.length];
+    }
+    if (enemy.state === 'hurt') return FOUR_ARM_PUNCH_FRAMES[0];
+    if (enemy.state === 'down') return FOUR_ARM_HIGH_KICK;
+    return FOUR_ARM_IDLE;
+  }
   if (enemy.ebony) {
     if (enemy.state === 'walk') {
       const frameIndex = WALK_CYCLE[Math.floor(now / 175 + enemy.id * 0.67) % WALK_CYCLE.length];
@@ -1541,6 +1652,35 @@ function drawEnemySprite(
   groundOffset = 7,
   anchorX = enemy.x,
 ) {
+  if (enemy.kind === 'fourArmBoss') {
+    const isStomp = enemy.state === 'attack' &&
+      enemy.attackPoseIndex === ATTACK_FRAMES.fourArmBoss.length - 1;
+    const isSpin = enemy.state === 'attack' && enemy.attackPoseIndex === FOUR_ARM_PUNCH_FRAMES.length;
+    const image = isStomp ? atlas.fourArmBossKick
+      : isSpin ? atlas.fourArmBossSpin : atlas.fourArmBoss;
+    const rect = (isStomp || isSpin) && image
+      ? { x: 0, y: 0, w: image.width, h: image.height }
+      : frame;
+    const progress = enemy.state === 'attack'
+      ? clamp(1 - enemy.stateTimer / 0.82, 0, 1) : 0;
+    const stompLift = isStomp && progress < 0.44
+      ? Math.sin((progress / 0.44) * Math.PI) * 17
+      : isSpin && progress < 0.5 ? Math.sin(progress * Math.PI * 2) * 8 : 0;
+    drawAtlasSprite(
+      context,
+      image,
+      rect,
+      anchorX,
+      enemy.y,
+      Math.max(150, (height * rect.w) / Math.max(1, rect.h)),
+      height + stompLift,
+      enemy.direction < 0,
+      0,
+      lift,
+      groundOffset,
+    );
+    return;
+  }
   if (enemy.kind === 'roxy') {
     drawRoxyFrame(context, atlas.roxy, frame as RoxyFrame,
       enemy.x, enemy.y, enemy.direction < 0, enemy.state, enemy.stride, lift);
@@ -1702,6 +1842,35 @@ function drawWorld(
           groundY - 20 - Math.sin(i * 2.4) * spread / 2, 5, 3);
       }
       context.restore();
+    }
+    return;
+  }
+
+  const fourArmBossOffer = world.phase === STATE_FOUR_ARM_BOSS_OFFER;
+  const fourArmBossScene = world.phase === STATE_FOUR_ARM_BOSS_CHALLENGE ||
+    (world.phase === 'game-over' && world.defeatKind === 'four-arm-boss');
+  if (fourArmBossOffer || fourArmBossScene) {
+    const boss = world.enemies.find((enemy) => enemy.id === world.currentGrappler);
+    if (fourArmBossScene) {
+      const frameIndex = fourArmStoryFrameIndex(
+        world.fourArmBossSceneElapsed,
+        FOUR_ARM_BOSS_SCENE_DURATION,
+        world.fourArmBossSceneComplete,
+      );
+      drawFourArmStoryFrame(
+        context,
+        atlas.fourArmBossStory,
+        FOUR_ARM_STORY_FRAMES[frameIndex],
+        WIDTH / 2,
+        clamp(world.heroY, FLOOR_MIN, FLOOR_MAX),
+      );
+    } else {
+      const groundY = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
+      drawAtlasSprite(context, atlas.hero, HERO_FRAMES.defeated,
+        world.heroX, groundY, 230, 80, world.facing < 0);
+      if (boss) {
+        drawEnemySprite(context, atlas, boss, FOUR_ARM_IDLE, 208, 0, 7, boss.x);
+      }
     }
     return;
   }
@@ -2268,6 +2437,80 @@ function endKarateChallenge(world: World) {
   enterGameOver(world);
 }
 
+function beginFourArmBossOffer(world: World, boss: Enemy) {
+  stopClips(world);
+  world.phase = STATE_FOUR_ARM_BOSS_OFFER;
+  world.defeatKind = null;
+  world.isGrappleActive = true;
+  world.currentGrappler = boss.id;
+  world.heroHp = world.defeatedPreviewActive ? world.heroHp : 0;
+  world.defeatSecondsLeft = 0;
+  world.fourArmBossSceneElapsed = 0;
+  world.fourArmBossSceneComplete = false;
+  world.heroAction = 'hurt';
+  world.actionTimer = 0;
+  world.heroVelocityX = 0;
+  world.heroVelocityY = 0;
+  world.jumpOffset = 0;
+  world.jumpVelocity = 0;
+  world.heroX = clamp(world.heroX, 220, WIDTH - 220);
+  world.heroY = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
+  world.particles = [];
+  boss.direction = boss.x < world.heroX ? 1 : -1;
+  boss.x = clamp(world.heroX - boss.direction * 142, 80, WIDTH - 80);
+  boss.y = world.heroY;
+  boss.state = 'idle';
+  boss.stateTimer = 0;
+  boss.vx = 0;
+  boss.vy = 0;
+  world.enemies.forEach((enemy) => {
+    enemy.vx = 0;
+    enemy.vy = 0;
+    if (enemy.hp > 0 && enemy.active) enemy.state = 'idle';
+  });
+}
+
+function respondToFourArmBossOffer(world: World, accepted: boolean) {
+  if (world.phase !== STATE_FOUR_ARM_BOSS_OFFER) return;
+  stopClips(world);
+  if (!accepted) {
+    const attackerId = world.currentGrappler;
+    world.currentGrappler = null;
+    if (world.defeatedPreviewActive) {
+      world.isolatedDefeatOpponentId = attackerId;
+      world.phase = 'group-defeat';
+      world.defeatKind = 'group';
+      world.isGrappleActive = false;
+      world.defeatSecondsLeft = GROUP_DEFEAT_DURATION;
+      world.heroAction = 'hurt';
+      world.actionTimer = 0.9;
+      world.heroVelocityX = 0;
+      world.heroVelocityY = 0;
+    } else {
+      beginGenericDefeat(world);
+    }
+    return;
+  }
+
+  world.phase = STATE_FOUR_ARM_BOSS_CHALLENGE;
+  world.defeatKind = 'four-arm-boss';
+  world.isGrappleActive = true;
+  world.heroHp = world.defeatedPreviewActive ? world.heroHp : 0;
+  world.fourArmBossSceneElapsed = 0;
+  world.fourArmBossSceneComplete = false;
+  world.defeatSecondsLeft = FOUR_ARM_BOSS_SCENE_DURATION;
+}
+
+function endFourArmBossChallenge(world: World) {
+  if (world.phase !== STATE_FOUR_ARM_BOSS_CHALLENGE &&
+      !(world.phase === 'game-over' && world.defeatKind === 'four-arm-boss')) return;
+  stopClips(world);
+  if (world.defeatedPreviewActive) return;
+  world.defeatKind = 'group';
+  world.phase = 'game-over';
+  world.defeatSecondsLeft = 0;
+}
+
 function beginSpecialGrapple(world: World, enemy: Enemy) {
   // Karatekas never enter the generic grapple renderer: its paired sheets
   // contain an Amazon. Keep every karate special behind its own opt-in.
@@ -2345,9 +2588,11 @@ function doHeroAttack(world: World, action: 'punch' | 'kick') {
   for (const enemy of world.enemies.filter((item) => item.hp > 0 && item.active)) {
     const dx = enemy.x - world.heroX;
     const dy = Math.abs(enemy.y - world.heroY);
+    const enemyAttackReach = range + (enemy.kind === 'fourArmBoss' ? 38 : 0);
+    const enemyHurtHeight = enemy.kind === 'fourArmBoss' ? 78 : 65;
     if (
-      dy < 65 &&
-      Math.abs(dx) < range &&
+      dy < enemyHurtHeight &&
+      Math.abs(dx) < enemyAttackReach &&
       (Math.sign(dx) === world.facing || Math.abs(dx) < 42)
     ) {
       enemy.hp -= damage;
@@ -2422,7 +2667,9 @@ function updateEnemies(world: World, dt: number, now: number) {
   if (world.phase === 'pantera-combo' ||
       (world.phase === 'game-over' && world.defeatKind === 'pantera-combo')) return;
   if (world.phase === STATE_ROXY_OFFER || world.phase === STATE_ROXY_CHALLENGE ||
-      world.phase === STATE_KARATE_OFFER || world.phase === STATE_KARATE_CHALLENGE) return;
+      world.phase === STATE_KARATE_OFFER || world.phase === STATE_KARATE_CHALLENGE ||
+      world.phase === STATE_FOUR_ARM_BOSS_OFFER ||
+      world.phase === STATE_FOUR_ARM_BOSS_CHALLENGE) return;
   if (world.phase === 'playing') {
     for (const enemy of world.enemies) {
       if (!enemy.active && enemy.hp <= 0) {
@@ -2490,7 +2737,7 @@ function updateEnemies(world: World, dt: number, now: number) {
 
     // Let Roxy finish the current pose before pursuing again. Otherwise the
     // next AI tick replaces her kick/hit pose with a walk and slides her legs.
-    if ((enemy.kind === 'roxy' || enemy.ebony ||
+    if ((enemy.kind === 'roxy' || enemy.ebony || enemy.kind === 'fourArmBoss' ||
       enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') &&
         enemy.stateTimer > 0 &&
         (enemy.state === 'attack' || enemy.state === 'hurt' || enemy.state === 'down')) {
@@ -2521,7 +2768,8 @@ function updateEnemies(world: World, dt: number, now: number) {
       }
     }
 
-    if (distance > 78) {
+    const approachDistance = enemy.kind === 'fourArmBoss' ? 128 : 78;
+    if (distance > approachDistance) {
       const pace = (distance > 250 ? 92 : 68) *
         (enemy.kind === 'ninja' ? 1.14 : enemy.kind === 'roxy' ? 1.06 : 1);
       const velocityResponse = Math.min(1, dt * 7.5);
@@ -2539,12 +2787,24 @@ function updateEnemies(world: World, dt: number, now: number) {
       enemy.x += enemy.vx * dt;
       enemy.y += enemy.vy * dt;
       enemy.state = 'attack';
-      enemy.stateTimer = 0.48;
-      enemy.attackPoseIndex = (enemy.attackPoseIndex + 1) % ATTACK_FRAMES[enemy.kind].length;
+      enemy.stateTimer = enemy.kind === 'fourArmBoss' ? 0.82 : 0.48;
+      if (enemy.kind === 'fourArmBoss') {
+        const roll = random(world);
+        const stomp = enemy.specialAttackCooldown <= 0 && roll > 0.68;
+        const spin = !stomp && roll > 0.42;
+        enemy.attackPoseIndex = stomp
+          ? ATTACK_FRAMES.fourArmBoss.length - 1
+          : spin ? FOUR_ARM_PUNCH_FRAMES.length
+            : Math.floor(random(world) * FOUR_ARM_PUNCH_FRAMES.length);
+        if (stomp) enemy.specialAttackCooldown = 5.5;
+      } else {
+        enemy.attackPoseIndex = (enemy.attackPoseIndex + 1) % ATTACK_FRAMES[enemy.kind].length;
+      }
       enemy.attackCooldown =
-        (enemy.kind === 'ninja' ? 1.08 : enemy.kind === 'roxy' ? 1.18 : 1.3) +
+        (enemy.kind === 'ninja' ? 1.08 : enemy.kind === 'roxy' ? 1.18
+          : enemy.kind === 'fourArmBoss' ? 1.25 : 1.3) +
         random(world) * 0.75;
-      if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') {
+        if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') {
         playKarateAttackVoice(
           world,
           enemy.kind === 'karateBlonde' ? 'blonde' : 'ebony',
@@ -2552,6 +2812,9 @@ function updateEnemies(world: World, dt: number, now: number) {
         );
       } else if (enemy.kind === 'pantera') {
         playHit(world);
+      } else if (enemy.kind === 'fourArmBoss') {
+        if (enemy.attackPoseIndex >= FOUR_ARM_PUNCH_FRAMES.length) playStomp(world);
+        else playHit(world);
       } else {
         playClip(
           world,
@@ -2562,16 +2825,32 @@ function updateEnemies(world: World, dt: number, now: number) {
         );
       }
       if (enemy.kind === 'ninja') playNinjaKiai(world);
-      if (distance < 106 && world.heroHitCooldown <= 0) {
-        world.heroHp = Math.max(0, world.heroHp - (7 + Math.floor(random(world) * 4)));
-        world.heroHitCooldown = 0.68;
+      const isBoss = enemy.kind === 'fourArmBoss';
+      const bossStomp = isBoss && enemy.attackPoseIndex === ATTACK_FRAMES.fourArmBoss.length - 1;
+      const bossSpin = isBoss && enemy.attackPoseIndex === FOUR_ARM_PUNCH_FRAMES.length;
+      const hitRange = isBoss ? 168 : 106;
+      if (distance < hitRange && world.heroHitCooldown <= 0) {
+        const damage = bossStomp ? 24 : bossSpin ? 15
+          : isBoss ? 11 : 7 + Math.floor(random(world) * 4);
+        world.heroHp = Math.max(0, world.heroHp - damage);
+        world.heroHitCooldown = isBoss ? 0.84 : 0.68;
         world.heroAction = 'hurt';
-        world.actionTimer = 0.36;
-        playStomp(world);
+        world.actionTimer = bossStomp ? 0.52 : 0.36;
+        if (bossStomp) {
+          world.heroX = clamp(world.heroX + enemy.direction * 22, 48, WIDTH - 48);
+          playStomp(world);
+        } else if (bossSpin) {
+          world.heroX = clamp(world.heroX + enemy.direction * 12, 48, WIDTH - 48);
+          playHit(world);
+        } else {
+          playStomp(world);
+        }
         playClip(world, 'heroineHurt', 0.64, 430);
         if (world.heroHp <= 0) {
           if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') {
             beginKarateOffer(world, enemy);
+          } else if (isBoss) {
+            beginFourArmBossOffer(world, enemy);
           } else {
             beginGenericDefeat(world, enemy);
           }
@@ -2615,7 +2894,8 @@ function updateEnemies(world: World, dt: number, now: number) {
               continue;
             }
           }
-        } else if (enemy.kind !== 'pantera' && world.heroHp <= 42 && random(world) < 0.25) {
+        } else if (enemy.kind !== 'pantera' && !isBoss &&
+                   world.heroHp <= 42 && random(world) < 0.25) {
           beginSpecialGrapple(world, enemy);
           continue;
         }
@@ -2798,6 +3078,19 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
     if (world.defeatSecondsLeft <= 0) {
       stopClips(world);
       enterGameOver(world);
+    }
+  } else if (world.phase === STATE_FOUR_ARM_BOSS_CHALLENGE) {
+    world.fourArmBossSceneElapsed = Math.min(
+      FOUR_ARM_BOSS_SCENE_DURATION,
+      world.fourArmBossSceneElapsed + dt,
+    );
+    world.defeatSecondsLeft = Math.max(
+      0,
+      FOUR_ARM_BOSS_SCENE_DURATION - world.fourArmBossSceneElapsed,
+    );
+    if (world.fourArmBossSceneElapsed >= FOUR_ARM_BOSS_SCENE_DURATION) {
+      world.fourArmBossSceneComplete = true;
+      if (!world.defeatedPreviewActive) enterGameOver(world);
     }
   } else if (world.phase === 'grapple') {
     world.grappleSecondsLeft = Math.max(0, world.grappleSecondsLeft - dt);
@@ -3046,6 +3339,9 @@ export function useJungleGame(
     } else if (kind === 'karateBlonde' || kind === 'karateEbony') {
       beginKarateOffer(world, attacker);
       world.defeatedPreviewActive = true;
+    } else if (kind === 'fourArmBoss') {
+      beginFourArmBossOffer(world, attacker);
+      world.defeatedPreviewActive = true;
     } else if (kind === 'ebony' && world.fightConfig.ebonyVictory) {
       beginGenericDefeat(world, attacker, attacker.id);
       world.defeatedPreviewActive = true;
@@ -3114,6 +3410,22 @@ export function useJungleGame(
     resetGame('title');
   }, [exitDefeatedPreview, resetGame]);
 
+  const chooseFourArmBossChallenge = useCallback((accepted: boolean) => {
+    respondToFourArmBossOffer(worldRef.current, accepted);
+    pressedRef.current.clear();
+    setSnapshot(publishSnapshot(worldRef.current));
+  }, []);
+
+  const exitFourArmBossChallenge = useCallback(() => {
+    if (worldRef.current.defeatedPreviewActive) {
+      exitDefeatedPreview();
+      return;
+    }
+    endFourArmBossChallenge(worldRef.current);
+    pressedRef.current.clear();
+    setSnapshot(publishSnapshot(worldRef.current));
+  }, [exitDefeatedPreview]);
+
   const pressVirtualControl = useCallback((code: string) => {
     const world = worldRef.current;
     if (code === 'Escape' && world.defeatKind === 'ebony-victory') {
@@ -3133,12 +3445,21 @@ export function useJungleGame(
       if (code === 'KeyN' || code === 'Escape') chooseKarateChallenge(false);
       return;
     }
+    if (!wasPressed && world.phase === STATE_FOUR_ARM_BOSS_OFFER) {
+      if (code === 'KeyY') chooseFourArmBossChallenge(true);
+      if (code === 'KeyN' || code === 'Escape') chooseFourArmBossChallenge(false);
+      return;
+    }
     if (!wasPressed && world.phase === STATE_ROXY_CHALLENGE && code === 'Escape') {
       exitRoxyChallenge();
       return;
     }
     if (!wasPressed && world.phase === STATE_KARATE_CHALLENGE && code === 'Escape') {
       exitKarateChallenge();
+      return;
+    }
+    if (!wasPressed && world.phase === STATE_FOUR_ARM_BOSS_CHALLENGE && code === 'Escape') {
+      exitFourArmBossChallenge();
       return;
     }
     if (code === 'KeyJ') {
@@ -3165,8 +3486,10 @@ export function useJungleGame(
   }, [
     chooseRoxyChallenge,
     chooseKarateChallenge,
+    chooseFourArmBossChallenge,
     exitRoxyChallenge,
     exitKarateChallenge,
+    exitFourArmBossChallenge,
     restartGame,
   ]);
 
@@ -3201,6 +3524,10 @@ export function useJungleGame(
       hero: null,
       amazon: null,
       pantera: null,
+      fourArmBoss: null,
+      fourArmBossKick: null,
+      fourArmBossSpin: null,
+      fourArmBossStory: null,
       ebony: null,
       ebonyStomp: null,
       ebonyVictory: null,
@@ -3259,6 +3586,7 @@ export function useJungleGame(
           karateBlonde: blonde ? 1 : 0,
           karateEbony: blonde ? 0 : 1,
           pantera: 0,
+          fourArmBoss: 0,
           ebonyVictory: false,
         };
         const world = worldRef.current;
@@ -3298,6 +3626,7 @@ export function useJungleGame(
           karateBlonde: blonde ? 1 : 0,
           karateEbony: !blonde || duo ? 1 : 0,
           pantera: 0,
+          fourArmBoss: 0,
           ebonyVictory: false,
         };
         const world = worldRef.current;
@@ -3337,6 +3666,7 @@ export function useJungleGame(
           karateEbony: 0,
           ebony: duo ? 2 : 1,
           pantera: 0,
+          fourArmBoss: 0,
           ebonyVictory: true,
         };
         const world = worldRef.current;
@@ -3367,6 +3697,56 @@ export function useJungleGame(
         freezePreview = params.get('_freeze') === '1';
         setSnapshot(publishSnapshot(world));
       }
+      if (scene === 'four-arm-boss' || scene === 'four-arm-boss-offer') {
+        const config: FightConfig = {
+          amazonas: 0,
+          ebony: 0,
+          ninjas: 0,
+          roxy: 0,
+          karateBlonde: 0,
+          karateEbony: 0,
+          pantera: 0,
+          fourArmBoss: 1,
+          ebonyVictory: false,
+        };
+        const world = worldRef.current;
+        const oldSound = world.sound;
+        Object.assign(world, createWorld(createFightLineup(config), config), {
+          phase: 'playing',
+          heroX: 430,
+          heroY: 510,
+          heroHp: 0,
+          sound: oldSound,
+          soundEnabled: false,
+        });
+        world.sound.enabled = false;
+        const boss = world.enemies[0];
+        boss.x = 650;
+        boss.y = 510;
+        boss.direction = -1;
+        boss.state = 'idle';
+        if (scene === 'four-arm-boss-offer' || params.get('_offer') === '1') {
+          world.heroHp = 100;
+          beginFourArmBossOffer(world, boss);
+        } else {
+          world.defeatedPreviewActive = true;
+          beginFourArmBossOffer(world, boss);
+          respondToFourArmBossOffer(world, true);
+          world.fourArmBossSceneElapsed = clamp(
+            Number(params.get('_elapsed') ?? 0),
+            0,
+            FOUR_ARM_BOSS_SCENE_DURATION,
+          );
+          world.defeatSecondsLeft = Math.max(
+            0,
+            FOUR_ARM_BOSS_SCENE_DURATION - world.fourArmBossSceneElapsed,
+          );
+          world.fourArmBossSceneComplete =
+            world.fourArmBossSceneElapsed >= FOUR_ARM_BOSS_SCENE_DURATION;
+        }
+        freezePreview = params.get('_freeze') === '1';
+        setSnapshot(publishSnapshot(world));
+      }
       if (scene === 'pantera') {
         const config: FightConfig = {
           amazonas: 0,
@@ -3376,6 +3756,7 @@ export function useJungleGame(
           karateBlonde: 0,
           karateEbony: 0,
           pantera: 1,
+          fourArmBoss: 0,
           ebonyVictory: false,
         };
         const world = worldRef.current;
@@ -3580,6 +3961,8 @@ export function useJungleGame(
       loadImage(karateEbonyAttackOneUrl),
       loadImage(karateEbonyAttackTwoUrl),
       loadImage(panteraSheetUrl),
+      loadImage(fourArmBossSheetUrl),
+      loadImage(fourArmBossStoryUrl),
     ]).then(([
       background,
       hero,
@@ -3603,15 +3986,22 @@ export function useJungleGame(
       karateEbonyAttackOne,
       karateEbonyAttackTwo,
       panteraImage,
+      fourArmBossImage,
+      fourArmBossStoryImage,
     ]) => {
       if (disposed) return;
       const blondeBase = prepareKarateSheet(karateBlonde);
       const ebonyBase = prepareKarateSheet(karateEbony);
+      const fourArmBoss = prepareFourArmBossSheet(fourArmBossImage);
       atlas = {
         background,
         hero: removeCheckerboard(hero),
         amazon: withRedToenails(removeCheckerboard(amazon), 'amazon'),
         pantera: preparePanteraSheet(panteraImage),
+        fourArmBoss,
+        fourArmBossKick: extractLargestBossPose(fourArmBoss, FOUR_ARM_HIGH_KICK),
+        fourArmBossSpin: extractLargestBossPose(fourArmBoss, FOUR_ARM_SPIN_KICK),
+        fourArmBossStory: prepareFourArmStorySheet(fourArmBossStoryImage),
         ebony: withRedToenails(prepareEbonySheet(ebony, EBONY_BASE_CROPS), 'ebony'),
         ebonyStomp: withRedToenails(prepareEbonySheet(ebonyStomp, EBONY_STOMP), 'ebonyStomp'),
         ebonyVictory: withRedToenails(prepareEbonySheet(ebonyVictory, EBONY_VICTORY), 'ebonyVictory'),
@@ -3770,6 +4160,8 @@ export function useJungleGame(
     exitRoxyChallenge,
     chooseKarateChallenge,
     exitKarateChallenge,
+    chooseFourArmBossChallenge,
+    exitFourArmBossChallenge,
     heroPortrait,
     pressVirtualControl,
     releaseVirtualControl,
