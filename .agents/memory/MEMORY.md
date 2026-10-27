@@ -8,3 +8,4 @@
 - [Defeeated preview](defeeated-preview.md) — previews heroine defeat scenes from active opponents without changing the fight; optional scenes still require consent.
 - [Four-armed boss](four-armed-boss.md) — the kneeling/bowing/foot-kiss ending is opt-in, and the player can decline or stop it.
 - [Workspace verification tools](workspace-verification-tools.md) — run test tools in the artifact package; root commands may not find installed binaries.
+- [Checkerboard story sheets](checkerboard-story-sheets.md) — use per-panel edge flood-fill for gray checkerboards; global color keys leave fragments or damage neutral art.

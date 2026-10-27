@@ -10,9 +10,10 @@ import {
 import {
   KARATE_BLONDE, KARATE_BLONDE_ATTACKS, KARATE_BLONDE_WALK,
   KARATE_EBONY, KARATE_EBONY_ATTACKS, KARATE_EBONY_WALK,
+  MINERVA, MINERVA_ATTACKS, MINERVA_WALK,
   karateBlondeSequenceFrames, karateEbonySequenceFrames, karateDuoSequenceFrames,
   clearStoryboardHeaderBands, extractKarateEbonyTaunt, extractKarateCombatPose,
-  prepareKarateSheet, prepareKarateDuoSheet, removeStoryboardHeadings,
+  prepareKarateSheet, prepareKarateDuoSheet, prepareMinervaStorySheet, removeStoryboardHeadings,
 } from './karateSprites';
 import {
   PANTERA_ATTACK_FRAMES,
@@ -74,6 +75,8 @@ import karateEbonyAttackTwoUrl from '@assets/karate_ebony_atk_2_1791929279638.pn
 import panteraSheetUrl from '@assets/image_1792014912583.png';
 import fourArmBossSheetUrl from '@assets/image_1793063368917.png';
 import fourArmBossStoryUrl from '@assets/image_1793063355742.png';
+import minervaSheetUrl from '@assets/image_1793065095807.png';
+import minervaStoryUrl from '@assets/image_1793065104800.png';
 
 const WIDTH = 1024;
 const HEIGHT = 576;
@@ -90,6 +93,7 @@ export interface FightConfig {
   roxy: number;
   karateBlonde: number;
   karateEbony: number;
+  minerva: number;
   pantera: number;
   fourArmBoss: number;
   ebonyVictory: boolean;
@@ -102,6 +106,7 @@ export const DEFAULT_FIGHT_CONFIG: FightConfig = {
   roxy: 1,
   karateBlonde: 0,
   karateEbony: 0,
+  minerva: 0,
   pantera: 0,
   fourArmBoss: 0,
   ebonyVictory: false,
@@ -150,7 +155,7 @@ export interface GameSnapshot {
   soundEnabled: boolean;
   roxyChallengeElapsed: number;
   ebonyVictoryActive: boolean;
-  karateOfferOpponent: 'blonde' | 'ebony' | 'duo' | null;
+  karateOfferOpponent: 'blonde' | 'ebony' | 'duo' | 'minerva' | null;
   karateOfferIsApproach: boolean;
   karateSceneActive: boolean;
   fourArmBossSceneElapsed: number;
@@ -183,6 +188,9 @@ interface SpriteAtlas {
   karateEbonyTaunt: HTMLCanvasElement | null;
   karateEbonyAttackOne: HTMLCanvasElement | null;
   karateEbonyAttackTwo: HTMLCanvasElement | null;
+  minerva: HTMLCanvasElement | null;
+  minervaCombat: HTMLCanvasElement[];
+  minervaStory: HTMLCanvasElement | null;
   ninja: HTMLCanvasElement | null;
   pantera: HTMLCanvasElement | null;
   fourArmBoss: HTMLCanvasElement | null;
@@ -198,7 +206,8 @@ interface SpriteAtlas {
   pinExtended: HTMLCanvasElement | null;
 }
 
-type EnemyKind = 'amazon' | 'ninja' | 'roxy' | 'karateBlonde' | 'karateEbony' | 'pantera' | 'fourArmBoss';
+type EnemyKind = 'amazon' | 'ninja' | 'roxy' | 'karateBlonde' | 'karateEbony' |
+  'minerva' | 'pantera' | 'fourArmBoss';
 type EnemyState = 'idle' | 'walk' | 'run' | 'taunt' | 'attack' | 'hurt' | 'down';
 
 interface Enemy {
@@ -236,7 +245,7 @@ interface Particle {
   size: number;
 }
 
-type KarateSequenceKind = 'blonde' | 'ebony' | 'duo';
+type KarateSequenceKind = 'blonde' | 'ebony' | 'duo' | 'minerva';
 
 interface World {
   phase: GamePhase;
@@ -413,6 +422,7 @@ const ATTACK_FRAMES: Record<EnemyKind, SpriteRect[]> = {
   roxy: [ROXY_FRAMES.kick, ROXY_FRAMES.spin],
   karateBlonde: KARATE_BLONDE_ATTACKS,
   karateEbony: KARATE_EBONY_ATTACKS,
+  minerva: MINERVA_ATTACKS,
   pantera: PANTERA_ATTACK_FRAMES,
   fourArmBoss: [...FOUR_ARM_PUNCH_FRAMES, FOUR_ARM_SPIN_KICK, FOUR_ARM_HIGH_KICK],
 };
@@ -422,6 +432,7 @@ const ENEMY_FRAMES = {
   roxy: ROXY_FRAMES,
   karateBlonde: KARATE_BLONDE,
   karateEbony: KARATE_EBONY,
+  minerva: MINERVA,
   pantera: PANTERA_FRAMES,
   fourArmBoss: {
     idle: FOUR_ARM_IDLE,
@@ -512,6 +523,7 @@ function createFightLineup(config: FightConfig): OpponentKind[] {
     roxy: config.roxy,
     karateBlonde: config.karateBlonde,
     karateEbony: config.karateEbony,
+    minerva: config.minerva,
     pantera: config.pantera,
     fourArmBoss: config.fourArmBoss,
   };
@@ -523,13 +535,13 @@ function createFightLineup(config: FightConfig): OpponentKind[] {
   }
   if (counts.amazon === 5 && counts.ninja === 3 && counts.roxy === 1 && counts.ebony === 0 &&
       counts.karateBlonde === 0 && counts.karateEbony === 0 && counts.pantera === 0 &&
-      counts.fourArmBoss === 0) {
+      counts.minerva === 0 && counts.fourArmBoss === 0) {
     return [...STARTING_ENEMY_KINDS];
   }
 
   const lineup: OpponentKind[] = [];
   const order: OpponentKind[] = [
-    'amazon', 'ebony', 'ninja', 'roxy', 'karateBlonde', 'karateEbony', 'pantera', 'fourArmBoss',
+    'amazon', 'ebony', 'ninja', 'roxy', 'karateBlonde', 'karateEbony', 'minerva', 'pantera', 'fourArmBoss',
   ];
   while (order.some((kind) => counts[kind] > 0)) {
     for (const kind of order) {
@@ -1611,9 +1623,11 @@ function enemyAnimationFrame(enemy: Enemy, now: number): SpriteRect {
       ? PANTERA_FRAMES.hurt
       : PANTERA_IDLE_FRAMES[idleIndex];
   }
-  if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') {
-    const karate = enemy.kind === 'karateBlonde' ? KARATE_BLONDE : KARATE_EBONY;
-    const walkCycle = enemy.kind === 'karateBlonde' ? KARATE_BLONDE_WALK : KARATE_EBONY_WALK;
+  if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony' || enemy.kind === 'minerva') {
+    const karate = enemy.kind === 'karateBlonde' ? KARATE_BLONDE
+      : enemy.kind === 'karateEbony' ? KARATE_EBONY : MINERVA;
+    const walkCycle = enemy.kind === 'karateBlonde' ? KARATE_BLONDE_WALK
+      : enemy.kind === 'karateEbony' ? KARATE_EBONY_WALK : MINERVA_WALK;
     if (enemy.state === 'walk' || enemy.state === 'run') {
       const speed = enemy.state === 'run' ? 104 : 150;
       return walkCycle[Math.floor(now / speed + enemy.id * 0.61) % walkCycle.length];
@@ -1704,9 +1718,10 @@ function drawEnemySprite(
     );
     return;
   }
-  if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') {
+  if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony' || enemy.kind === 'minerva') {
     const combatPoses = enemy.kind === 'karateBlonde'
-      ? atlas.karateBlondeCombat : atlas.karateEbonyCombat;
+      ? atlas.karateBlondeCombat : enemy.kind === 'karateEbony'
+        ? atlas.karateEbonyCombat : atlas.minervaCombat;
     const isolatedPose = enemy.state === 'attack'
       ? combatPoses[enemy.attackPoseIndex % combatPoses.length] : undefined;
     const attackMotion = enemy.state === 'attack'
@@ -1907,19 +1922,27 @@ function drawWorld(
         world.facing < 0,
       );
     }
-    if (attacker && (attacker.kind === 'karateBlonde' || attacker.kind === 'karateEbony')) {
+    if (attacker && (attacker.kind === 'karateBlonde' || attacker.kind === 'karateEbony' ||
+        attacker.kind === 'minerva')) {
       const attackerX = clamp(
         world.heroX + (attacker.direction === 1 ? -150 : 150),
         100,
         WIDTH - 100,
       );
-      const idlePose = attacker.kind === 'karateEbony' ? KARATE_EBONY.idle : KARATE_BLONDE.idle;
+      const idlePose = attacker.kind === 'karateEbony' ? KARATE_EBONY.idle
+        : attacker.kind === 'minerva' ? MINERVA.idle : KARATE_BLONDE.idle;
       drawEnemySprite(context, atlas, attacker, idlePose, 205, 0, 7, attackerX);
     }
   } else if (karateDefeatSequence) {
     const sequence = world.karateSequence ?? 'blonde';
     const elapsed = world.karateDefeatElapsed;
-    if (sequence === 'duo' && atlas.karateEbonyAttackOne) {
+    if (sequence === 'minerva' && atlas.minervaStory) {
+      const frames = karateDuoSequenceFrames(atlas.minervaStory.width, atlas.minervaStory.height);
+      const index = Math.min(frames.length - 1,
+        Math.floor((elapsed / KARATE_DEFEAT_DURATION) * frames.length));
+      drawKarateSequenceFrame(context, atlas.minervaStory,
+        frames[Math.max(0, index)], WIDTH / 2, world.heroY, 260, false, elapsed);
+    } else if (sequence === 'duo' && atlas.karateEbonyAttackOne) {
       const frames = karateDuoSequenceFrames(
         atlas.karateEbonyAttackOne.width,
         atlas.karateEbonyAttackOne.height,
@@ -2360,7 +2383,7 @@ function beginKarateOffer(world: World, enemy: Enemy, fromApproach = false) {
     .filter((opponent) => opponent.active && opponent.hp > 0 &&
       (opponent.kind === 'karateBlonde' || opponent.kind === 'karateEbony'))
     .map((opponent) => opponent.kind));
-  const bothKaratekasParticipating =
+  const bothKaratekasParticipating = enemy.kind !== 'minerva' &&
     activeKaratekaKinds.has('karateBlonde') && activeKaratekaKinds.has('karateEbony');
   world.phase = STATE_KARATE_OFFER;
   world.defeatKind = null;
@@ -2371,9 +2394,9 @@ function beginKarateOffer(world: World, enemy: Enemy, fromApproach = false) {
   world.defeatSecondsLeft = 0;
   world.karateDefeatElapsed = 0;
   world.kissSoundPlayed = false;
-  world.karateSequence = bothKaratekasParticipating
-    ? 'duo'
-    : enemy.kind === 'karateEbony' ? 'ebony' : 'blonde';
+  world.karateSequence = enemy.kind === 'minerva' ? 'minerva'
+    : bothKaratekasParticipating ? 'duo'
+      : enemy.kind === 'karateEbony' ? 'ebony' : 'blonde';
   world.heroAction = fromApproach ? 'idle' : 'hurt';
   world.actionTimer = 0;
   world.heroVelocityX = 0;
@@ -2519,9 +2542,9 @@ function endFourArmBossChallenge(world: World) {
 }
 
 function beginSpecialGrapple(world: World, enemy: Enemy) {
-  // Karatekas never enter the generic grapple renderer: its paired sheets
-  // contain an Amazon. Keep every karate special behind its own opt-in.
-  if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') {
+  // These fighters never enter the generic grapple renderer: its paired sheets
+  // contain an Amazon. Keep every custom scene behind its own opt-in.
+  if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony' || enemy.kind === 'minerva') {
     beginKarateOffer(world, enemy);
     return;
   }
@@ -2745,7 +2768,7 @@ function updateEnemies(world: World, dt: number, now: number) {
     // Let Roxy finish the current pose before pursuing again. Otherwise the
     // next AI tick replaces her kick/hit pose with a walk and slides her legs.
     if ((enemy.kind === 'roxy' || enemy.ebony || enemy.kind === 'fourArmBoss' ||
-      enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') &&
+      enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony' || enemy.kind === 'minerva') &&
         enemy.stateTimer > 0 &&
         (enemy.state === 'attack' || enemy.state === 'hurt' || enemy.state === 'down')) {
       enemy.vx = 0;
@@ -2778,7 +2801,8 @@ function updateEnemies(world: World, dt: number, now: number) {
     const approachDistance = enemy.kind === 'fourArmBoss' ? 128 : 78;
     if (distance > approachDistance) {
       const pace = (distance > 250 ? 92 : 68) *
-        (enemy.kind === 'ninja' ? 1.14 : enemy.kind === 'roxy' ? 1.06 : 1);
+        (enemy.kind === 'ninja' || enemy.kind === 'minerva'
+          ? 1.14 : enemy.kind === 'roxy' ? 1.06 : 1);
       const velocityResponse = Math.min(1, dt * 7.5);
       const targetVelocityX = (dx / Math.max(distance, 1)) * pace;
       const targetVelocityY = (dy / Math.max(distance, 1)) * pace * 0.56;
@@ -2808,13 +2832,13 @@ function updateEnemies(world: World, dt: number, now: number) {
         enemy.attackPoseIndex = (enemy.attackPoseIndex + 1) % ATTACK_FRAMES[enemy.kind].length;
       }
       enemy.attackCooldown =
-        (enemy.kind === 'ninja' ? 1.08 : enemy.kind === 'roxy' ? 1.18
+        (enemy.kind === 'ninja' ? 1.08 : enemy.kind === 'minerva' ? 1.02 : enemy.kind === 'roxy' ? 1.18
           : enemy.kind === 'fourArmBoss' ? 1.25 : 1.3) +
         random(world) * 0.75;
-        if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') {
+        if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony' || enemy.kind === 'minerva') {
         playKarateAttackVoice(
           world,
-          enemy.kind === 'karateBlonde' ? 'blonde' : 'ebony',
+            enemy.kind === 'karateEbony' ? 'ebony' : 'blonde',
           0.6,
         );
       } else if (enemy.kind === 'pantera') {
@@ -2835,10 +2859,11 @@ function updateEnemies(world: World, dt: number, now: number) {
       const isBoss = enemy.kind === 'fourArmBoss';
       const bossStomp = isBoss && enemy.attackPoseIndex === ATTACK_FRAMES.fourArmBoss.length - 1;
       const bossSpin = isBoss && enemy.attackPoseIndex === FOUR_ARM_PUNCH_FRAMES.length;
-      const hitRange = isBoss ? 168 : 106;
+      const hitRange = isBoss ? 168 : enemy.kind === 'minerva' ? 124 : 106;
       if (distance < hitRange && world.heroHitCooldown <= 0) {
         const damage = bossStomp ? 24 : bossSpin ? 15
-          : isBoss ? 11 : 7 + Math.floor(random(world) * 4);
+          : isBoss ? 11 : enemy.kind === 'minerva'
+            ? 9 + Math.floor(random(world) * 4) : 7 + Math.floor(random(world) * 4);
         world.heroHp = Math.max(0, world.heroHp - damage);
         world.heroHitCooldown = isBoss ? 0.84 : 0.68;
         world.heroAction = 'hurt';
@@ -2854,7 +2879,8 @@ function updateEnemies(world: World, dt: number, now: number) {
         }
         playClip(world, 'heroineHurt', 0.64, 430);
         if (world.heroHp <= 0) {
-          if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony') {
+          if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony' ||
+              enemy.kind === 'minerva') {
             beginKarateOffer(world, enemy);
           } else if (isBoss) {
             beginFourArmBossOffer(world, enemy);
@@ -3352,7 +3378,7 @@ export function useJungleGame(
     } else if (kind === 'roxy') {
       beginRoxyOffer(world, attacker);
       world.defeatedPreviewActive = true;
-    } else if (kind === 'karateBlonde' || kind === 'karateEbony') {
+    } else if (kind === 'karateBlonde' || kind === 'karateEbony' || kind === 'minerva') {
       beginKarateOffer(world, attacker);
       world.defeatedPreviewActive = true;
     } else if (kind === 'fourArmBoss') {
@@ -3557,6 +3583,9 @@ export function useJungleGame(
       karateEbonyTaunt: null,
       karateEbonyAttackOne: null,
       karateEbonyAttackTwo: null,
+      minerva: null,
+      minervaCombat: [],
+      minervaStory: null,
       ninja: null,
       ninjaFootsmother: null,
       ninjaFootsmotherEnding: null,
@@ -3593,15 +3622,17 @@ export function useJungleGame(
     if (import.meta.env.DEV) {
       const params = new URLSearchParams(window.location.search);
       const scene = params.get('_scene');
-      if (scene === 'karate-blonde' || scene === 'karate-ebony') {
+      if (scene === 'karate-blonde' || scene === 'karate-ebony' || scene === 'minerva') {
         const blonde = scene === 'karate-blonde';
+        const minerva = scene === 'minerva';
         const config: FightConfig = {
           amazonas: params.get('_amazon') === '1' ? 1 : 0,
           ebony: 0,
           ninjas: 0,
           roxy: 0,
           karateBlonde: blonde ? 1 : 0,
-          karateEbony: blonde ? 0 : 1,
+          karateEbony: !blonde && !minerva ? 1 : 0,
+          minerva: minerva ? 1 : 0,
           pantera: 0,
           fourArmBoss: 0,
           ebonyVictory: false,
@@ -3616,7 +3647,7 @@ export function useJungleGame(
           soundEnabled: false,
         });
         const karateka = world.enemies.find((enemy) =>
-          enemy.kind === (blonde ? 'karateBlonde' : 'karateEbony'));
+          enemy.kind === (minerva ? 'minerva' : blonde ? 'karateBlonde' : 'karateEbony'));
         if (karateka) {
           karateka.x = 650;
           karateka.y = 510;
@@ -3631,17 +3662,21 @@ export function useJungleGame(
         freezePreview = params.get('_freeze') === '1';
         setSnapshot(publishSnapshot(world));
       }
-      if (scene === 'karate-offer' || scene === 'karate-challenge' || scene === 'karate-duo') {
+      if (scene === 'karate-offer' || scene === 'karate-challenge' || scene === 'karate-duo' ||
+          scene === 'minerva-offer' || scene === 'minerva-challenge') {
         const duo = scene === 'karate-duo';
         const blonde = params.get('_opponent') === 'blonde' || duo;
-        const approachOffer = scene === 'karate-offer' && params.get('_approach') === '1';
+        const minerva = scene === 'minerva-offer' || scene === 'minerva-challenge';
+        const offer = scene === 'karate-offer' || scene === 'minerva-offer';
+        const approachOffer = offer && params.get('_approach') === '1';
         const config: FightConfig = {
-          amazonas: scene === 'karate-offer' ? 3 : params.get('_amazon') === '1' ? 1 : 0,
+          amazonas: offer ? 3 : params.get('_amazon') === '1' ? 1 : 0,
           ebony: 0,
           ninjas: 0,
           roxy: 0,
-          karateBlonde: blonde ? 1 : 0,
-          karateEbony: !blonde || duo ? 1 : 0,
+          karateBlonde: !minerva && blonde ? 1 : 0,
+          karateEbony: !minerva && (!blonde || duo) ? 1 : 0,
+          minerva: minerva ? 1 : 0,
           pantera: 0,
           fourArmBoss: 0,
           ebonyVictory: false,
@@ -3649,20 +3684,20 @@ export function useJungleGame(
         const world = worldRef.current;
         const oldSound = world.sound;
         Object.assign(world, createWorld(createFightLineup(config), config), {
-          phase: scene === 'karate-offer' ? STATE_KARATE_OFFER : STATE_KARATE_CHALLENGE,
+          phase: offer ? STATE_KARATE_OFFER : STATE_KARATE_CHALLENGE,
           heroX: WIDTH / 2,
           heroY: 510,
           heroHp: approachOffer ? 100 : 0,
           sound: oldSound,
           soundEnabled: false,
           isGrappleActive: true,
-          defeatKind: scene === 'karate-offer' ? null : 'karate-victory',
+          defeatKind: offer ? null : 'karate-victory',
           karateOfferIsApproach: approachOffer,
-          karateSequence: duo ? 'duo' : blonde ? 'blonde' : 'ebony',
+          karateSequence: minerva ? 'minerva' : duo ? 'duo' : blonde ? 'blonde' : 'ebony',
           karateDefeatElapsed: Number(params.get('_elapsed') ?? 3),
           defeatSecondsLeft: KARATE_DEFEAT_DURATION,
         });
-        const grapplerKind = blonde ? 'karateBlonde' : 'karateEbony';
+        const grapplerKind = minerva ? 'minerva' : blonde ? 'karateBlonde' : 'karateEbony';
         const grappler = world.enemies.find((enemy) => enemy.kind === grapplerKind);
         world.currentGrappler = grappler?.id ?? null;
         if (approachOffer && grappler) {
@@ -3681,6 +3716,7 @@ export function useJungleGame(
           amazonas: 0, ninjas: 0, roxy: 0,
           karateBlonde: 0,
           karateEbony: 0,
+          minerva: 0,
           ebony: duo ? 2 : 1,
           pantera: 0,
           fourArmBoss: 0,
@@ -3722,6 +3758,7 @@ export function useJungleGame(
           roxy: 0,
           karateBlonde: 0,
           karateEbony: 0,
+          minerva: 0,
           pantera: 0,
           fourArmBoss: 1,
           ebonyVictory: false,
@@ -3772,6 +3809,7 @@ export function useJungleGame(
           roxy: 0,
           karateBlonde: 0,
           karateEbony: 0,
+          minerva: 0,
           pantera: 1,
           fourArmBoss: 0,
           ebonyVictory: false,
@@ -3980,6 +4018,8 @@ export function useJungleGame(
       loadImage(panteraSheetUrl),
       loadImage(fourArmBossSheetUrl),
       loadImage(fourArmBossStoryUrl),
+      loadImage(minervaSheetUrl),
+      loadImage(minervaStoryUrl),
     ]).then(([
       background,
       hero,
@@ -4005,11 +4045,21 @@ export function useJungleGame(
       panteraImage,
       fourArmBossImage,
       fourArmBossStoryImage,
+      minervaImage,
+      minervaStoryImage,
     ]) => {
       if (disposed) return;
       const blondeBase = prepareKarateSheet(karateBlonde);
       const ebonyBase = prepareKarateSheet(karateEbony);
+      const minervaBase = prepareKarateSheet(minervaImage);
       const fourArmBoss = prepareFourArmBossSheet(fourArmBossImage);
+      const minervaStoryFrames = karateDuoSequenceFrames(
+        minervaStoryImage.naturalWidth || minervaStoryImage.width,
+        minervaStoryImage.naturalHeight || minervaStoryImage.height,
+      );
+      const minervaStory = prepareMinervaStorySheet(minervaStoryImage, minervaStoryFrames);
+      clearStoryboardHeaderBands(minervaStory, minervaStoryFrames, 72);
+      minervaStory.getContext('2d')?.clearRect(448, 92, 230, 92);
       atlas = {
         background,
         hero: removeCheckerboard(hero),
@@ -4073,6 +4123,9 @@ export function useJungleGame(
           );
           return sheet;
         })(),
+        minerva: minervaBase,
+        minervaCombat: MINERVA_ATTACKS.map((pose) => extractKarateCombatPose(minervaBase, pose)),
+        minervaStory,
         ninja: removeNinjaCheckerboard(ninja),
         ninjaFootsmother: removeFootsmotherCheckerboard(ninjaFootsmother),
         ninjaFootsmotherEnding: removeFootsmotherCheckerboard(

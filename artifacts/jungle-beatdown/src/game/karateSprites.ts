@@ -59,6 +59,33 @@ export const KARATE_EBONY_ATTACKS = [
   KARATE_EBONY.kick,
 ];
 
+const MINERVA_SCALE_X = 428 / 765;
+const MINERVA_SCALE_Y = 572 / 1024;
+function scaleMinervaPose(pose: KaratePose): KaratePose {
+  return {
+    x: Math.round(pose.x * MINERVA_SCALE_X),
+    y: Math.round(pose.y * MINERVA_SCALE_Y),
+    w: Math.round(pose.w * MINERVA_SCALE_X),
+    h: Math.round(pose.h * MINERVA_SCALE_Y),
+  };
+}
+
+/** Coordinates for Minerva's compact 428×572 sheet, mapped from the same layout. */
+export const MINERVA = {
+  idle: scaleMinervaPose(KARATE_BLONDE.idle),
+  walk: KARATE_BLONDE_WALK.map(scaleMinervaPose),
+  run: scaleMinervaPose(KARATE_BLONDE.run),
+  punch: scaleMinervaPose(KARATE_BLONDE.punch),
+  hurt: scaleMinervaPose(KARATE_BLONDE.hurt),
+  down: scaleMinervaPose(KARATE_BLONDE.down),
+  defeated: scaleMinervaPose(KARATE_BLONDE.defeated),
+  kick: scaleMinervaPose(KARATE_BLONDE.kick),
+  spin: scaleMinervaPose(KARATE_BLONDE.spin),
+  highKick: scaleMinervaPose(KARATE_BLONDE.highKick),
+};
+export const MINERVA_ATTACKS = KARATE_BLONDE_ATTACKS.map(scaleMinervaPose);
+export const MINERVA_WALK = MINERVA.walk;
+
 function gridFrames(
   columns: number,
   rows: number,
@@ -244,6 +271,65 @@ export function prepareKarateSheet(image: HTMLImageElement, checkerboard = false
   context.clearRect(canvas.width - 2, 0, 2, canvas.height);
   context.clearRect(0, 0, canvas.width, 2);
   context.clearRect(0, canvas.height - 2, canvas.width, 2);
+  return canvas;
+}
+
+/** Flood-fills the neutral dark checkerboard on Minerva's story sheet per panel. */
+export function prepareMinervaStorySheet(image: HTMLImageElement, frames: KaratePose[]) {
+  const canvas = document.createElement('canvas');
+  canvas.width = image.naturalWidth || image.width;
+  canvas.height = image.naturalHeight || image.height;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) throw new Error('Canvas 2D indisponível para as cenas da Minerva.');
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const pixels = imageData.data;
+  const pixelCount = canvas.width * canvas.height;
+  const candidates = new Uint8Array(pixelCount);
+  const visited = new Uint8Array(pixelCount);
+  const queue = new Uint32Array(pixelCount);
+  for (let index = 0; index < pixelCount; index += 1) {
+    const offset = index * 4;
+    const red = pixels[offset], green = pixels[offset + 1], blue = pixels[offset + 2];
+    const min = Math.min(red, green, blue);
+    const max = Math.max(red, green, blue);
+    candidates[index] = Number(min >= 24 && max <= 125 && max - min <= 24);
+  }
+
+  let tail = 0;
+  const enqueue = (x: number, y: number) => {
+    if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return;
+    const index = y * canvas.width + x;
+    if (visited[index] || pixels[index * 4 + 3] < 20 || !candidates[index]) return;
+    visited[index] = 1;
+    queue[tail++] = index;
+  };
+  for (const frame of frames) {
+    const left = Math.max(0, Math.round(frame.x));
+    const top = Math.max(0, Math.round(frame.y));
+    const right = Math.min(canvas.width - 1, Math.round(frame.x + frame.w) - 1);
+    const bottom = Math.min(canvas.height - 1, Math.round(frame.y + frame.h) - 1);
+    for (let x = left; x <= right; x += 1) {
+      enqueue(x, top);
+      enqueue(x, bottom);
+    }
+    for (let y = top + 1; y < bottom; y += 1) {
+      enqueue(left, y);
+      enqueue(right, y);
+    }
+  }
+  for (let head = 0; head < tail; head += 1) {
+    const index = queue[head];
+    const x = index % canvas.width;
+    const y = Math.floor(index / canvas.width);
+    pixels[index * 4 + 3] = 0;
+    enqueue(x - 1, y);
+    enqueue(x + 1, y);
+    enqueue(x, y - 1);
+    enqueue(x, y + 1);
+  }
+  context.putImageData(imageData, 0, 0);
   return canvas;
 }
 
