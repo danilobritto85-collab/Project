@@ -86,6 +86,39 @@ export const MINERVA = {
 export const MINERVA_ATTACKS = KARATE_BLONDE_ATTACKS.map(scaleMinervaPose);
 export const MINERVA_WALK = MINERVA.walk;
 
+export const MAY_IDLE_FRAMES: KaratePose[] = [
+  { x: 0, y: 38, w: 192, h: 278 },
+  { x: 192, y: 38, w: 190, h: 278 },
+  { x: 382, y: 38, w: 191, h: 278 },
+  { x: 573, y: 38, w: 192, h: 278 },
+];
+
+export const MAY_WALK_FRAMES = MAY_IDLE_FRAMES;
+export const MAY_ATTACKS: KaratePose[] = [
+  MAY_IDLE_FRAMES[1], // Guard-frame lunge; the sheet has no dedicated punch drawing
+  MAY_IDLE_FRAMES[2],
+  MAY_IDLE_FRAMES[3], // Upper-body strike pose
+  { x: 184, y: 382, w: 190, h: 270 }, // Low-kick preparation
+  { x: 0, y: 382, w: 230, h: 292 }, // Front kick
+  { x: 400, y: 352, w: 225, h: 292 }, // High roundhouse
+  { x: 190, y: 680, w: 220, h: 344 }, // Spinning follow-through
+  { x: 610, y: 394, w: 155, h: 250 }, // Side/sweeping kick
+];
+
+export const MAY = {
+  idle: MAY_IDLE_FRAMES[0],
+  walk: MAY_WALK_FRAMES[0],
+  run: MAY_WALK_FRAMES[2],
+  punch: MAY_ATTACKS[0],
+  hurt: MAY_ATTACKS[3],
+  down: MAY_ATTACKS[3],
+  defeated: MAY_ATTACKS[3],
+  kick: MAY_ATTACKS[4],
+  spin: MAY_ATTACKS[5],
+  highKick: MAY_ATTACKS[6],
+  block: MAY_IDLE_FRAMES[3],
+};
+
 function gridFrames(
   columns: number,
   rows: number,
@@ -195,6 +228,18 @@ export function karateDuoSequenceFrames(width: number, height: number): KaratePo
   return gridFrames(2, 2, width, height, 0);
 }
 
+/** May's storyboard has a wide caption gap between its two rows. */
+export function mayStorySequenceFrames(width: number, height: number): KaratePose[] {
+  const halfWidth = Math.round(width / 2);
+  const lowerRowTop = Math.round(height * (332 / 572));
+  return [
+    { x: 0, y: 0, w: halfWidth, h: lowerRowTop - 46 },
+    { x: halfWidth, y: 0, w: width - halfWidth, h: lowerRowTop - 46 },
+    { x: 0, y: lowerRowTop, w: halfWidth, h: height - lowerRowTop },
+    { x: halfWidth, y: lowerRowTop, w: width - halfWidth, h: height - lowerRowTop },
+  ];
+}
+
 export function prepareKarateSheet(image: HTMLImageElement, checkerboard = false) {
   const canvas = document.createElement('canvas');
   canvas.width = image.naturalWidth || image.width;
@@ -271,6 +316,59 @@ export function prepareKarateSheet(image: HTMLImageElement, checkerboard = false
   context.clearRect(canvas.width - 2, 0, 2, canvas.height);
   context.clearRect(0, 0, canvas.width, 2);
   context.clearRect(0, canvas.height - 2, canvas.width, 2);
+  return canvas;
+}
+
+/** Removes the pale gray isometric guide grid while preserving outlined gi sprites. */
+export function prepareMaySheet(image: HTMLImageElement) {
+  const canvas = document.createElement('canvas');
+  canvas.width = image.naturalWidth || image.width;
+  canvas.height = image.naturalHeight || image.height;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) throw new Error('Canvas 2D indisponível para a folha da May.');
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const pixels = imageData.data;
+  const pixelCount = canvas.width * canvas.height;
+  const candidates = new Uint8Array(pixelCount);
+  const visited = new Uint8Array(pixelCount);
+  const queue = new Uint32Array(pixelCount);
+  for (let index = 0; index < pixelCount; index += 1) {
+    const offset = index * 4;
+    const red = pixels[offset], green = pixels[offset + 1], blue = pixels[offset + 2];
+    const min = Math.min(red, green, blue);
+    const max = Math.max(red, green, blue);
+    candidates[index] = Number(min >= 175 && max <= 248 && max - min <= 26);
+  }
+
+  let tail = 0;
+  const enqueue = (x: number, y: number) => {
+    if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return;
+    const index = y * canvas.width + x;
+    if (visited[index] || pixels[index * 4 + 3] < 20 || !candidates[index]) return;
+    visited[index] = 1;
+    queue[tail++] = index;
+  };
+  for (let x = 0; x < canvas.width; x += 1) {
+    enqueue(x, 0);
+    enqueue(x, canvas.height - 1);
+  }
+  for (let y = 1; y < canvas.height - 1; y += 1) {
+    enqueue(0, y);
+    enqueue(canvas.width - 1, y);
+  }
+  for (let head = 0; head < tail; head += 1) {
+    const index = queue[head];
+    const x = index % canvas.width;
+    const y = Math.floor(index / canvas.width);
+    pixels[index * 4 + 3] = 0;
+    enqueue(x - 1, y);
+    enqueue(x + 1, y);
+    enqueue(x, y - 1);
+    enqueue(x, y + 1);
+  }
+  context.putImageData(imageData, 0, 0);
   return canvas;
 }
 
@@ -363,9 +461,12 @@ export function prepareKarateDuoSheet(image: HTMLImageElement, frames: KaratePos
     // squares, plus JPEG blends at their boundaries. Pure black sprite
     // outlines are intentionally outside these ranges.
     candidates[pixel] = Number(
-      nearCheckerTone([12, 12, 8], 12) ||
+      nearCheckerTone([0, 0, 0], 16) ||
+      nearCheckerTone([12, 12, 8], 22) ||
       nearCheckerTone([36, 32, 16], 14) ||
-      nearCheckerTone([64, 52, 32], 17),
+      nearCheckerTone([37, 34, 29], 22) ||
+      nearCheckerTone([52, 49, 34], 22) ||
+      nearCheckerTone([64, 52, 32], 24),
     );
   }
 

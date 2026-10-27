@@ -33,7 +33,7 @@ import {
 
 type OpponentCountKey =
   | 'amazonas' | 'ebony' | 'ninjas' | 'roxy' | 'karateBlonde' | 'karateEbony'
-  | 'minerva' | 'pantera' | 'fourArmBoss';
+  | 'minerva' | 'may' | 'pantera' | 'fourArmBoss';
 
 function formatScore(score: number) {
   return Math.max(0, score).toString().padStart(6, '0');
@@ -167,6 +167,7 @@ function App() {
     karateBlonde: 'Karateka loira',
     karateEbony: 'Karateka Ebony',
     minerva: 'Minerva',
+    may: 'May',
     pantera: 'Pantera',
     fourArmBoss: 'Chefe Guerreira de Quatro Braços',
   };
@@ -176,7 +177,7 @@ function App() {
     ((isDefeatSequence && (snapshot.phase !== 'pantera-combo' || snapshot.heroHp <= 0)) ||
       snapshot.phase === 'game-over');
   const fightCount = fightConfig.amazonas + fightConfig.ebony + fightConfig.ninjas + fightConfig.roxy +
-    fightConfig.karateBlonde + fightConfig.karateEbony + fightConfig.minerva +
+    fightConfig.karateBlonde + fightConfig.karateEbony + fightConfig.minerva + fightConfig.may +
     fightConfig.pantera + fightConfig.fourArmBoss;
   const handleOpponentCountChange = (kind: OpponentCountKey, value: number) => {
     if (!Number.isSafeInteger(value) || value < 0) return;
@@ -294,6 +295,9 @@ function App() {
                       <OpponentCounter label="Minerva" kind="minerva"
                         value={fightConfig.minerva}
                         onChange={handleOpponentCountChange} />
+                      <OpponentCounter label="May" kind="may"
+                        value={fightConfig.may}
+                        onChange={handleOpponentCountChange} />
                       <OpponentCounter label="Pantera" kind="pantera"
                         value={fightConfig.pantera}
                         onChange={handleOpponentCountChange} />
@@ -336,12 +340,18 @@ function App() {
                       <p className="roxy-special-help">Selecione ao menos uma adversária para começar.</p>
                     )}
                     {(fightConfig.karateBlonde > 0 || fightConfig.karateEbony > 0 ||
-                      fightConfig.minerva > 0) && (
+                      fightConfig.minerva > 0 || fightConfig.may > 0) && (
                       <p className="roxy-special-help">
                         As cenas especiais das lutadoras são opcionais: ao ser derrotada por uma delas,
                         você poderá aceitar, recusar ou encerrar a sequência.
                         {fightConfig.karateEbony > 0 &&
                           ' A Karateka Ebony também usa um giro pesado automático, no máximo uma vez a cada 6 segundos.'}
+                      </p>
+                    )}
+                    {fightConfig.may > 0 && (
+                      <p className="roxy-special-help">
+                        May alterna combinações e chutes de longo alcance; quando você ataca de perto,
+                        ela pode bloquear e reduzir bastante o dano, ou recuar para reposicionar.
                       </p>
                     )}
                     <button className="start-button" type="button"
@@ -530,7 +540,9 @@ function App() {
                     ? 'das duas karatecas'
                     : snapshot.karateOfferOpponent === 'minerva'
                       ? 'da Minerva'
-                      : `da Karateka ${snapshot.karateOfferOpponent === 'ebony' ? 'Ebony' : 'loira'}`}
+                      : snapshot.karateOfferOpponent === 'may'
+                        ? 'da May'
+                        : `da Karateka ${snapshot.karateOfferOpponent === 'ebony' ? 'Ebony' : 'loira'}`}
                 </h2>
                 <p>
                   {snapshot.karateOfferIsApproach
