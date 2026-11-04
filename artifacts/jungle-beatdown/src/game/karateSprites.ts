@@ -231,12 +231,12 @@ export function karateDuoSequenceFrames(width: number, height: number): KaratePo
 /** May's storyboard has a wide caption gap between its two rows. */
 export function mayStorySequenceFrames(width: number, height: number): KaratePose[] {
   const halfWidth = Math.round(width / 2);
-  const lowerRowTop = Math.round(height * (332 / 572));
+  const scaleY = height / 572;
   return [
-    { x: 0, y: 0, w: halfWidth, h: lowerRowTop - 46 },
-    { x: halfWidth, y: 0, w: width - halfWidth, h: lowerRowTop - 46 },
-    { x: 0, y: lowerRowTop, w: halfWidth, h: height - lowerRowTop },
-    { x: halfWidth, y: lowerRowTop, w: width - halfWidth, h: height - lowerRowTop },
+    { x: 0, y: Math.round(70 * scaleY), w: halfWidth, h: Math.round(240 * scaleY) },
+    { x: halfWidth, y: Math.round(65 * scaleY), w: width - halfWidth, h: Math.round(245 * scaleY) },
+    { x: 0, y: Math.round(310 * scaleY), w: halfWidth, h: height - Math.round(310 * scaleY) },
+    { x: halfWidth, y: Math.round(350 * scaleY), w: width - halfWidth, h: height - Math.round(350 * scaleY) },
   ];
 }
 
@@ -436,7 +436,7 @@ export function prepareMinervaStorySheet(image: HTMLImageElement, frames: Karate
  * the neutral gray used by the other karate sheets. Flood-fill the muted
  * checker colors from each frame edge so the key does not eat the figures.
  */
-export function prepareKarateDuoSheet(image: HTMLImageElement, frames: KaratePose[]) {
+export function prepareKarateDuoSheet(image: HTMLImageElement, frames: KaratePose[], mayPalette = false) {
   const canvas = document.createElement('canvas');
   canvas.width = image.naturalWidth || image.width;
   canvas.height = image.naturalHeight || image.height;
@@ -460,14 +460,13 @@ export function prepareKarateDuoSheet(image: HTMLImageElement, frames: KaratePos
     // The source uses olive-brown (#403420) and near-black green (#0c0c08)
     // squares, plus JPEG blends at their boundaries. Pure black sprite
     // outlines are intentionally outside these ranges.
-    candidates[pixel] = Number(
-      nearCheckerTone([0, 0, 0], 16) ||
-      nearCheckerTone([12, 12, 8], 22) ||
-      nearCheckerTone([36, 32, 16], 14) ||
-      nearCheckerTone([37, 34, 29], 22) ||
-      nearCheckerTone([52, 49, 34], 22) ||
-      nearCheckerTone([64, 52, 32], 24),
-    );
+    candidates[pixel] = Number(mayPalette
+      ? (Math.max(red, green, blue) < 15 ||
+        (red >= 20 && red <= 85 && red - green >= -3 && red - green <= 8 &&
+          green - blue >= 5 && green - blue <= 27))
+      : (nearCheckerTone([12, 12, 8], 12) ||
+        nearCheckerTone([36, 32, 16], 14) ||
+        nearCheckerTone([64, 52, 32], 17)));
   }
 
   let tail = 0;
@@ -501,6 +500,43 @@ export function prepareKarateDuoSheet(image: HTMLImageElement, frames: KaratePos
     if (pixel >= canvas.width) enqueueIfBackground(x, Math.floor(pixel / canvas.width) - 1);
     if (pixel + canvas.width < pixelCount) enqueueIfBackground(x, Math.floor(pixel / canvas.width) + 1);
     pixels[pixel * 4 + 3] = 0;
+  }
+  if (mayPalette) {
+    visited.fill(0);
+    for (const frame of frames) {
+      const left = Math.round(frame.x), top = Math.round(frame.y);
+      const right = Math.min(canvas.width, left + Math.round(frame.w));
+      const bottom = Math.min(canvas.height, top + Math.round(frame.h));
+      for (let y = top; y < bottom; y += 1) {
+        for (let x = left; x < right; x += 1) {
+          const seed = y * canvas.width + x;
+          if (visited[seed] || pixels[seed * 4 + 3] < 20) continue;
+          let end = 1;
+          let hasForegroundColor = false;
+          queue[0] = seed;
+          visited[seed] = 1;
+          const add = (nx: number, ny: number) => {
+            if (nx < left || nx >= right || ny < top || ny >= bottom) return;
+            const next = ny * canvas.width + nx;
+            if (visited[next] || pixels[next * 4 + 3] < 20) return;
+            visited[next] = 1;
+            queue[end++] = next;
+          };
+          for (let head = 0; head < end; head += 1) {
+            const current = queue[head];
+            const offset = current * 4;
+            if (Math.max(pixels[offset], pixels[offset + 1], pixels[offset + 2]) > 95) {
+              hasForegroundColor = true;
+            }
+            const cx = current % canvas.width, cy = Math.floor(current / canvas.width);
+            add(cx - 1, cy); add(cx + 1, cy); add(cx, cy - 1); add(cx, cy + 1);
+          }
+          if (!hasForegroundColor || end < 20) {
+            for (let index = 0; index < end; index += 1) pixels[queue[index] * 4 + 3] = 0;
+          }
+        }
+      }
+    }
   }
   context.putImageData(imageData, 0, 0);
   return canvas;

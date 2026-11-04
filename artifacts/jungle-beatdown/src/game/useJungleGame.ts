@@ -271,7 +271,7 @@ interface World {
   heroY: number;
   heroHp: number;
   facing: -1 | 1;
-  heroAction: 'idle' | 'walk' | 'run' | 'punch' | 'kick' | 'jump' | 'hurt';
+  heroAction: 'idle' | 'walk' | 'run' | 'punch' | 'kick' | 'jump' | 'hurt' | 'down';
   actionTimer: number;
   jumpOffset: number;
   jumpVelocity: number;
@@ -1834,6 +1834,7 @@ function heroRect(world: World) {
   if (world.phase === 'special-defeat' || (world.phase === 'game-over' && world.defeatKind === 'special')) return HERO_FRAMES.down;
   if (world.phase === 'grapple') return HERO_FRAMES.hurt;
   if (world.heroAction === 'hurt') return HERO_FRAMES.hurt;
+  if (world.heroAction === 'down') return HERO_FRAMES.down;
   if (world.heroAction === 'punch') return HERO_FRAMES.punch;
   if (world.heroAction === 'kick') return HERO_FRAMES.kick;
   if (world.heroAction === 'jump') return HERO_FRAMES.jump;
@@ -2693,6 +2694,7 @@ function doHeroAttack(world: World, action: 'punch' | 'kick') {
 
 function handleMovement(world: World, pressed: Set<string>, dt: number) {
   if (world.phase !== 'playing' || world.isGrappleActive) return;
+  if (world.heroAction === 'down' && world.actionTimer > 0) return;
   let horizontal = 0;
   let depth = 0;
   if (pressed.has('KeyA') || pressed.has('ArrowLeft')) horizontal -= 1;
@@ -2956,7 +2958,7 @@ function updateEnemies(world: World, dt: number, now: number) {
               : 7 + Math.floor(random(world) * 4);
         world.heroHp = Math.max(0, world.heroHp - damage);
         world.heroHitCooldown = isBoss ? 0.84 : 0.68;
-        world.heroAction = 'hurt';
+        world.heroAction = mayProfile?.knockdown ? 'down' : 'hurt';
         world.actionTimer = bossStomp ? 0.52 : mayProfile?.knockdown ? 0.7 : 0.36;
         if (mayProfile?.knockback) {
           world.heroX = clamp(world.heroX + enemy.direction * mayProfile.knockback, 48, WIDTH - 48);
@@ -3117,7 +3119,8 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
         playStomp(world);
       }
     }
-    if (world.actionTimer <= 0 && (world.heroAction === 'punch' || world.heroAction === 'kick' || world.heroAction === 'hurt')) {
+    if (world.actionTimer <= 0 && (world.heroAction === 'punch' || world.heroAction === 'kick' ||
+        world.heroAction === 'hurt' || world.heroAction === 'down')) {
       world.heroAction = 'idle';
     }
 
@@ -4181,8 +4184,8 @@ export function useJungleGame(
         mayStoryImage.naturalWidth || mayStoryImage.width,
         mayStoryImage.naturalHeight || mayStoryImage.height,
       );
-      const mayStory = prepareKarateDuoSheet(mayStoryImage, mayStoryFrames);
-      clearStoryboardHeaderBands(mayStory, mayStoryFrames.slice(0, 2), 72);
+      const mayStory = prepareKarateDuoSheet(mayStoryImage, mayStoryFrames, true);
+      mayStory.getContext('2d')?.clearRect(0, 310, 240, 40);
       atlas = {
         background,
         hero: removeCheckerboard(hero),
