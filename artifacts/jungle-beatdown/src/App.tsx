@@ -567,7 +567,7 @@ function App() {
             </section>
           )}
 
-          {isKarateChallenge && (
+          {isKarateChallenge && snapshot.karateSequence !== 'laura' && (
             <section className="roxy-choice-panel roxy-voluntary-panel" role="dialog"
               aria-modal="true" aria-labelledby="karate-scene-title"
               data-testid="karate-consensual-scene">

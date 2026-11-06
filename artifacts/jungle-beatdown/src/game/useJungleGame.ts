@@ -79,7 +79,7 @@ import fourArmBossSheetUrl from '@assets/image_1793063368917.png';
 import fourArmBossStoryUrl from '@assets/image_1793063355742.png';
 import minervaSheetUrl from '@assets/image_1793065095807.png';
 import minervaStoryUrl from '@assets/image_1793065104800.png';
-import { LAURA, LAURA_IDLE, LAURA_WALK, LAURA_ATTACKS, LAURA_GUARD, LAURA_HURT, prepareLauraSheet, isolateLauraKick, lauraVictorySequenceFrames } from './lauraSprites';
+import { LAURA, LAURA_IDLE, LAURA_WALK, LAURA_ATTACKS, LAURA_GUARD, LAURA_HURT, prepareLauraSheet, prepareLauraVictorySheet, isolateLauraKick, lauraVictorySequenceFrames } from './lauraSprites';
 import lauraSheetUrl from '@assets/image_1793977523679.png';
 import lauraVictorySheetUrl from '@assets/image_1793978481211.png';
 import maySheetUrl from '@assets/image_1793093978357.jpeg';
@@ -167,6 +167,7 @@ export interface GameSnapshot {
   roxyChallengeElapsed: number;
   ebonyVictoryActive: boolean;
   karateOfferOpponent: 'blonde' | 'ebony' | 'duo' | 'minerva' | 'may' | 'laura' | null;
+  karateSequence: KarateSequenceKind | null;
   karateOfferIsApproach: boolean;
   karateSceneActive: boolean;
   fourArmBossSceneElapsed: number;
@@ -543,6 +544,7 @@ const initialSnapshot: GameSnapshot = {
   roxyChallengeElapsed: 0,
   ebonyVictoryActive: false,
   karateOfferOpponent: null,
+  karateSequence: null,
   karateOfferIsApproach: false,
   karateSceneActive: false,
   fourArmBossSceneElapsed: 0,
@@ -715,6 +717,7 @@ function publishSnapshot(world: World): GameSnapshot {
     karateOfferOpponent: world.phase === STATE_KARATE_OFFER
       ? world.karateSequence ?? 'blonde'
       : null,
+    karateSequence: world.karateSequence,
     karateOfferIsApproach:
       world.phase === STATE_KARATE_OFFER && world.karateOfferIsApproach,
     karateSceneActive: world.phase === STATE_KARATE_CHALLENGE ||
@@ -4265,7 +4268,7 @@ export function useJungleGame(
         { x: 0, y: 88, w: 512, h: 282 },
         { x: 512, y: 88, w: 512, h: 282 },
       ];
-      const lauraVictory = prepareMinervaStorySheet(lauraVictoryImage, lauraVictoryFrames);
+      const lauraVictory = prepareLauraVictorySheet(lauraVictoryImage, lauraVictoryFrames);
       const fourArmBoss = prepareFourArmBossSheet(fourArmBossImage);
       const minervaStoryFrames = karateDuoSequenceFrames(
         minervaStoryImage.naturalWidth || minervaStoryImage.width,

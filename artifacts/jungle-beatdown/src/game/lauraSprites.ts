@@ -37,12 +37,113 @@ export const LAURA_GUARD = [LAURA_PUNCHES[0], LAURA_PUNCHES[3], LAURA_PUNCHES[4]
 
 export function lauraVictorySequenceFrames(width: number, height: number): KaratePose[] {
   const scaleX = width / 1024;
-  const scaleY = height / 572;
+  const scaleY = height / 765;
   return [
     { x: 0, y: Math.round(88 * scaleY), w: Math.round(512 * scaleX), h: Math.round(282 * scaleY) },
     { x: Math.round(512 * scaleX), y: Math.round(88 * scaleY),
       w: width - Math.round(512 * scaleX), h: Math.round(282 * scaleY) },
   ];
+}
+
+/** Laura's victory storyboard uses gray (#141413 / #51504c) checkers. */
+export function prepareLauraVictorySheet(
+  image: HTMLImageElement,
+  frames: KaratePose[],
+): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = image.naturalWidth || image.width;
+  canvas.height = image.naturalHeight || image.height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) throw new Error('Canvas 2D indisponível para a sequência da Laura.');
+  ctx.drawImage(image, 0, 0);
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const visited = new Uint8Array(canvas.width * canvas.height);
+  const queue = new Int32Array(visited.length);
+  let tail = 0;
+  const enqueue = (x: number, y: number, bounds: KaratePose) => {
+    if (x < bounds.x || y < bounds.y || x >= bounds.x + bounds.w || y >= bounds.y + bounds.h) return;
+    const p = y * canvas.width + x, o = p * 4;
+    if (visited[p]) return;
+    const r = pixels.data[o], g = pixels.data[o + 1], b = pixels.data[o + 2];
+    if (pixels.data[o + 3] < 20 || Math.min(r, g, b) < 10 ||
+        Math.max(r, g, b) > 112 || Math.max(r, g, b) - Math.min(r, g, b) > 30) return;
+    visited[p] = 1;
+    queue[tail++] = p;
+  };
+  for (const frame of frames) {
+    const left = Math.round(frame.x), top = Math.round(frame.y);
+    const right = Math.round(frame.x + frame.w) - 1, bottom = Math.round(frame.y + frame.h) - 1;
+    for (let x = left; x <= right; x++) { enqueue(x, top, frame); enqueue(x, bottom, frame); }
+    for (let y = top + 1; y < bottom; y++) { enqueue(left, y, frame); enqueue(right, y, frame); }
+  }
+  for (let head = 0; head < tail; head++) {
+    const p = queue[head], x = p % canvas.width, y = Math.floor(p / canvas.width);
+    pixels.data[p * 4 + 3] = 0;
+    for (const frame of frames) {
+      if (x < frame.x || x >= frame.x + frame.w || y < frame.y || y >= frame.y + frame.h) continue;
+      enqueue(x - 1, y, frame); enqueue(x + 1, y, frame);
+      enqueue(x, y - 1, frame); enqueue(x, y + 1, frame);
+      break;
+    }
+  }
+  // Exact source checker tones catch enclosed tiles that cannot be reached
+  // from panel edges; warm/green character pixels remain outside this palette.
+  for (const frame of frames) {
+    for (let y = frame.y; y < frame.y + frame.h; y++) {
+      for (let x = frame.x; x < frame.x + frame.w; x++) {
+        const o = (y * canvas.width + x) * 4;
+        const r = pixels.data[o], g = pixels.data[o + 1], b = pixels.data[o + 2];
+        const tone = (tr: number, tg: number, tb: number) =>
+          Math.hypot(r - tr, g - tg, b - tb) < 17;
+        const midpoint = Math.max(Math.abs(r - 50), Math.abs(g - 50), Math.abs(b - 48)) < 12;
+        if (tone(20, 20, 20) || tone(81, 80, 76) || midpoint) pixels.data[o + 3] = 0;
+      }
+    }
+  }
+  // Neutral checker islands trapped between outlined figures are not edge-
+  // connected. Drop gray-only components while retaining connected dark linework.
+  for (const frame of frames) {
+    const left = Math.round(frame.x), top = Math.round(frame.y);
+    const right = Math.round(frame.x + frame.w), bottom = Math.round(frame.y + frame.h);
+    const seen = new Uint8Array(frame.w * frame.h);
+    const component = new Int32Array(seen.length);
+    for (let start = 0; start < seen.length; start++) {
+      const sx = start % frame.w, sy = Math.floor(start / frame.w);
+      const global = (top + sy) * canvas.width + left + sx;
+      if (seen[start] || pixels.data[global * 4 + 3] < 20) continue;
+      let end = 1, hasColor = false;
+      component[0] = start;
+      seen[start] = 1;
+      for (let head = 0; head < end; head++) {
+        const point = component[head], x = point % frame.w, y = Math.floor(point / frame.w);
+        const p = (top + y) * canvas.width + left + x, o = p * 4;
+        const r = pixels.data[o], g = pixels.data[o + 1], b = pixels.data[o + 2];
+        if (Math.max(r, g, b) - Math.min(r, g, b) > 24 ||
+            Math.abs(g - r) > 7 || Math.abs(b - r) > 9) hasColor = true;
+        const neighbors = [x > 0 ? point - 1 : -1, x + 1 < frame.w ? point + 1 : -1,
+          y > 0 ? point - frame.w : -1, y + 1 < frame.h ? point + frame.w : -1];
+        for (const next of neighbors) {
+          if (next < 0 || seen[next]) continue;
+          const nx = next % frame.w, ny = Math.floor(next / frame.w);
+          const no = ((top + ny) * canvas.width + left + nx) * 4;
+          if (pixels.data[no + 3] < 20) continue;
+          seen[next] = 1;
+          component[end++] = next;
+        }
+      }
+      if (!hasColor) {
+        for (let i = 0; i < end; i++) {
+          const point = component[i], x = point % frame.w, y = Math.floor(point / frame.w);
+          pixels.data[((top + y) * canvas.width + left + x) * 4 + 3] = 0;
+        }
+      }
+    }
+    if (right > canvas.width || bottom > canvas.height) {
+      throw new RangeError('Quadro da sequência da Laura está fora da folha.');
+    }
+  }
+  ctx.putImageData(pixels, 0, 0);
+  return canvas;
 }
 
 // The kick artwork overlaps neighboring cells. These source-space masks remove

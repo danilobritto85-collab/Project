@@ -21,7 +21,7 @@ test('Laura has distinct punches and kicks rather than damaging guard poses', ()
 });
 
 test('Laura defeat sequence uses only final-blow and victory-stance panels', () => {
-  const frames = lauraVictorySequenceFrames(1024, 572);
+  const frames = lauraVictorySequenceFrames(1024, 765);
   assert.equal(frames.length, 2);
   assert.deepEqual(frames.map(({ x, y, w, h }) => [x, y, w, h]), [
     [0, 88, 512, 282],
@@ -29,6 +29,6 @@ test('Laura defeat sequence uses only final-blow and victory-stance panels', () 
   ]);
   for (const frame of frames) {
     assert.ok(frame.x + frame.w <= 1024);
-    assert.ok(frame.y + frame.h <= 572);
+    assert.ok(frame.y + frame.h <= 765);
   }
 });
