@@ -35,6 +35,16 @@ export const LAURA_ATTACKS = [
 ];
 export const LAURA_GUARD = [LAURA_PUNCHES[0], LAURA_PUNCHES[3], LAURA_PUNCHES[4], LAURA_KICKS[5]];
 
+export function lauraVictorySequenceFrames(width: number, height: number): KaratePose[] {
+  const scaleX = width / 1024;
+  const scaleY = height / 572;
+  return [
+    { x: 0, y: Math.round(88 * scaleY), w: Math.round(512 * scaleX), h: Math.round(282 * scaleY) },
+    { x: Math.round(512 * scaleX), y: Math.round(88 * scaleY),
+      w: width - Math.round(512 * scaleX), h: Math.round(282 * scaleY) },
+  ];
+}
+
 // The kick artwork overlaps neighboring cells. These source-space masks remove
 // neighboring heads/feet before connected-component isolation.
 const KICK_MASKS = [
