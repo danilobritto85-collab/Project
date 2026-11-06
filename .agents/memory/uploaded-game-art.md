@@ -50,3 +50,9 @@ For rasterized storyboard sheets, the checkerboard can contain many close but di
 **Why:** A small global palette removed most of the checker pattern but left distracting remnants, while fixed title-band assumptions exposed leftover label pixels.
 
 **How to apply:** Inspect the source at native resolution, use subject-aware cleanup for paired figures, and verify the rendered frame itself rather than trusting crop dimensions or type checks alone.
+
+When adjacent poses physically overlap in a supplied sheet, rectangular slicing and largest-component extraction cannot separate them reliably.
+
+**Why:** Connected neighboring feet and heads can remain attached to the intended silhouette, and a mask cannot recover artwork hidden behind another pose.
+
+**How to apply:** Use pose-specific silhouette masks for visible artwork. If the overlap hides essential anatomy, request separate poses or replacement art rather than promising an exact reconstruction.

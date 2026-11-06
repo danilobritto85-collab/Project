@@ -79,6 +79,8 @@ import fourArmBossSheetUrl from '@assets/image_1793063368917.png';
 import fourArmBossStoryUrl from '@assets/image_1793063355742.png';
 import minervaSheetUrl from '@assets/image_1793065095807.png';
 import minervaStoryUrl from '@assets/image_1793065104800.png';
+import { LAURA, LAURA_IDLE, LAURA_WALK, LAURA_ATTACKS, LAURA_GUARD, LAURA_HURT, prepareLauraSheet, isolateLauraKick } from './lauraSprites';
+import lauraSheetUrl from '@assets/image_1793977523679.png';
 import maySheetUrl from '@assets/image_1793093978357.jpeg';
 import mayStoryUrl from '@assets/image_1793094318134.jpeg';
 
@@ -99,6 +101,7 @@ export interface FightConfig {
   karateEbony: number;
   minerva: number;
   may: number;
+  laura: number;
   pantera: number;
   fourArmBoss: number;
   ebonyVictory: boolean;
@@ -113,6 +116,7 @@ export const DEFAULT_FIGHT_CONFIG: FightConfig = {
   karateEbony: 0,
   minerva: 0,
   may: 0,
+  laura: 0,
   pantera: 0,
   fourArmBoss: 0,
   ebonyVictory: false,
@@ -200,6 +204,8 @@ interface SpriteAtlas {
   may: HTMLCanvasElement | null;
   mayCombat: HTMLCanvasElement[];
   mayStory: HTMLCanvasElement | null;
+  laura: HTMLCanvasElement | null;
+  lauraCombat: HTMLCanvasElement[];
   ninja: HTMLCanvasElement | null;
   pantera: HTMLCanvasElement | null;
   fourArmBoss: HTMLCanvasElement | null;
@@ -216,7 +222,7 @@ interface SpriteAtlas {
 }
 
 type EnemyKind = 'amazon' | 'ninja' | 'roxy' | 'karateBlonde' | 'karateEbony' |
-  'minerva' | 'may' | 'pantera' | 'fourArmBoss';
+  'minerva' | 'may' | 'laura' | 'pantera' | 'fourArmBoss';
 type EnemyState = 'idle' | 'walk' | 'run' | 'taunt' | 'attack' | 'hurt' | 'down' | 'block';
 
 interface Enemy {
@@ -433,6 +439,7 @@ const ATTACK_FRAMES: Record<EnemyKind, SpriteRect[]> = {
   karateEbony: KARATE_EBONY_ATTACKS,
   minerva: MINERVA_ATTACKS,
   may: MAY_ATTACKS,
+  laura: LAURA_ATTACKS,
   pantera: PANTERA_ATTACK_FRAMES,
   fourArmBoss: [...FOUR_ARM_PUNCH_FRAMES, FOUR_ARM_SPIN_KICK, FOUR_ARM_HIGH_KICK],
 };
@@ -461,6 +468,7 @@ const ENEMY_FRAMES = {
   karateEbony: KARATE_EBONY,
   minerva: MINERVA,
   may: MAY,
+  laura: LAURA,
   pantera: PANTERA_FRAMES,
   fourArmBoss: {
     idle: FOUR_ARM_IDLE,
@@ -553,6 +561,7 @@ function createFightLineup(config: FightConfig): OpponentKind[] {
     karateEbony: config.karateEbony,
     minerva: config.minerva,
     may: config.may,
+    laura: config.laura,
     pantera: config.pantera,
     fourArmBoss: config.fourArmBoss,
   };
@@ -564,13 +573,13 @@ function createFightLineup(config: FightConfig): OpponentKind[] {
   }
   if (counts.amazon === 5 && counts.ninja === 3 && counts.roxy === 1 && counts.ebony === 0 &&
       counts.karateBlonde === 0 && counts.karateEbony === 0 && counts.pantera === 0 &&
-      counts.minerva === 0 && counts.may === 0 && counts.fourArmBoss === 0) {
+      counts.minerva === 0 && counts.may === 0 && counts.laura === 0 && counts.fourArmBoss === 0) {
     return [...STARTING_ENEMY_KINDS];
   }
 
   const lineup: OpponentKind[] = [];
   const order: OpponentKind[] = [
-    'amazon', 'ebony', 'ninja', 'roxy', 'karateBlonde', 'karateEbony', 'minerva', 'may', 'pantera', 'fourArmBoss',
+    'amazon', 'ebony', 'ninja', 'roxy', 'karateBlonde', 'karateEbony', 'minerva', 'may', 'laura', 'pantera', 'fourArmBoss',
   ];
   while (order.some((kind) => counts[kind] > 0)) {
     for (const kind of order) {
@@ -594,7 +603,7 @@ function createEnemy(id: number, index: number, opponent: OpponentKind, lineupSi
     y: 475 + ((index * 29) % 55),
     vx: 0,
     vy: 0,
-    hp: opponent === 'fourArmBoss' ? 6 : opponent === 'may' ? 4 : 3,
+    hp: opponent === 'fourArmBoss' ? 6 : opponent === 'may' || opponent === 'laura' ? 4 : 3,
     active: true,
     direction: -1,
     state: 'idle',
@@ -1612,6 +1621,17 @@ function drawFourArmStompEffect(context: CanvasRenderingContext2D, enemy: Enemy)
 }
 
 function enemyAnimationFrame(enemy: Enemy, now: number): SpriteRect {
+  if (enemy.kind === 'laura') {
+    if (enemy.state === 'walk' || enemy.state === 'run') {
+      return LAURA_WALK[Math.floor(now / (enemy.state === 'run' ? 100 : 145) + enemy.id) % LAURA_WALK.length];
+    }
+    if (enemy.state === 'attack') return enemy.stateTimer < 0.1
+      ? LAURA_GUARD[enemy.attackPoseIndex % LAURA_GUARD.length]
+      : LAURA_ATTACKS[enemy.attackPoseIndex % LAURA_ATTACKS.length];
+    if (enemy.state === 'hurt') return LAURA_HURT[Math.min(2, Math.floor((0.4 - enemy.stateTimer) * 8))] ?? LAURA.hurt;
+    if (enemy.state === 'down') return LAURA.down;
+    return LAURA_IDLE[Math.floor(now / 190 + enemy.id) % LAURA_IDLE.length];
+  }
   if (enemy.kind === 'fourArmBoss') {
     if (enemy.state === 'walk') {
       return FOUR_ARM_WALK_FRAMES[Math.floor(now / 165 + enemy.id * 0.61) % FOUR_ARM_WALK_FRAMES.length];
@@ -1703,6 +1723,18 @@ function drawEnemySprite(
   groundOffset = 7,
   anchorX = enemy.x,
 ) {
+  if (enemy.kind === 'laura') {
+    const image = enemy.state === 'attack' && enemy.stateTimer >= 0.1
+      ? atlas.lauraCombat[enemy.attackPoseIndex % atlas.lauraCombat.length] : undefined;
+    const source = image ?? atlas.laura;
+    const rect = image ? { x: 0, y: 0, w: image.width, h: image.height } : frame;
+    const visible = source ? getKarateVisibleBounds(source, rect) : rect;
+    // Fixed native-pixel scale: extended kicks and the lying pose must not grow.
+    drawKarateBaseSprite(context, image ?? atlas.laura,
+      rect, anchorX, enemy.y, visible.h * 0.98,
+      enemy.direction < 0, lift, groundOffset);
+    return;
+  }
   if (enemy.kind === 'fourArmBoss') {
     const isStomp = enemy.state === 'attack' &&
       enemy.attackPoseIndex === ATTACK_FRAMES.fourArmBoss.length - 1;
@@ -2585,6 +2617,8 @@ function endFourArmBossChallenge(world: World) {
 }
 
 function beginSpecialGrapple(world: World, enemy: Enemy) {
+  // Laura uses combat-only attacks; never borrow another fighter's paired art.
+  if (enemy.kind === 'laura') return;
   // These fighters never enter the generic grapple renderer: its paired sheets
   // contain an Amazon. Keep every custom scene behind its own opt-in.
   if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony' ||
@@ -2820,7 +2854,7 @@ function updateEnemies(world: World, dt: number, now: number) {
     // next AI tick replaces her kick/hit pose with a walk and slides her legs.
     if ((enemy.kind === 'roxy' || enemy.ebony || enemy.kind === 'fourArmBoss' ||
       enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony' ||
-      enemy.kind === 'minerva' || enemy.kind === 'may') &&
+      enemy.kind === 'minerva' || enemy.kind === 'may' || enemy.kind === 'laura') &&
         enemy.stateTimer > 0 &&
         (enemy.state === 'attack' || enemy.state === 'hurt' || enemy.state === 'down' ||
           enemy.state === 'block')) {
@@ -2923,7 +2957,7 @@ function updateEnemies(world: World, dt: number, now: number) {
             enemy.kind === 'karateEbony' ? 'ebony' : 'blonde',
           0.6,
         );
-        } else if (enemy.kind === 'may') {
+        } else if (enemy.kind === 'may' || enemy.kind === 'laura') {
           playHit(world);
       } else if (enemy.kind === 'pantera') {
         playHit(world);
@@ -2945,7 +2979,8 @@ function updateEnemies(world: World, dt: number, now: number) {
       const bossSpin = isBoss && enemy.attackPoseIndex === FOUR_ARM_PUNCH_FRAMES.length;
       const mayProfile = enemy.kind === 'may'
         ? MAY_ATTACK_PROFILES[enemy.attackPoseIndex % MAY_ATTACK_PROFILES.length] : null;
-      const hitRange = isBoss ? 168 : mayProfile ? mayProfile.range
+      const hitRange = enemy.kind === 'laura' ? enemy.attackPoseIndex < 3 ? 112 : 160
+        : isBoss ? 168 : mayProfile ? mayProfile.range
         : enemy.kind === 'minerva' ? 124 : 106;
       const verticalReach = mayProfile?.height ?? 132;
       if (distance < hitRange && Math.abs(dy) < verticalReach && world.heroHitCooldown <= 0) {
@@ -3690,6 +3725,8 @@ export function useJungleGame(
       may: null,
       mayCombat: [],
       mayStory: null,
+      laura: null,
+      lauraCombat: [],
       ninja: null,
       ninjaFootsmother: null,
       ninjaFootsmotherEnding: null,
@@ -3727,19 +3764,21 @@ export function useJungleGame(
       const params = new URLSearchParams(window.location.search);
       const scene = params.get('_scene');
       if (scene === 'karate-blonde' || scene === 'karate-ebony' ||
-          scene === 'minerva' || scene === 'may') {
+          scene === 'minerva' || scene === 'may' || scene === 'laura') {
         const blonde = scene === 'karate-blonde';
         const minerva = scene === 'minerva';
         const may = scene === 'may';
+        const laura = scene === 'laura';
         const config: FightConfig = {
           amazonas: params.get('_amazon') === '1' ? 1 : 0,
           ebony: 0,
           ninjas: 0,
           roxy: 0,
           karateBlonde: blonde ? 1 : 0,
-          karateEbony: !blonde && !minerva && !may ? 1 : 0,
+          karateEbony: !blonde && !minerva && !may && !laura ? 1 : 0,
           minerva: minerva ? 1 : 0,
           may: may ? 1 : 0,
+          laura: laura ? 1 : 0,
           pantera: 0,
           fourArmBoss: 0,
           ebonyVictory: false,
@@ -3753,7 +3792,7 @@ export function useJungleGame(
           sound: oldSound,
           soundEnabled: false,
         });
-        const karatekaKind = may ? 'may' : minerva ? 'minerva'
+        const karatekaKind = laura ? 'laura' : may ? 'may' : minerva ? 'minerva'
           : blonde ? 'karateBlonde' : 'karateEbony';
         const karateka = world.enemies.find((enemy) => enemy.kind === karatekaKind);
         if (karateka) {
@@ -3763,8 +3802,9 @@ export function useJungleGame(
           karateka.state = params.get('_action') === 'attack'
             ? 'attack'
             : params.get('_action') === 'taunt' ? 'taunt' : 'walk';
-          karateka.stateTimer = karateka.state === 'taunt' ? 20 : 0;
-          karateka.attackPoseIndex = clamp(Number(params.get('_pose') ?? 2), 0, 4);
+          karateka.stateTimer = karateka.state === 'taunt' ? 20
+            : karateka.state === 'attack' ? 0.3 : 0;
+          karateka.attackPoseIndex = clamp(Number(params.get('_pose') ?? 2), 0, ATTACK_FRAMES[karateka.kind].length - 1);
           if (params.get('_grapple') === '1') beginSpecialGrapple(world, karateka);
         }
         freezePreview = params.get('_freeze') === '1';
@@ -3788,6 +3828,7 @@ export function useJungleGame(
           karateEbony: !minerva && !may && (!blonde || duo) ? 1 : 0,
           minerva: minerva ? 1 : 0,
           may: may ? 1 : 0,
+          laura: 0,
           pantera: 0,
           fourArmBoss: 0,
           ebonyVictory: false,
@@ -3831,6 +3872,7 @@ export function useJungleGame(
           minerva: 0,
           may: 0,
           ebony: duo ? 2 : 1,
+          laura: 0,
           pantera: 0,
           fourArmBoss: 0,
           ebonyVictory: true,
@@ -3875,6 +3917,7 @@ export function useJungleGame(
           may: 0,
           pantera: 0,
           fourArmBoss: 1,
+          laura: 0,
           ebonyVictory: false,
         };
         const world = worldRef.current;
@@ -3926,6 +3969,7 @@ export function useJungleGame(
           minerva: 0,
           may: 0,
           pantera: 1,
+          laura: 0,
           fourArmBoss: 0,
           ebonyVictory: false,
         };
@@ -4137,6 +4181,7 @@ export function useJungleGame(
       loadImage(minervaStoryUrl),
       loadImage(maySheetUrl),
       loadImage(mayStoryUrl),
+      loadImage(lauraSheetUrl),
     ]).then(([
       background,
       hero,
@@ -4166,12 +4211,14 @@ export function useJungleGame(
       minervaStoryImage,
       mayImage,
       mayStoryImage,
+      lauraImage,
     ]) => {
       if (disposed) return;
       const blondeBase = prepareKarateSheet(karateBlonde);
       const ebonyBase = prepareKarateSheet(karateEbony);
       const minervaBase = prepareKarateSheet(minervaImage);
       const mayBase = prepareMaySheet(mayImage);
+      const lauraBase = prepareLauraSheet(lauraImage);
       const fourArmBoss = prepareFourArmBossSheet(fourArmBossImage);
       const minervaStoryFrames = karateDuoSequenceFrames(
         minervaStoryImage.naturalWidth || minervaStoryImage.width,
@@ -4255,6 +4302,12 @@ export function useJungleGame(
         may: mayBase,
         mayCombat: MAY_ATTACKS.map((pose) => extractKarateCombatPose(mayBase, pose)),
         mayStory,
+        laura: lauraBase,
+        lauraCombat: LAURA_ATTACKS.map((pose, index) => {
+          if (index < 3) return extractKarateCombatPose(lauraBase, pose);
+          const isolated = isolateLauraKick(lauraBase, pose, index - 3);
+          return extractKarateCombatPose(isolated, { x: 0, y: 0, w: isolated.width, h: isolated.height });
+        }),
         ninja: removeNinjaCheckerboard(ninja),
         ninjaFootsmother: removeFootsmotherCheckerboard(ninjaFootsmother),
         ninjaFootsmotherEnding: removeFootsmotherCheckerboard(

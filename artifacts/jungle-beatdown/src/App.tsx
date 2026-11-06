@@ -33,7 +33,7 @@ import {
 
 type OpponentCountKey =
   | 'amazonas' | 'ebony' | 'ninjas' | 'roxy' | 'karateBlonde' | 'karateEbony'
-  | 'minerva' | 'may' | 'pantera' | 'fourArmBoss';
+  | 'minerva' | 'may' | 'laura' | 'pantera' | 'fourArmBoss';
 
 function formatScore(score: number) {
   return Math.max(0, score).toString().padStart(6, '0');
@@ -168,6 +168,7 @@ function App() {
     karateEbony: 'Karateka Ebony',
     minerva: 'Minerva',
     may: 'May',
+    laura: 'Laura',
     pantera: 'Pantera',
     fourArmBoss: 'Chefe Guerreira de Quatro Braços',
   };
@@ -178,7 +179,7 @@ function App() {
       snapshot.phase === 'game-over');
   const fightCount = fightConfig.amazonas + fightConfig.ebony + fightConfig.ninjas + fightConfig.roxy +
     fightConfig.karateBlonde + fightConfig.karateEbony + fightConfig.minerva + fightConfig.may +
-    fightConfig.pantera + fightConfig.fourArmBoss;
+    fightConfig.pantera + fightConfig.fourArmBoss + fightConfig.laura;
   const handleOpponentCountChange = (kind: OpponentCountKey, value: number) => {
     if (!Number.isSafeInteger(value) || value < 0) return;
     if (kind === 'fourArmBoss' && value > 1) value = 1;
@@ -297,6 +298,9 @@ function App() {
                         onChange={handleOpponentCountChange} />
                       <OpponentCounter label="May" kind="may"
                         value={fightConfig.may}
+                        onChange={handleOpponentCountChange} />
+                      <OpponentCounter label="Laura" kind="laura"
+                        value={fightConfig.laura}
                         onChange={handleOpponentCountChange} />
                       <OpponentCounter label="Pantera" kind="pantera"
                         value={fightConfig.pantera}
