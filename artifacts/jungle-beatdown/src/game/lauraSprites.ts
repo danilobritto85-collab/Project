@@ -7,9 +7,14 @@ export const LAURA_IDLE: KaratePose[] = Array.from({ length: 5 }, (_, i) => ({
 export const LAURA_WALK: KaratePose[] = Array.from({ length: 6 }, (_, i) => ({
   x: i * 127, y: 220, w: 127, h: 198,
 }));
-export const LAURA_PUNCHES: KaratePose[] = Array.from({ length: 6 }, (_, i) => ({
-  x: i * 127, y: 426, w: 127, h: 193,
-}));
+export const LAURA_PUNCHES: KaratePose[] = [
+  { x: 0, y: 426, w: 127, h: 193 },
+  { x: 140, y: 426, w: 140, h: 193 },
+  { x: 266, y: 426, w: 143, h: 193 },
+  { x: 400, y: 426, w: 100, h: 193 },
+  { x: 510, y: 426, w: 105, h: 193 },
+  { x: 639, y: 426, w: 126, h: 193 },
+];
 export const LAURA_KICKS: KaratePose[] = [
   { x: 0, y: 623, w: 161, h: 205 },
   { x: 138, y: 623, w: 170, h: 205 },
@@ -31,9 +36,26 @@ export const LAURA = {
 };
 export const LAURA_ATTACKS = [
   LAURA_PUNCHES[1], LAURA_PUNCHES[2], LAURA_PUNCHES[5],
-  ...LAURA_KICKS.slice(0, 5),
+  // The second and third kicks are physically overpainted by adjacent heads
+  // and feet in the source; no rectangular crop can recover hidden anatomy.
+  LAURA_KICKS[0], LAURA_KICKS[3], LAURA_KICKS[4],
 ];
 export const LAURA_GUARD = [LAURA_PUNCHES[0], LAURA_PUNCHES[3], LAURA_PUNCHES[4], LAURA_KICKS[5]];
+
+/** Combat-only timeline: independent actors, no storyboard duplicates. */
+export function lauraDefeatStage(elapsed: number) {
+  if (elapsed < 0.3) return 'strike';
+  if (elapsed < 0.75) return 'recoil';
+  if (elapsed < 1.5) return 'fall';
+  return 'hold';
+}
+
+export function lauraFallingPose(secondsLeft: number): KaratePose {
+  if (secondsLeft > 0.85) return LAURA_HURT[0];
+  if (secondsLeft > 0.55) return LAURA_HURT[1];
+  if (secondsLeft > 0.25) return LAURA_HURT[2];
+  return LAURA.defeated;
+}
 
 export function lauraVictorySequenceFrames(width: number, height: number): KaratePose[] {
   const scaleX = width / 1024;
@@ -188,7 +210,9 @@ export function prepareLauraSheet(image: HTMLImageElement): HTMLCanvasElement {
   const add = (x: number, y: number) => {
     if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return;
     const p = y * canvas.width + x, o = p * 4;
-    if (visited[p] || Math.max(data.data[o], data.data[o + 1], data.data[o + 2]) > 18) return;
+    // The backdrop is pure black. A broad cutoff also eats Laura's dark
+    // hair strands and outlines, creating transparent holes in every pose.
+    if (visited[p] || Math.max(data.data[o], data.data[o + 1], data.data[o + 2]) > 4) return;
     visited[p] = 1;
     queue[tail++] = p;
   };

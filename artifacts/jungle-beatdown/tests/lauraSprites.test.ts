@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   LAURA, LAURA_IDLE, LAURA_WALK, LAURA_ATTACKS, LAURA_GUARD, LAURA_HURT,
-  lauraVictorySequenceFrames,
+  lauraVictorySequenceFrames, lauraDefeatStage, lauraFallingPose, LAURA_KICKS,
 } from '../src/game/lauraSprites';
 
 test('Laura poses stay inside the native 765×1024 combat sheet', () => {
@@ -15,9 +15,22 @@ test('Laura poses stay inside the native 765×1024 combat sheet', () => {
 });
 
 test('Laura has distinct punches and kicks rather than damaging guard poses', () => {
-  assert.equal(LAURA_ATTACKS.length, 8);
+  assert.equal(LAURA_ATTACKS.length, 6);
   assert.equal(LAURA_WALK.length, 6);
   for (const attack of LAURA_ATTACKS) assert.ok(!LAURA_GUARD.includes(attack));
+});
+
+test('Laura excludes kicks with anatomy obscured by adjacent poses', () => {
+  assert.ok(!LAURA_ATTACKS.includes(LAURA_KICKS[1]));
+  assert.ok(!LAURA_ATTACKS.includes(LAURA_KICKS[2]));
+  assert.equal(LAURA_ATTACKS[0].x + LAURA_ATTACKS[0].w, 280);
+});
+
+test('Combat defeat advances through reaction and fall, then holds', () => {
+  assert.deepEqual([0, 0.3, 0.75, 1.5, 10, 100].map(lauraDefeatStage),
+    ['strike', 'recoil', 'fall', 'hold', 'hold', 'hold']);
+  assert.deepEqual([1.15, 0.8, 0.5, 0].map(lauraFallingPose),
+    [...LAURA_HURT, LAURA.defeated]);
 });
 
 test('Laura defeat sequence uses only final-blow and victory-stance panels', () => {

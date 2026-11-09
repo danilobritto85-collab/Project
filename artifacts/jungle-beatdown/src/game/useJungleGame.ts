@@ -79,7 +79,7 @@ import fourArmBossSheetUrl from '@assets/image_1793063368917.png';
 import fourArmBossStoryUrl from '@assets/image_1793063355742.png';
 import minervaSheetUrl from '@assets/image_1793065095807.png';
 import minervaStoryUrl from '@assets/image_1793065104800.png';
-import { LAURA, LAURA_IDLE, LAURA_WALK, LAURA_ATTACKS, LAURA_GUARD, LAURA_HURT, prepareLauraSheet, prepareLauraVictorySheet, isolateLauraKick, lauraVictorySequenceFrames } from './lauraSprites';
+import { LAURA, LAURA_IDLE, LAURA_WALK, LAURA_ATTACKS, LAURA_KICKS, LAURA_GUARD, LAURA_HURT, prepareLauraSheet, prepareLauraVictorySheet, isolateLauraKick, lauraVictorySequenceFrames, lauraDefeatStage, lauraFallingPose } from './lauraSprites';
 import lauraSheetUrl from '@assets/image_1793977523679.png';
 import lauraVictorySheetUrl from '@assets/image_1793978481211.png';
 import maySheetUrl from '@assets/image_1793093978357.jpeg';
@@ -1634,7 +1634,7 @@ function enemyAnimationFrame(enemy: Enemy, now: number): SpriteRect {
       ? LAURA_GUARD[enemy.attackPoseIndex % LAURA_GUARD.length]
       : LAURA_ATTACKS[enemy.attackPoseIndex % LAURA_ATTACKS.length];
     if (enemy.state === 'hurt') return LAURA_HURT[Math.min(2, Math.floor((0.4 - enemy.stateTimer) * 8))] ?? LAURA.hurt;
-    if (enemy.state === 'down') return LAURA.down;
+    if (enemy.state === 'down') return lauraFallingPose(enemy.stateTimer);
     return LAURA_IDLE[Math.floor(now / 190 + enemy.id) % LAURA_IDLE.length];
   }
   if (enemy.kind === 'fourArmBoss') {
@@ -2009,14 +2009,27 @@ function drawWorld(
   } else if (karateDefeatSequence) {
     const sequence = world.karateSequence ?? 'blonde';
     const elapsed = world.karateDefeatElapsed;
-    if (sequence === 'laura' && atlas.lauraVictory) {
-      const frames = lauraVictorySequenceFrames(atlas.lauraVictory.width, atlas.lauraVictory.height);
-      const frameIndex = elapsed < KARATE_DEFEAT_DURATION / 2 ? 0 : 1;
-      const frame = frames[frameIndex];
-      drawKarateSequenceFrame(
-        context, atlas.lauraVictory, frame, WIDTH / 2, world.heroY, 264, false,
-        Math.min(elapsed, KARATE_DEFEAT_DURATION),
-      );
+    if (sequence === 'laura' && atlas.laura) {
+      const stage = lauraDefeatStage(elapsed);
+      const floor = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
+      const fall = clamp((elapsed - 0.75) / 0.75, 0, 1);
+      const heroX = WIDTH / 2 + 60 + fall * 55;
+      const pose = stage === 'strike' || stage === 'recoil' ? HERO_FRAMES.hurt
+        : stage === 'fall'
+          ? { x: 318, y: 592, w: 147, h: 145 }
+          : HERO_FRAMES.defeated;
+      // Separate sprites preserve anatomy and allow recoil/fall motion without
+      // stretching a paired storyboard or duplicating its standing figures.
+      const attack = atlas.lauraCombat[0];
+      const source = stage === 'strike' && attack ? attack : atlas.laura;
+      const lauraPose = stage === 'strike' && attack
+        ? { x: 0, y: 0, w: attack.width, h: attack.height } : LAURA.idle;
+      drawKarateBaseSprite(context, source, lauraPose,
+        WIDTH / 2 - 85, floor, 190, false);
+      const shake = stage === 'recoil' ? Math.sin(elapsed * 55) * 3 : 0;
+      drawAtlasSprite(context, atlas.hero, pose, heroX + shake, floor,
+        stage === 'hold' ? 230 : 150, stage === 'hold' ? 80 : 164,
+        true, 0, stage === 'fall' ? Math.sin(fall * Math.PI) * 24 : 0);
     } else if (sequence === 'may' && atlas.mayStory) {
       const frames = mayStorySequenceFrames(atlas.mayStory.width, atlas.mayStory.height);
       const index = Math.min(frames.length - 1,
@@ -2286,7 +2299,8 @@ function drawWorld(
       const defeated = !enemy.active;
       const enemyFrames = enemy.ebony ? EBONY_FRAMES : ENEMY_FRAMES[enemy.kind];
       const rect = defeated
-        ? enemy.stateTimer > 0 ? enemyFrames.down : enemyFrames.defeated
+        ? enemy.kind === 'laura' ? lauraFallingPose(enemy.stateTimer)
+          : enemy.stateTimer > 0 ? enemyFrames.down : enemyFrames.defeated
         : enemyAnimationFrame(enemy, now);
       actors.push({
         // Keep Roxy's extended kick silhouette readable when it crosses the
@@ -4356,7 +4370,7 @@ export function useJungleGame(
         lauraVictory,
         lauraCombat: LAURA_ATTACKS.map((pose, index) => {
           if (index < 3) return extractKarateCombatPose(lauraBase, pose);
-          const isolated = isolateLauraKick(lauraBase, pose, index - 3);
+          const isolated = isolateLauraKick(lauraBase, pose, LAURA_KICKS.indexOf(pose));
           return extractKarateCombatPose(isolated, { x: 0, y: 0, w: isolated.width, h: isolated.height });
         }),
         ninja: removeNinjaCheckerboard(ninja),
