@@ -1,52 +1,61 @@
 import type { KaratePose } from './karateSprites';
 
-// Native coordinates of the supplied 765×1024 sheet; rows are not an equal grid.
-export const LAURA_IDLE: KaratePose[] = Array.from({ length: 5 }, (_, i) => ({
-  x: i * 153, y: 15, w: 153, h: 201,
-}));
-export const LAURA_WALK: KaratePose[] = Array.from({ length: 6 }, (_, i) => ({
-  x: i * 127, y: 220, w: 127, h: 198,
-}));
+// Measured 765×1024 combat sheet: idle / walk / punch / kick / hurt rows.
+export const LAURA_IDLE: KaratePose[] = [
+  { x: 8, y: 20, w: 150, h: 198 },
+  { x: 160, y: 20, w: 152, h: 198 },
+  { x: 314, y: 20, w: 150, h: 198 },
+  { x: 466, y: 20, w: 152, h: 198 },
+  { x: 620, y: 20, w: 145, h: 198 },
+];
+export const LAURA_WALK: KaratePose[] = [
+  { x: 22, y: 222, w: 118, h: 196 },
+  { x: 148, y: 222, w: 122, h: 196 },
+  { x: 270, y: 222, w: 114, h: 196 },
+  { x: 385, y: 222, w: 122, h: 196 },
+  { x: 508, y: 222, w: 124, h: 196 },
+  { x: 632, y: 222, w: 120, h: 196 },
+];
 export const LAURA_PUNCHES: KaratePose[] = [
-  { x: 0, y: 426, w: 127, h: 193 },
-  { x: 140, y: 426, w: 140, h: 193 },
-  { x: 266, y: 426, w: 143, h: 193 },
-  { x: 400, y: 426, w: 100, h: 193 },
-  { x: 510, y: 426, w: 105, h: 193 },
-  { x: 639, y: 426, w: 126, h: 193 },
+  { x: 8, y: 432, w: 128, h: 188 },
+  { x: 136, y: 432, w: 144, h: 188 },
+  { x: 264, y: 432, w: 144, h: 188 },
+  { x: 400, y: 432, w: 108, h: 188 },
+  { x: 500, y: 432, w: 116, h: 188 },
+  { x: 612, y: 432, w: 144, h: 188 },
 ];
 export const LAURA_KICKS: KaratePose[] = [
-  { x: 0, y: 623, w: 161, h: 205 },
-  { x: 138, y: 623, w: 170, h: 205 },
-  { x: 285, y: 623, w: 135, h: 205 },
-  { x: 399, y: 623, w: 98, h: 205 },
-  { x: 459, y: 623, w: 185, h: 205 },
-  { x: 642, y: 623, w: 123, h: 205 },
+  { x: 0, y: 618, w: 161, h: 210 },
+  { x: 138, y: 618, w: 170, h: 210 },
+  { x: 285, y: 618, w: 135, h: 210 },
+  { x: 399, y: 618, w: 98, h: 210 },
+  { x: 459, y: 618, w: 185, h: 210 },
+  { x: 642, y: 618, w: 123, h: 210 },
 ];
 export const LAURA_HURT: KaratePose[] = [
-  { x: 0, y: 837, w: 153, h: 187 },
-  { x: 145, y: 837, w: 166, h: 187 },
-  { x: 278, y: 837, w: 177, h: 187 },
+  { x: 8, y: 840, w: 148, h: 184 },
+  { x: 140, y: 840, w: 170, h: 184 },
+  { x: 276, y: 840, w: 176, h: 184 },
 ];
 export const LAURA = {
   idle: LAURA_IDLE[0], walk: LAURA_WALK[0], run: LAURA_WALK[3],
   hurt: LAURA_HURT[0],
-  down: { x: 455, y: 916, w: 202, h: 108 },
-  defeated: { x: 455, y: 916, w: 202, h: 108 },
+  down: { x: 454, y: 908, w: 206, h: 116 },
+  defeated: { x: 454, y: 908, w: 206, h: 116 },
 };
 export const LAURA_ATTACKS = [
   LAURA_PUNCHES[1], LAURA_PUNCHES[2], LAURA_PUNCHES[5],
-  // The second and third kicks are physically overpainted by adjacent heads
-  // and feet in the source; no rectangular crop can recover hidden anatomy.
+  // Kicks 2–3 are overpainted by neighboring heads/feet in the source sheet.
   LAURA_KICKS[0], LAURA_KICKS[3], LAURA_KICKS[4],
 ];
 export const LAURA_GUARD = [LAURA_PUNCHES[0], LAURA_PUNCHES[3], LAURA_PUNCHES[4], LAURA_KICKS[5]];
 
-/** Combat-only timeline: independent actors, no storyboard duplicates. */
+/** Combat-only timeline: punch, kick, heroine recoil/fall, then hold. */
 export function lauraDefeatStage(elapsed: number) {
-  if (elapsed < 0.3) return 'strike';
-  if (elapsed < 0.75) return 'recoil';
-  if (elapsed < 1.5) return 'fall';
+  if (elapsed < 0.28) return 'punch';
+  if (elapsed < 0.55) return 'kick';
+  if (elapsed < 1.05) return 'recoil';
+  if (elapsed < 1.7) return 'fall';
   return 'hold';
 }
 
@@ -57,20 +66,93 @@ export function lauraFallingPose(secondsLeft: number): KaratePose {
   return LAURA.defeated;
 }
 
+/** Combat-only storyboard panels (7–8): final blow and victory stance. */
 export function lauraVictorySequenceFrames(width: number, height: number): KaratePose[] {
-  const scaleX = width / 1024;
-  const scaleY = height / 765;
+  return lauraStoryboardFourFrames(width, height).slice(0, 2);
+}
+
+function scaleLauraRect(
+  x: number, y: number, w: number, h: number,
+  width: number, height: number, nativeW: number, nativeH: number,
+): KaratePose {
+  const scaleX = width / nativeW;
+  const scaleY = height / nativeH;
+  const sx = Math.max(0, Math.round(x * scaleX));
+  const sy = Math.max(0, Math.round(y * scaleY));
+  return {
+    x: sx,
+    y: sy,
+    w: Math.min(Math.round(w * scaleX), width - sx),
+    h: Math.min(Math.round(h * scaleY), height - sy),
+  };
+}
+
+/**
+ * Panels 7–10 on the pre-keyed victory sheet (no captions). Crops follow
+ * the figure groups so empty padding does not shrink them on screen.
+ */
+export function lauraStoryboardFourFrames(width: number, height: number): KaratePose[] {
   return [
-    { x: 0, y: Math.round(88 * scaleY), w: Math.round(512 * scaleX), h: Math.round(282 * scaleY) },
-    { x: Math.round(512 * scaleX), y: Math.round(88 * scaleY),
-      w: width - Math.round(512 * scaleX), h: Math.round(282 * scaleY) },
+    scaleLauraRect(26, 78, 450, 292, width, height, 1024, 765),
+    scaleLauraRect(555, 77, 448, 292, width, height, 1024, 765),
+    scaleLauraRect(6, 433, 430, 332, width, height, 1024, 765),
+    scaleLauraRect(512, 479, 508, 286, width, height, 1024, 765),
   ];
 }
 
-/** Laura's victory storyboard uses gray (#141413 / #51504c) checkers. */
+/**
+ * Panels 11–13 on the continuation sheet (light gray/white checker).
+ */
+export function lauraContinuationFrames(width: number, height: number): KaratePose[] {
+  return [
+    scaleLauraRect(8, 80, 484, 314, width, height, 1024, 764),
+    scaleLauraRect(540, 80, 476, 314, width, height, 1024, 764),
+    scaleLauraRect(20, 418, 996, 346, width, height, 1024, 764),
+  ];
+}
+
+/** Opt-in special uses all four victory panels plus the three continuation panels. */
+export function lauraSpecialSequenceFrames(
+  victoryWidth: number,
+  victoryHeight: number,
+  continuationWidth: number,
+  continuationHeight: number,
+): { sheet: 'victory' | 'continuation'; frame: KaratePose }[] {
+  return [
+    ...lauraStoryboardFourFrames(victoryWidth, victoryHeight).map((frame) => ({
+      sheet: 'victory' as const,
+      frame,
+    })),
+    ...lauraContinuationFrames(continuationWidth, continuationHeight).map((frame) => ({
+      sheet: 'continuation' as const,
+      frame,
+    })),
+  ];
+}
+
+export const LAURA_SPECIAL_PANEL_COUNT = 7;
+export const LAURA_SPECIAL_DURATION = 14;
+/** Caption strip height inside each storyboard panel (numbered titles). */
+export const LAURA_STORYBOARD_CAPTION_HEIGHT = 24;
+
+export function lauraSpecialPanelIndex(elapsed: number, duration = LAURA_SPECIAL_DURATION) {
+  const progress = Math.max(0, Math.min(0.999, elapsed / Math.max(0.001, duration)));
+  return Math.min(LAURA_SPECIAL_PANEL_COUNT - 1, Math.floor(progress * LAURA_SPECIAL_PANEL_COUNT));
+}
+
+/** Soft kiss cue during the continuation kiss panels. */
+export function lauraSpecialKissElapsed(duration = LAURA_SPECIAL_DURATION) {
+  return duration * (5 / LAURA_SPECIAL_PANEL_COUNT);
+}
+
+/**
+ * Victory PNG already has real alpha. Continuation JPEG still has a
+ * Photoshop gray/white checker; hair is black so we only flood light
+ * gray from the edges and never touch dark pixels.
+ */
 export function prepareLauraVictorySheet(
   image: HTMLImageElement,
-  frames: KaratePose[],
+  _frames: KaratePose[],
 ): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = image.naturalWidth || image.width;
@@ -79,89 +161,67 @@ export function prepareLauraVictorySheet(
   if (!ctx) throw new Error('Canvas 2D indisponível para a sequência da Laura.');
   ctx.drawImage(image, 0, 0);
   const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const visited = new Uint8Array(canvas.width * canvas.height);
-  const queue = new Int32Array(visited.length);
+  const data = pixels.data;
+  const width = canvas.width;
+  const height = canvas.height;
+  let transparent = 0;
+  for (let o = 3; o < data.length; o += 4) {
+    if (data[o] < 20) transparent += 1;
+  }
+  if (transparent > width * height * 0.12) {
+    ctx.putImageData(pixels, 0, 0);
+    return canvas;
+  }
+  const isLightChecker = (o: number) => {
+    const r = data[o], g = data[o + 1], b = data[o + 2];
+    const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+    const luma = (r + g + b) / 3;
+    return data[o + 3] >= 20 && chroma < 22 && luma >= 168;
+  };
+  const seen = new Uint8Array(width * height);
+  const queue = new Int32Array(width * height);
   let tail = 0;
-  const enqueue = (x: number, y: number, bounds: KaratePose) => {
-    if (x < bounds.x || y < bounds.y || x >= bounds.x + bounds.w || y >= bounds.y + bounds.h) return;
-    const p = y * canvas.width + x, o = p * 4;
-    if (visited[p]) return;
-    const r = pixels.data[o], g = pixels.data[o + 1], b = pixels.data[o + 2];
-    if (pixels.data[o + 3] < 20 || Math.min(r, g, b) < 10 ||
-        Math.max(r, g, b) > 112 || Math.max(r, g, b) - Math.min(r, g, b) > 30) return;
-    visited[p] = 1;
+  const add = (x: number, y: number) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return;
+    const p = y * width + x;
+    if (seen[p] || !isLightChecker(p * 4)) return;
+    seen[p] = 1;
     queue[tail++] = p;
   };
-  for (const frame of frames) {
-    const left = Math.round(frame.x), top = Math.round(frame.y);
-    const right = Math.round(frame.x + frame.w) - 1, bottom = Math.round(frame.y + frame.h) - 1;
-    for (let x = left; x <= right; x++) { enqueue(x, top, frame); enqueue(x, bottom, frame); }
-    for (let y = top + 1; y < bottom; y++) { enqueue(left, y, frame); enqueue(right, y, frame); }
-  }
+  for (let x = 0; x < width; x++) { add(x, 0); add(x, height - 1); }
+  for (let y = 1; y < height - 1; y++) { add(0, y); add(width - 1, y); }
   for (let head = 0; head < tail; head++) {
-    const p = queue[head], x = p % canvas.width, y = Math.floor(p / canvas.width);
-    pixels.data[p * 4 + 3] = 0;
-    for (const frame of frames) {
-      if (x < frame.x || x >= frame.x + frame.w || y < frame.y || y >= frame.y + frame.h) continue;
-      enqueue(x - 1, y, frame); enqueue(x + 1, y, frame);
-      enqueue(x, y - 1, frame); enqueue(x, y + 1, frame);
-      break;
-    }
+    const p = queue[head];
+    const x = p % width, y = Math.floor(p / width);
+    data[p * 4 + 3] = 0;
+    add(x - 1, y); add(x + 1, y); add(x, y - 1); add(x, y + 1);
   }
-  // Exact source checker tones catch enclosed tiles that cannot be reached
-  // from panel edges; warm/green character pixels remain outside this palette.
-  for (const frame of frames) {
-    for (let y = frame.y; y < frame.y + frame.h; y++) {
-      for (let x = frame.x; x < frame.x + frame.w; x++) {
-        const o = (y * canvas.width + x) * 4;
-        const r = pixels.data[o], g = pixels.data[o + 1], b = pixels.data[o + 2];
-        const tone = (tr: number, tg: number, tb: number) =>
-          Math.hypot(r - tr, g - tg, b - tb) < 17;
-        const midpoint = Math.max(Math.abs(r - 50), Math.abs(g - 50), Math.abs(b - 48)) < 12;
-        if (tone(20, 20, 20) || tone(81, 80, 76) || midpoint) pixels.data[o + 3] = 0;
+  seen.fill(0);
+  tail = 0;
+  for (let start = 0; start < seen.length; start++) {
+    if (seen[start] || !isLightChecker(start * 4)) continue;
+    let head = 0;
+    tail = 0;
+    queue[tail++] = start;
+    seen[start] = 1;
+    while (head < tail) {
+      const p = queue[head++];
+      const x = p % width, y = Math.floor(p / width);
+      if (x > 0 && !seen[p - 1] && isLightChecker((p - 1) * 4)) {
+        seen[p - 1] = 1; queue[tail++] = p - 1;
+      }
+      if (x + 1 < width && !seen[p + 1] && isLightChecker((p + 1) * 4)) {
+        seen[p + 1] = 1; queue[tail++] = p + 1;
+      }
+      if (y > 0 && !seen[p - width] && isLightChecker((p - width) * 4)) {
+        seen[p - width] = 1; queue[tail++] = p - width;
+      }
+      if (y + 1 < height && !seen[p + width] && isLightChecker((p + width) * 4)) {
+        seen[p + width] = 1; queue[tail++] = p + width;
       }
     }
-  }
-  // Neutral checker islands trapped between outlined figures are not edge-
-  // connected. Drop gray-only components while retaining connected dark linework.
-  for (const frame of frames) {
-    const left = Math.round(frame.x), top = Math.round(frame.y);
-    const right = Math.round(frame.x + frame.w), bottom = Math.round(frame.y + frame.h);
-    const seen = new Uint8Array(frame.w * frame.h);
-    const component = new Int32Array(seen.length);
-    for (let start = 0; start < seen.length; start++) {
-      const sx = start % frame.w, sy = Math.floor(start / frame.w);
-      const global = (top + sy) * canvas.width + left + sx;
-      if (seen[start] || pixels.data[global * 4 + 3] < 20) continue;
-      let end = 1, hasColor = false;
-      component[0] = start;
-      seen[start] = 1;
-      for (let head = 0; head < end; head++) {
-        const point = component[head], x = point % frame.w, y = Math.floor(point / frame.w);
-        const p = (top + y) * canvas.width + left + x, o = p * 4;
-        const r = pixels.data[o], g = pixels.data[o + 1], b = pixels.data[o + 2];
-        if (Math.max(r, g, b) - Math.min(r, g, b) > 24 ||
-            Math.abs(g - r) > 7 || Math.abs(b - r) > 9) hasColor = true;
-        const neighbors = [x > 0 ? point - 1 : -1, x + 1 < frame.w ? point + 1 : -1,
-          y > 0 ? point - frame.w : -1, y + 1 < frame.h ? point + frame.w : -1];
-        for (const next of neighbors) {
-          if (next < 0 || seen[next]) continue;
-          const nx = next % frame.w, ny = Math.floor(next / frame.w);
-          const no = ((top + ny) * canvas.width + left + nx) * 4;
-          if (pixels.data[no + 3] < 20) continue;
-          seen[next] = 1;
-          component[end++] = next;
-        }
-      }
-      if (!hasColor) {
-        for (let i = 0; i < end; i++) {
-          const point = component[i], x = point % frame.w, y = Math.floor(point / frame.w);
-          pixels.data[((top + y) * canvas.width + left + x) * 4 + 3] = 0;
-        }
-      }
-    }
-    if (right > canvas.width || bottom > canvas.height) {
-      throw new RangeError('Quadro da sequência da Laura está fora da folha.');
+    if (tail >= 16) {
+      for (let i = 0; i < tail; i++) data[queue[i] * 4 + 3] = 0;
     }
   }
   ctx.putImageData(pixels, 0, 0);
@@ -193,6 +253,42 @@ export function isolateLauraKick(
   ctx.closePath(); ctx.clip();
   ctx.drawImage(sheet, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
   return result;
+}
+
+/**
+ * Strip numbered panel titles ("7. FINAL BLOW…") without touching figures.
+ * Unlike removeStoryboardHeadings, this never deletes whole components that
+ * merely overlap the caption band (e.g. tall hair).
+ */
+export function removeLauraStoryboardCaptions(
+  canvas: HTMLCanvasElement,
+  frames: KaratePose[],
+  captionHeight = LAURA_STORYBOARD_CAPTION_HEIGHT,
+) {
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) throw new Error('Canvas 2D indisponível para legendas da Laura.');
+  const image = context.getImageData(0, 0, canvas.width, canvas.height);
+  const pixels = image.data;
+  for (const frame of frames) {
+    const left = Math.max(0, Math.round(frame.x));
+    const top = Math.max(0, Math.round(frame.y));
+    const right = Math.min(canvas.width, left + Math.round(frame.w));
+    const captionBottom = Math.min(Math.round(frame.y + frame.h), top + captionHeight);
+    for (let y = top; y < captionBottom; y += 1) {
+      for (let x = left; x < right; x += 1) {
+        const offset = (y * canvas.width + x) * 4;
+        if (pixels[offset + 3] < 20) continue;
+        const red = pixels[offset], green = pixels[offset + 1], blue = pixels[offset + 2];
+        const max = Math.max(red, green, blue);
+        const min = Math.min(red, green, blue);
+        const chroma = max - min;
+        const captionInk = max >= 158 && chroma < 42;
+        const captionOnChecker = max >= 52 && max < 108 && chroma < 14;
+        if (captionInk || captionOnChecker) pixels[offset + 3] = 0;
+      }
+    }
+  }
+  context.putImageData(image, 0, 0);
 }
 
 /** Remove only edge-connected black backdrop, preserving dark hair and outlines. */

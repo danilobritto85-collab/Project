@@ -17,6 +17,8 @@ import jungleBackground from '@assets/background_1791470375690.png';
 import {
   DEFAULT_FIGHT_CONFIG,
   KARATE_DEFEAT_DURATION,
+  KARATE_EBONY_DEFEAT_DURATION,
+  LAURA_SPECIAL_DURATION,
   NINJA_FOOTSMOTHER_DURATION,
   STATE_NINJA_FOOTSMOTHER,
   STATE_ROXY_OFFER,
@@ -188,12 +190,15 @@ function App() {
       [kind]: value,
     }));
   };
+  const sequenceDuration = isKarateChallenge
+    ? (snapshot.lauraSpecialActive ? LAURA_SPECIAL_DURATION
+      : snapshot.karateSequence === 'ebony' ? KARATE_EBONY_DEFEAT_DURATION
+        : KARATE_DEFEAT_DURATION)
+    : isFourArmBossChallenge ? FOUR_ARM_BOSS_SCENE_DURATION
+      : isSpecialDefeat || isNinjaFootsmother || isRoxySmother
+        ? NINJA_FOOTSMOTHER_DURATION : 20;
   const sequencePercent = Math.max(0, Math.min(100,
-    (snapshot.defeatSecondsLeft /
-        (isKarateChallenge ? KARATE_DEFEAT_DURATION
-          : isFourArmBossChallenge ? FOUR_ARM_BOSS_SCENE_DURATION
-        : isSpecialDefeat || isNinjaFootsmother || isRoxySmother
-          ? NINJA_FOOTSMOTHER_DURATION : 20)) * 100));
+    (snapshot.defeatSecondsLeft / sequenceDuration) * 100));
 
   return (
     <main className="game-shell">
@@ -344,7 +349,7 @@ function App() {
                       <p className="roxy-special-help">Selecione ao menos uma adversária para começar.</p>
                     )}
                     {(fightConfig.karateBlonde > 0 || fightConfig.karateEbony > 0 ||
-                      fightConfig.minerva > 0 || fightConfig.may > 0) && (
+                      fightConfig.minerva > 0 || fightConfig.may > 0 || fightConfig.laura > 0) && (
                       <p className="roxy-special-help">
                         As cenas especiais das lutadoras são opcionais: ao ser derrotada por uma delas,
                         você poderá aceitar, recusar ou encerrar a sequência.
@@ -356,6 +361,14 @@ function App() {
                       <p className="roxy-special-help">
                         May alterna combinações e chutes de longo alcance; quando você ataca de perto,
                         ela pode bloquear e reduzir bastante o dano, ou recuar para reposicionar.
+                      </p>
+                    )}
+                    {fightConfig.laura > 0 && (
+                      <p className="roxy-special-help">
+                        Laura usa socos, guarda e chutes próprios. Ao ser derrotada por ela, você pode
+                        aceitar a sequência completa (golpe final, vitória, submissão, humilhação e
+                        os painéis de adoração/beijo) ou recusar e ver só a derrota de combate.
+                        Esc encerra a cena especial a qualquer momento.
                       </p>
                     )}
                     <button className="start-button" type="button"
@@ -546,12 +559,16 @@ function App() {
                       ? 'da Minerva'
                       : snapshot.karateOfferOpponent === 'may'
                         ? 'da May'
-                        : `da Karateka ${snapshot.karateOfferOpponent === 'ebony' ? 'Ebony' : 'loira'}`}
+                        : snapshot.karateOfferOpponent === 'laura'
+                          ? 'da Laura'
+                          : `da Karateka ${snapshot.karateOfferOpponent === 'ebony' ? 'Ebony' : 'loira'}`}
                 </h2>
                 <p>
                   {snapshot.karateOfferIsApproach
                     ? 'Ebony está chamando a heroína para um desafio. Aceitar inicia o agarrão e a sequência; recusar mantém a luta.'
-                    : 'Esta sequência especial só começa com seu aceite. Você pode recusar e ver a derrota comum, ou encerrar a cena depois que ela começar.'}
+                    : snapshot.karateOfferOpponent === 'laura'
+                      ? 'Aceitar mostra a vitória completa da Laura (painéis 7–13, incluindo submissão e adoração). Recusar mantém só a derrota de combate; depois de aceitar, Esc encerra a cena.'
+                      : 'Esta sequência especial só começa com seu aceite. Você pode recusar e ver a derrota comum, ou encerrar a cena depois que ela começar.'}
                 </p>
               </div>
               <div className="roxy-choice-actions">
@@ -567,17 +584,25 @@ function App() {
             </section>
           )}
 
-          {isKarateChallenge && snapshot.karateSequence !== 'laura' && (
+          {isKarateChallenge && (snapshot.karateSequence !== 'laura' || snapshot.lauraSpecialActive) && (
             <section className="roxy-choice-panel roxy-voluntary-panel" role="dialog"
               aria-modal="true" aria-labelledby="karate-scene-title"
               data-testid="karate-consensual-scene">
               <div className="roxy-choice-copy">
-                <h2 id="karate-scene-title">Sequência especial aceita</h2>
-                <p>Você pode encerrar a qualquer momento e voltar ao menu. Na derrota, a finalização da karateka permanece animada.</p>
+                <h2 id="karate-scene-title">
+                  {snapshot.lauraSpecialActive
+                    ? 'Sequência especial da Laura'
+                    : 'Sequência especial aceita'}
+                </h2>
+                <p>
+                  {snapshot.lauraSpecialActive
+                    ? 'Painéis 7–13 da vitória da Laura. Você pode encerrar a qualquer momento com Esc; a pose final permanece.'
+                    : 'Você pode encerrar a qualquer momento e voltar ao menu. Na derrota, a finalização da karateka permanece animada.'}
+                </p>
               </div>
               <div className="roxy-choice-actions">
                 <button type="button" onClick={exitKarateChallenge}
-                  data-testid="button-karate-stop">Encerrar sequência</button>
+                  data-testid="button-karate-stop">Encerrar sequência <kbd>Esc</kbd></button>
               </div>
             </section>
           )}

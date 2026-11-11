@@ -56,7 +56,7 @@ export const KARATE_EBONY_ATTACKS = [
   { x: 448, y: 265, w: 150, h: 245 },
   KARATE_EBONY.kick,
   KARATE_EBONY.spin,
-  KARATE_EBONY.kick,
+  KARATE_EBONY.highKick,
 ];
 
 const MINERVA_SCALE_X = 428 / 765;
@@ -93,7 +93,13 @@ export const MAY_IDLE_FRAMES: KaratePose[] = [
   { x: 573, y: 38, w: 192, h: 278 },
 ];
 
-export const MAY_WALK_FRAMES = MAY_IDLE_FRAMES;
+/** Walk row of the May sheet (second row): stride + forward lunge, mixed with idle. */
+export const MAY_WALK_FRAMES: KaratePose[] = [
+  MAY_IDLE_FRAMES[0],
+  { x: 175, y: 390, w: 190, h: 250 },
+  MAY_IDLE_FRAMES[2],
+  { x: 540, y: 390, w: 210, h: 250 },
+];
 export const MAY_ATTACKS: KaratePose[] = [
   MAY_IDLE_FRAMES[1], // Guard-frame lunge; the sheet has no dedicated punch drawing
   MAY_IDLE_FRAMES[2],
@@ -107,8 +113,8 @@ export const MAY_ATTACKS: KaratePose[] = [
 
 export const MAY = {
   idle: MAY_IDLE_FRAMES[0],
-  walk: MAY_WALK_FRAMES[0],
-  run: MAY_WALK_FRAMES[2],
+  walk: MAY_WALK_FRAMES[1],
+  run: MAY_WALK_FRAMES[3],
   punch: MAY_ATTACKS[0],
   hurt: MAY_ATTACKS[3],
   down: MAY_ATTACKS[3],
@@ -166,6 +172,28 @@ export function karateEbonySequenceFrames(width: number, height: number): Karate
     h: rows[row + 1] - y,
   })));
 }
+
+/** Solo Ebony plays the 8-panel takedown, then the 4-panel submission sheet. */
+export function karateEbonyPunishmentSequence(
+  takedownWidth: number,
+  takedownHeight: number,
+  submissionWidth: number,
+  submissionHeight: number,
+): { sheet: 'takedown' | 'submission'; frame: KaratePose }[] {
+  return [
+    ...karateEbonySequenceFrames(takedownWidth, takedownHeight).map((frame) => ({
+      sheet: 'takedown' as const,
+      frame,
+    })),
+    ...karateDuoSequenceFrames(submissionWidth, submissionHeight).map((frame) => ({
+      sheet: 'submission' as const,
+      frame,
+    })),
+  ];
+}
+
+export const KARATE_EBONY_PUNISHMENT_COUNT = 12;
+export const KARATE_EBONY_DEFEAT_DURATION = 14;
 
 /** Isolate a single combat pose, never an adjacent figure in the collage. */
 export function extractKarateCombatPose(sheet: HTMLCanvasElement, frame: KaratePose) {
@@ -436,7 +464,13 @@ export function prepareMinervaStorySheet(image: HTMLImageElement, frames: Karate
  * the neutral gray used by the other karate sheets. Flood-fill the muted
  * checker colors from each frame edge so the key does not eat the figures.
  */
-export function prepareKarateDuoSheet(image: HTMLImageElement, frames: KaratePose[], mayPalette = false) {
+export type StoryboardCheckerPalette = 'ebony' | 'may' | 'laura';
+
+export function prepareKarateDuoSheet(
+  image: HTMLImageElement,
+  frames: KaratePose[],
+  palette: StoryboardCheckerPalette = 'ebony',
+) {
   const canvas = document.createElement('canvas');
   canvas.width = image.naturalWidth || image.width;
   canvas.height = image.naturalHeight || image.height;
@@ -460,13 +494,23 @@ export function prepareKarateDuoSheet(image: HTMLImageElement, frames: KaratePos
     // The source uses olive-brown (#403420) and near-black green (#0c0c08)
     // squares, plus JPEG blends at their boundaries. Pure black sprite
     // outlines are intentionally outside these ranges.
-    candidates[pixel] = Number(mayPalette
-      ? (Math.max(red, green, blue) < 15 ||
+    if (palette === 'may') {
+      candidates[pixel] = Number(
+        Math.max(red, green, blue) < 15 ||
         (red >= 20 && red <= 85 && red - green >= -3 && red - green <= 8 &&
-          green - blue >= 5 && green - blue <= 27))
-      : (nearCheckerTone([12, 12, 8], 12) ||
+          green - blue >= 5 && green - blue <= 27));
+    } else if (palette === 'laura') {
+      candidates[pixel] = Number(
+        Math.max(red, green, blue) < 12 ||
+        nearCheckerTone([20, 20, 19], 15) ||
+        nearCheckerTone([81, 80, 76], 18) ||
+        nearCheckerTone([50, 50, 48], 14));
+    } else {
+      candidates[pixel] = Number(
+        nearCheckerTone([12, 12, 8], 12) ||
         nearCheckerTone([36, 32, 16], 14) ||
-        nearCheckerTone([64, 52, 32], 17)));
+        nearCheckerTone([64, 52, 32], 17));
+    }
   }
 
   let tail = 0;
@@ -501,7 +545,7 @@ export function prepareKarateDuoSheet(image: HTMLImageElement, frames: KaratePos
     if (pixel + canvas.width < pixelCount) enqueueIfBackground(x, Math.floor(pixel / canvas.width) + 1);
     pixels[pixel * 4 + 3] = 0;
   }
-  if (mayPalette) {
+  if (palette === 'may') {
     visited.fill(0);
     for (const frame of frames) {
       const left = Math.round(frame.x), top = Math.round(frame.y);

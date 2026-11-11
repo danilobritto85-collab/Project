@@ -13,6 +13,7 @@ import {
   KARATE_EBONY, KARATE_EBONY_ATTACKS, KARATE_EBONY_WALK,
   MINERVA, MINERVA_ATTACKS, MINERVA_WALK,
   karateBlondeSequenceFrames, karateEbonySequenceFrames, karateDuoSequenceFrames,
+  karateEbonyPunishmentSequence, KARATE_EBONY_DEFEAT_DURATION,
   mayStorySequenceFrames,
   clearStoryboardHeaderBands, extractKarateEbonyTaunt, extractKarateCombatPose,
   prepareKarateSheet, prepareKarateDuoSheet, prepareMinervaStorySheet, removeStoryboardHeadings,
@@ -79,9 +80,19 @@ import fourArmBossSheetUrl from '@assets/image_1793063368917.png';
 import fourArmBossStoryUrl from '@assets/image_1793063355742.png';
 import minervaSheetUrl from '@assets/image_1793065095807.png';
 import minervaStoryUrl from '@assets/image_1793065104800.png';
-import { LAURA, LAURA_IDLE, LAURA_WALK, LAURA_ATTACKS, LAURA_KICKS, LAURA_GUARD, LAURA_HURT, prepareLauraSheet, prepareLauraVictorySheet, isolateLauraKick, lauraVictorySequenceFrames, lauraDefeatStage, lauraFallingPose } from './lauraSprites';
+import {
+  LAURA, LAURA_IDLE, LAURA_WALK, LAURA_ATTACKS, LAURA_KICKS, LAURA_GUARD, LAURA_HURT,
+  prepareLauraSheet, prepareLauraVictorySheet,
+  isolateLauraKick,
+  lauraStoryboardFourFrames, lauraContinuationFrames,
+  lauraSpecialSequenceFrames, lauraSpecialPanelIndex, lauraSpecialKissElapsed,
+  lauraDefeatStage, lauraFallingPose,
+  LAURA_SPECIAL_DURATION,
+} from './lauraSprites';
 import lauraSheetUrl from '@assets/image_1793977523679.png';
-import lauraVictorySheetUrl from '@assets/image_1793978481211.png';
+import lauraVictorySheetUrl from '@assets/laura_victory_clean.png';
+import lauraVictoryAltSheetUrl from '@assets/laura_victory_clean.png';
+import lauraContinuationSheetUrl from '@assets/laura_continuation_clean.jpg';
 import maySheetUrl from '@assets/image_1793093978357.jpeg';
 import mayStoryUrl from '@assets/image_1793094318134.jpeg';
 
@@ -109,10 +120,11 @@ export interface FightConfig {
 }
 
 export const DEFAULT_FIGHT_CONFIG: FightConfig = {
-  amazonas: 5,
+  // Spec: no fixed cast. Start empty so the player builds the fight.
+  amazonas: 0,
   ebony: 0,
-  ninjas: 3,
-  roxy: 1,
+  ninjas: 0,
+  roxy: 0,
   karateBlonde: 0,
   karateEbony: 0,
   minerva: 0,
@@ -170,6 +182,7 @@ export interface GameSnapshot {
   karateSequence: KarateSequenceKind | null;
   karateOfferIsApproach: boolean;
   karateSceneActive: boolean;
+  lauraSpecialActive: boolean;
   fourArmBossSceneElapsed: number;
   fourArmBossSceneComplete: boolean;
   defeatedPreviewActive: boolean;
@@ -209,6 +222,8 @@ interface SpriteAtlas {
   laura: HTMLCanvasElement | null;
   lauraCombat: HTMLCanvasElement[];
   lauraVictory: HTMLCanvasElement | null;
+  lauraVictoryAlt: HTMLCanvasElement | null;
+  lauraContinuation: HTMLCanvasElement | null;
   ninja: HTMLCanvasElement | null;
   pantera: HTMLCanvasElement | null;
   fourArmBoss: HTMLCanvasElement | null;
@@ -304,6 +319,7 @@ interface World {
   isolatedDefeatOpponentId: number | null;
   karateDefeatElapsed: number;
   kissSoundPlayed: boolean;
+  lauraSpecialActive: boolean;
   fourArmBossSceneElapsed: number;
   fourArmBossSceneComplete: boolean;
   footstepTimer: number;
@@ -523,6 +539,13 @@ const NINJA_FOOTSMOTHER_ENDING_DURATION = 1.5;
 const NINJA_FOOTSMOTHER_FRAME_RATE = 6;
 const GROUP_DEFEAT_DURATION = 20;
 export const KARATE_DEFEAT_DURATION = 10;
+export { LAURA_SPECIAL_DURATION, KARATE_EBONY_DEFEAT_DURATION };
+
+function karateChallengeDuration(sequence: KarateSequenceKind | null, lauraSpecial = false) {
+  if (sequence === 'laura' && lauraSpecial) return LAURA_SPECIAL_DURATION;
+  if (sequence === 'ebony') return KARATE_EBONY_DEFEAT_DURATION;
+  return KARATE_DEFEAT_DURATION;
+}
 
 function sequenceFrame(frames: SpriteRect[], elapsed: number, duration: number) {
   const index = Math.min(frames.length - 1, Math.floor((elapsed / duration) * frames.length));
@@ -547,6 +570,7 @@ const initialSnapshot: GameSnapshot = {
   karateSequence: null,
   karateOfferIsApproach: false,
   karateSceneActive: false,
+  lauraSpecialActive: false,
   fourArmBossSceneElapsed: 0,
   fourArmBossSceneComplete: false,
   defeatedPreviewActive: false,
@@ -664,6 +688,7 @@ function createWorld(
     isolatedDefeatOpponentId: null,
     karateDefeatElapsed: 0,
     kissSoundPlayed: false,
+    lauraSpecialActive: false,
     fourArmBossSceneElapsed: 0,
     fourArmBossSceneComplete: false,
     footstepTimer: 0,
@@ -722,6 +747,7 @@ function publishSnapshot(world: World): GameSnapshot {
       world.phase === STATE_KARATE_OFFER && world.karateOfferIsApproach,
     karateSceneActive: world.phase === STATE_KARATE_CHALLENGE ||
       (world.phase === 'game-over' && world.defeatKind === 'karate-victory'),
+    lauraSpecialActive: world.lauraSpecialActive,
     fourArmBossSceneElapsed: world.fourArmBossSceneElapsed,
     fourArmBossSceneComplete: world.fourArmBossSceneComplete,
     defeatedPreviewActive: world.defeatedPreviewActive,
@@ -1505,6 +1531,48 @@ function drawRoxyDefeatFrame(
   context.restore();
 }
 
+/** Storyboard panel: scale the opaque composition, not empty padding. */
+function drawStoryboardPanelFrame(
+  context: CanvasRenderingContext2D,
+  image: HTMLCanvasElement | null,
+  frame: SpriteRect,
+  centerX: number,
+  groundY: number,
+  targetHeight: number,
+  flipped: boolean,
+  motionTime = 0,
+) {
+  if (!image) return;
+  const visible = getCompositeVisibleBounds(image, frame);
+  const drawW = Math.max(1, visible.w);
+  const drawH = Math.max(1, visible.h);
+  const maxWidth = WIDTH - 48;
+  const scale = Math.min(targetHeight / drawH, maxWidth / drawW);
+  const breath = 1 + Math.sin(motionTime * 2.2) * 0.006;
+  context.save();
+  if (flipped) {
+    context.translate(centerX, 0);
+    context.scale(-1, 1);
+    context.translate(-centerX, 0);
+  }
+  context.fillStyle = 'rgba(7, 13, 8, 0.26)';
+  context.beginPath();
+  context.ellipse(centerX, groundY + 7, targetHeight * 0.52, 7, 0, 0, Math.PI * 2);
+  context.fill();
+  context.drawImage(
+    image,
+    frame.x + visible.x,
+    frame.y + visible.y,
+    drawW,
+    drawH,
+    centerX - (drawW * scale) / 2,
+    groundY + 7 - drawH * scale * breath,
+    drawW * scale,
+    drawH * scale * breath,
+  );
+  context.restore();
+}
+
 function drawKarateSequenceFrame(
   context: CanvasRenderingContext2D,
   image: HTMLCanvasElement | null,
@@ -1517,7 +1585,8 @@ function drawKarateSequenceFrame(
 ) {
   if (!image) return;
   const visible = getCompositeVisibleBounds(image, frame);
-  const scale = targetHeight / frame.h;
+  const referenceHeight = Math.max(1, visible.h > 0 ? visible.h : frame.h);
+  const scale = targetHeight / referenceHeight;
   const breath = 1 + Math.sin(motionTime * 2.2) * 0.006;
   context.save();
   if (flipped) {
@@ -1995,7 +2064,7 @@ function drawWorld(
       );
     }
     if (attacker && (attacker.kind === 'karateBlonde' || attacker.kind === 'karateEbony' ||
-        attacker.kind === 'minerva' || attacker.kind === 'may')) {
+        attacker.kind === 'minerva' || attacker.kind === 'may' || attacker.kind === 'laura')) {
       const attackerX = clamp(
         world.heroX + (attacker.direction === 1 ? -150 : 150),
         100,
@@ -2003,30 +2072,48 @@ function drawWorld(
       );
       const idlePose = attacker.kind === 'karateEbony' ? KARATE_EBONY.idle
         : attacker.kind === 'minerva' ? MINERVA.idle
-          : attacker.kind === 'may' ? MAY.idle : KARATE_BLONDE.idle;
+          : attacker.kind === 'may' ? MAY.idle
+            : attacker.kind === 'laura' ? LAURA.idle : KARATE_BLONDE.idle;
       drawEnemySprite(context, atlas, attacker, idlePose, 205, 0, 7, attackerX);
     }
   } else if (karateDefeatSequence) {
     const sequence = world.karateSequence ?? 'blonde';
     const elapsed = world.karateDefeatElapsed;
-    if (sequence === 'laura' && atlas.laura) {
+    if (sequence === 'laura' && world.lauraSpecialActive &&
+        (atlas.lauraVictoryAlt || atlas.lauraVictory) && atlas.lauraContinuation) {
+      const victorySheet = atlas.lauraVictoryAlt ?? atlas.lauraVictory!;
+      const panels = lauraSpecialSequenceFrames(
+        victorySheet.width, victorySheet.height,
+        atlas.lauraContinuation.width, atlas.lauraContinuation.height,
+      );
+      const index = lauraSpecialPanelIndex(elapsed, LAURA_SPECIAL_DURATION);
+      const panel = panels[Math.max(0, Math.min(panels.length - 1, index))];
+      const sheet = panel.sheet === 'continuation'
+        ? atlas.lauraContinuation : victorySheet;
+      drawStoryboardPanelFrame(context, sheet, panel.frame,
+        WIDTH / 2, world.heroY, 340, false, elapsed);
+    } else if (sequence === 'laura' && atlas.laura) {
       const stage = lauraDefeatStage(elapsed);
       const floor = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
-      const fall = clamp((elapsed - 0.75) / 0.75, 0, 1);
+      const fall = clamp((elapsed - 1.05) / 0.65, 0, 1);
       const heroX = WIDTH / 2 + 60 + fall * 55;
-      const pose = stage === 'strike' || stage === 'recoil' ? HERO_FRAMES.hurt
+      const pose = stage === 'punch' || stage === 'kick' || stage === 'recoil'
+        ? HERO_FRAMES.hurt
         : stage === 'fall'
           ? { x: 318, y: 592, w: 147, h: 145 }
           : HERO_FRAMES.defeated;
-      // Separate sprites preserve anatomy and allow recoil/fall motion without
-      // stretching a paired storyboard or duplicating its standing figures.
-      const attack = atlas.lauraCombat[0];
-      const source = stage === 'strike' && attack ? attack : atlas.laura;
-      const lauraPose = stage === 'strike' && attack
+      const punch = atlas.lauraCombat[0];
+      const kick = atlas.lauraCombat[3];
+      const attack = stage === 'kick' ? kick : punch;
+      const striking = (stage === 'punch' || stage === 'kick') && attack;
+      const source = striking ? attack : atlas.laura;
+      const lauraPose = striking && attack
         ? { x: 0, y: 0, w: attack.width, h: attack.height } : LAURA.idle;
       drawKarateBaseSprite(context, source, lauraPose,
         WIDTH / 2 - 85, floor, 190, false);
-      const shake = stage === 'recoil' ? Math.sin(elapsed * 55) * 3 : 0;
+      const reduceMotion = typeof window !== 'undefined' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const shake = !reduceMotion && stage === 'recoil' ? Math.sin(elapsed * 55) * 3 : 0;
       drawAtlasSprite(context, atlas.hero, pose, heroX + shake, floor,
         stage === 'hold' ? 230 : 150, stage === 'hold' ? 80 : 164,
         true, 0, stage === 'fall' ? Math.sin(fall * Math.PI) * 24 : 0);
@@ -2051,13 +2138,29 @@ function drawWorld(
         Math.floor((elapsed / KARATE_DEFEAT_DURATION) * frames.length));
       drawKarateSequenceFrame(context, atlas.karateEbonyAttackOne,
         frames[Math.max(0, index)], WIDTH / 2, world.heroY, 250, false, elapsed);
+    } else if (sequence === 'ebony' && atlas.karateEbonyAttackTwo && atlas.karateEbonyAttackOne) {
+      const steps = karateEbonyPunishmentSequence(
+        atlas.karateEbonyAttackTwo.width,
+        atlas.karateEbonyAttackTwo.height,
+        atlas.karateEbonyAttackOne.width,
+        atlas.karateEbonyAttackOne.height,
+      );
+      const duration = karateChallengeDuration('ebony');
+      const index = Math.min(steps.length - 1,
+        Math.floor((elapsed / duration) * steps.length));
+      const step = steps[Math.max(0, index)];
+      const sheet = step.sheet === 'submission'
+        ? atlas.karateEbonyAttackOne : atlas.karateEbonyAttackTwo;
+      drawKarateSequenceFrame(context, sheet, step.frame,
+        WIDTH / 2, world.heroY, 260, false, elapsed);
     } else if (sequence === 'ebony' && atlas.karateEbonyAttackTwo) {
       const frames = karateEbonySequenceFrames(
         atlas.karateEbonyAttackTwo.width,
         atlas.karateEbonyAttackTwo.height,
       );
+      const duration = karateChallengeDuration('ebony');
       const index = Math.min(frames.length - 1,
-        Math.floor((elapsed / KARATE_DEFEAT_DURATION) * frames.length));
+        Math.floor((elapsed / duration) * frames.length));
       drawKarateSequenceFrame(context, atlas.karateEbonyAttackTwo,
         frames[Math.max(0, index)], WIDTH / 2, world.heroY, 260, false, elapsed);
     } else if (atlas.karateBlondeAttackOne && atlas.karateBlondeAttackTwo) {
@@ -2371,24 +2474,8 @@ function beginGenericDefeat(
     return;
   }
   if (attacker?.kind === 'laura') {
-    stopClips(world);
-    world.heroHp = 0;
-    world.phase = STATE_KARATE_CHALLENGE;
-    world.defeatKind = 'karate-victory';
-    world.karateSequence = 'laura';
-    world.currentGrappler = attacker.id;
-    world.isolatedDefeatOpponentId = attacker.id;
-    world.isGrappleActive = true;
-    world.karateDefeatElapsed = 0;
-    world.defeatSecondsLeft = KARATE_DEFEAT_DURATION;
-    world.kissSoundPlayed = true;
-    world.heroAction = 'down';
-    world.actionTimer = 0;
-    world.heroY = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
-    world.heroVelocityX = world.heroVelocityY = 0;
-    world.jumpOffset = world.jumpVelocity = 0;
-    world.particles = [];
-    playHit(world);
+    // Intimate Laura panels are opt-in; combat-only defeat stays automatic.
+    beginLauraCombatDefeat(world, attacker);
     return;
   }
   world.isolatedDefeatOpponentId = isolatedDefeatOpponentId;
@@ -2499,6 +2586,29 @@ function endRoxyChallenge(world: World) {
   });
 }
 
+function beginLauraCombatDefeat(world: World, attacker: Enemy) {
+  stopClips(world);
+  world.heroHp = 0;
+  world.phase = STATE_KARATE_CHALLENGE;
+  world.defeatKind = 'karate-victory';
+  world.karateSequence = 'laura';
+  world.lauraSpecialActive = false;
+  world.currentGrappler = attacker.id;
+  world.isolatedDefeatOpponentId = attacker.id;
+  world.isGrappleActive = true;
+  world.karateDefeatElapsed = 0;
+  world.defeatSecondsLeft = KARATE_DEFEAT_DURATION;
+  // Combat-only path skips intimate panels and the soft-kiss cue.
+  world.kissSoundPlayed = true;
+  world.heroAction = 'down';
+  world.actionTimer = 0;
+  world.heroY = clamp(world.heroY, FLOOR_MIN, FLOOR_MAX);
+  world.heroVelocityX = world.heroVelocityY = 0;
+  world.jumpOffset = world.jumpVelocity = 0;
+  world.particles = [];
+  playHit(world);
+}
+
 function beginKarateOffer(world: World, enemy: Enemy, fromApproach = false) {
   stopClips(world);
   const activeKaratekaKinds = new Set(world.enemies
@@ -2506,6 +2616,7 @@ function beginKarateOffer(world: World, enemy: Enemy, fromApproach = false) {
       (opponent.kind === 'karateBlonde' || opponent.kind === 'karateEbony'))
     .map((opponent) => opponent.kind));
   const bothKaratekasParticipating = enemy.kind !== 'minerva' && enemy.kind !== 'may' &&
+    enemy.kind !== 'laura' &&
     activeKaratekaKinds.has('karateBlonde') && activeKaratekaKinds.has('karateEbony');
   world.phase = STATE_KARATE_OFFER;
   world.defeatKind = null;
@@ -2516,10 +2627,11 @@ function beginKarateOffer(world: World, enemy: Enemy, fromApproach = false) {
   world.defeatSecondsLeft = 0;
   world.karateDefeatElapsed = 0;
   world.kissSoundPlayed = false;
-  world.karateSequence = enemy.kind === 'may' ? 'may'
-    : enemy.kind === 'minerva' ? 'minerva'
-      : bothKaratekasParticipating ? 'duo'
-        : enemy.kind === 'karateEbony' ? 'ebony' : 'blonde';
+  world.karateSequence = enemy.kind === 'laura' ? 'laura'
+    : enemy.kind === 'may' ? 'may'
+      : enemy.kind === 'minerva' ? 'minerva'
+        : bothKaratekasParticipating ? 'duo'
+          : enemy.kind === 'karateEbony' ? 'ebony' : 'blonde';
   world.heroAction = fromApproach ? 'idle' : 'hurt';
   world.actionTimer = 0;
   world.heroVelocityX = 0;
@@ -2564,7 +2676,14 @@ function respondToKarateOffer(world: World, accepted: boolean) {
       }
       return;
     }
+    const declinedLaura = world.karateSequence === 'laura'
+      ? world.enemies.find((enemy) => enemy.id === world.currentGrappler)
+      : null;
     world.karateOfferIsApproach = false;
+    if (declinedLaura?.kind === 'laura') {
+      beginLauraCombatDefeat(world, declinedLaura);
+      return;
+    }
     world.currentGrappler = null;
     world.karateSequence = null;
     beginGenericDefeat(world);
@@ -2574,16 +2693,28 @@ function respondToKarateOffer(world: World, accepted: boolean) {
   world.karateOfferIsApproach = false;
   world.phase = STATE_KARATE_CHALLENGE;
   world.defeatKind = 'karate-victory';
-  world.defeatSecondsLeft = KARATE_DEFEAT_DURATION;
+  world.lauraSpecialActive = world.karateSequence === 'laura';
+  const duration = karateChallengeDuration(
+    world.karateSequence,
+    world.lauraSpecialActive,
+  );
+  world.defeatSecondsLeft = duration;
   world.karateDefeatElapsed = 0;
   world.kissSoundPlayed = false;
   playSweep(world, 570, 250, 0.45, 0.022, 'sine');
+  if (world.lauraSpecialActive) {
+    playClip(world, 'heroineBreathing', 0.42, 900);
+  }
 }
 
 function endKarateChallenge(world: World) {
   if (world.phase !== STATE_KARATE_CHALLENGE) return;
   stopClips(world);
-  world.karateDefeatElapsed = Math.max(KARATE_DEFEAT_DURATION, world.karateDefeatElapsed);
+  const holdDuration = karateChallengeDuration(
+    world.karateSequence,
+    world.lauraSpecialActive,
+  );
+  world.karateDefeatElapsed = Math.max(holdDuration, world.karateDefeatElapsed);
   world.defeatKind = 'karate-victory';
   world.heroHp = 0;
   enterGameOver(world);
@@ -2665,12 +2796,10 @@ function endFourArmBossChallenge(world: World) {
 }
 
 function beginSpecialGrapple(world: World, enemy: Enemy) {
-  // Laura uses combat-only attacks; never borrow another fighter's paired art.
-  if (enemy.kind === 'laura') return;
   // These fighters never enter the generic grapple renderer: its paired sheets
   // contain an Amazon. Keep every custom scene behind its own opt-in.
   if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony' ||
-      enemy.kind === 'minerva' || enemy.kind === 'may') {
+      enemy.kind === 'minerva' || enemy.kind === 'may' || enemy.kind === 'laura') {
     beginKarateOffer(world, enemy);
     return;
   }
@@ -3062,7 +3191,8 @@ function updateEnemies(world: World, dt: number, now: number) {
         playClip(world, 'heroineHurt', 0.64, 430);
         if (world.heroHp <= 0) {
           if (enemy.kind === 'karateBlonde' || enemy.kind === 'karateEbony' ||
-              enemy.kind === 'minerva' || enemy.kind === 'may') {
+              enemy.kind === 'minerva' || enemy.kind === 'may' ||
+              enemy.kind === 'laura') {
             beginKarateOffer(world, enemy);
           } else if (isBoss) {
             beginFourArmBossOffer(world, enemy);
@@ -3384,7 +3514,20 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
   } else if (world.phase === STATE_KARATE_CHALLENGE ||
     (world.phase === 'game-over' && world.defeatKind === 'karate-victory')) {
     world.karateDefeatElapsed += dt;
-    if (!world.kissSoundPlayed && world.karateSequence !== 'ebony' &&
+    const sequenceDuration = karateChallengeDuration(
+      world.karateSequence,
+      world.lauraSpecialActive,
+    );
+    if (world.lauraSpecialActive && !world.kissSoundPlayed &&
+        world.karateDefeatElapsed >= lauraSpecialKissElapsed(LAURA_SPECIAL_DURATION)) {
+      world.kissSoundPlayed = true;
+      playClip(world, 'softKiss', 0.58);
+      playClip(world, 'heroineBreathing', 0.38, 1200);
+    } else if (!world.kissSoundPlayed && world.karateSequence === 'ebony' &&
+        world.karateDefeatElapsed >= 10) {
+      world.kissSoundPlayed = true;
+      playClip(world, 'softKiss', 0.58);
+    } else if (!world.kissSoundPlayed && world.karateSequence !== 'ebony' &&
         world.karateSequence !== 'laura' &&
         world.karateDefeatElapsed >= 7.5) {
       world.kissSoundPlayed = true;
@@ -3392,7 +3535,7 @@ function stepWorld(world: World, dt: number, now: number, pressed: Set<string>) 
     }
     world.defeatSecondsLeft = Math.max(
       0,
-      KARATE_DEFEAT_DURATION - world.karateDefeatElapsed,
+      sequenceDuration - world.karateDefeatElapsed,
     );
     if (world.phase === STATE_KARATE_CHALLENGE && world.defeatSecondsLeft <= 0) {
       endKarateChallenge(world);
@@ -3563,7 +3706,7 @@ export function useJungleGame(
       beginRoxyOffer(world, attacker);
       world.defeatedPreviewActive = true;
     } else if (kind === 'karateBlonde' || kind === 'karateEbony' ||
-        kind === 'minerva' || kind === 'may') {
+        kind === 'minerva' || kind === 'may' || kind === 'laura') {
       beginKarateOffer(world, attacker);
       world.defeatedPreviewActive = true;
     } else if (kind === 'fourArmBoss') {
@@ -3777,6 +3920,8 @@ export function useJungleGame(
       laura: null,
       lauraCombat: [],
       lauraVictory: null,
+      lauraVictoryAlt: null,
+      lauraContinuation: null,
       ninja: null,
       ninjaFootsmother: null,
       ninjaFootsmotherEnding: null,
@@ -3904,7 +4049,9 @@ export function useJungleGame(
           karateOfferIsApproach: approachOffer,
           karateSequence: may ? 'may' : minerva ? 'minerva' : duo ? 'duo' : blonde ? 'blonde' : 'ebony',
           karateDefeatElapsed: Number(params.get('_elapsed') ?? 3),
-          defeatSecondsLeft: KARATE_DEFEAT_DURATION,
+          defeatSecondsLeft: karateChallengeDuration(
+            may ? 'may' : minerva ? 'minerva' : duo ? 'duo' : blonde ? 'blonde' : 'ebony',
+          ),
         });
         const grapplerKind = may ? 'may' : minerva ? 'minerva'
           : blonde ? 'karateBlonde' : 'karateEbony';
@@ -4240,6 +4387,8 @@ export function useJungleGame(
       loadImage(mayStoryUrl),
       loadImage(lauraSheetUrl),
       loadImage(lauraVictorySheetUrl),
+      loadImage(lauraVictoryAltSheetUrl),
+      loadImage(lauraContinuationSheetUrl),
     ]).then(([
       background,
       hero,
@@ -4271,6 +4420,8 @@ export function useJungleGame(
       mayStoryImage,
       lauraImage,
       lauraVictoryImage,
+      lauraVictoryAltImage,
+      lauraContinuationImage,
     ]) => {
       if (disposed) return;
       const blondeBase = prepareKarateSheet(karateBlonde);
@@ -4278,11 +4429,25 @@ export function useJungleGame(
       const minervaBase = prepareKarateSheet(minervaImage);
       const mayBase = prepareMaySheet(mayImage);
       const lauraBase = prepareLauraSheet(lauraImage);
-      const lauraVictoryFrames = [
-        { x: 0, y: 88, w: 512, h: 282 },
-        { x: 512, y: 88, w: 512, h: 282 },
-      ];
+      const lauraVictoryFrames = lauraStoryboardFourFrames(
+        lauraVictoryImage.naturalWidth || lauraVictoryImage.width,
+        lauraVictoryImage.naturalHeight || lauraVictoryImage.height,
+      );
       const lauraVictory = prepareLauraVictorySheet(lauraVictoryImage, lauraVictoryFrames);
+      const lauraVictoryAltFrames = lauraStoryboardFourFrames(
+        lauraVictoryAltImage.naturalWidth || lauraVictoryAltImage.width,
+        lauraVictoryAltImage.naturalHeight || lauraVictoryAltImage.height,
+      );
+      const lauraVictoryAlt = prepareLauraVictorySheet(
+        lauraVictoryAltImage, lauraVictoryAltFrames,
+      );
+      const lauraContinuationFramesList = lauraContinuationFrames(
+        lauraContinuationImage.naturalWidth || lauraContinuationImage.width,
+        lauraContinuationImage.naturalHeight || lauraContinuationImage.height,
+      );
+      const lauraContinuation = prepareLauraVictorySheet(
+        lauraContinuationImage, lauraContinuationFramesList,
+      );
       const fourArmBoss = prepareFourArmBossSheet(fourArmBossImage);
       const minervaStoryFrames = karateDuoSequenceFrames(
         minervaStoryImage.naturalWidth || minervaStoryImage.width,
@@ -4295,7 +4460,7 @@ export function useJungleGame(
         mayStoryImage.naturalWidth || mayStoryImage.width,
         mayStoryImage.naturalHeight || mayStoryImage.height,
       );
-      const mayStory = prepareKarateDuoSheet(mayStoryImage, mayStoryFrames, true);
+      const mayStory = prepareKarateDuoSheet(mayStoryImage, mayStoryFrames, 'may');
       mayStory.getContext('2d')?.clearRect(0, 310, 240, 40);
       atlas = {
         background,
@@ -4368,6 +4533,8 @@ export function useJungleGame(
         mayStory,
         laura: lauraBase,
         lauraVictory,
+        lauraVictoryAlt,
+        lauraContinuation,
         lauraCombat: LAURA_ATTACKS.map((pose, index) => {
           if (index < 3) return extractKarateCombatPose(lauraBase, pose);
           const isolated = isolateLauraKick(lauraBase, pose, LAURA_KICKS.indexOf(pose));

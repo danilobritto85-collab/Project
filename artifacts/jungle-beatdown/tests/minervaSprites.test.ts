@@ -57,6 +57,8 @@ test('May movement and combat crops fit the uploaded 765×1024 sheet', () => {
     assert.ok(frame.y + frame.h <= 1024);
   }
   assert.equal(MAY_ATTACKS.length, 8);
+  assert.ok(MAY_WALK_FRAMES.some((frame) => frame.y > 350),
+    'May walk should use the dedicated walk row, not only idle poses');
 });
 
 test('May victory storyboard maps to four panels inside the uploaded sheet', () => {
