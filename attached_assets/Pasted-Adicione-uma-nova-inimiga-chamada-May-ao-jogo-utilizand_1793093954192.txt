@@ -1,0 +1,34 @@
+Adicione uma nova inimiga chamada "May" ao jogo utilizando a sprite sheet fornecida.
+
+### 1. Perfil da Personagem
+- **Nome:** May
+- **Tipo:** Inimiga (Lutadora de Karatê / Martials Arts Striker)
+- **Visual:** Mulher jovem, cabelo castanho escuro preso em rabo de cavalo, vestindo gi/kimono branco de karatê com faixa preta, pés descalços largos com unhas pretas pintadas.
+
+### 2. Estados e Animações (Spritesheet Mapping)
+Configure a máquina de estados (FSM) de May para suportar as seguintes animações:
+- `idle`: Posição de guarda balançando levemente o peso do corpo.
+- `walk_forward` / `walk_back`: Ciclo de passos e aproximação/recuo tático.
+- `jab` / `cross` / `uppercut` / `hook`: Combo rápido de socos para curtas distâncias.
+- `block_high`: Postura defensiva com redução de dano recebido em 75%.
+- `stagger_hit` / `knockdown`: Reação de impacto/dano ao ser atingida.
+- `kick_combo` (Golpes de chute):
+  * **Low Kick:** Ataque rápido rasteiro (interrompe ataques leves do jogador).
+  * **Front / Side Kick:** Chute frontal com médio alcance e empurrão (*knockback*).
+  * **Roundhouse / Axe Kick:** Finalizador pesado com alto dano e área de acerto vertical/horizontal estendida.
+  * **Spinning Kick / Sweeping Kick:** Golpe giratório em área baixa que derruba o jogador se não defendido.
+
+### 3. Comportamento da IA
+- **Distância Segura (Neutro):** Alterna entre `idle` e movimentação lateral/recuo mantendo distância de golpes do jogador.
+- **Engajamento:** 
+  - A meia distância: Tenta aproximação com `walk_forward` seguido de `Front Kick` ou `Side Kick`.
+  - A curta distância: Executa combo básico de socos (`jab` -> `cross`), seguido de cancelamento em `Roundhouse Kick` ou recuo.
+  - Reação: Se o jogador atacar repetidamente no neutro, aciona `block_high` ou contra-ataca com `Flying Knee` / `Axe Kick`.
+- **Hitboxes & Hurtboxes:**
+  - Ajuste a hurtbox corporal padrão do sprite.
+  - Hitboxes ofensivas específicas e estendidas nos quadros de impacto dos pés (especialmente em `Roundhouse`, `Axe Kick` e chutes frontais) para refletir o alcance ampliado dos golpes.
+
+### 4. Integração de Assets
+- Carregue o arquivo de imagem da sprite sheet (`may_spritesheet.png`).
+- Divida os frames com base na grade isométrica/dimensões da folha fornecida.
+- Implemente as transições fluidas entre animações, sons de impacto/golpes de artes marciais e eventos de término de frame para disparar detecção de colisão.
