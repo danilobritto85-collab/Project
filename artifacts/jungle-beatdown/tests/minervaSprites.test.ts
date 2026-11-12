@@ -8,7 +8,6 @@ import {
   MAY,
   MAY_ATTACKS,
   MAY_WALK_FRAMES,
-  mayStorySequenceFrames,
 } from '../src/game/karateSprites';
 
 test('Minerva movement and attack crops fit the uploaded 428×572 sheet', () => {
@@ -62,7 +61,7 @@ test('May movement and combat crops fit the uploaded 765×1024 sheet', () => {
 });
 
 test('May victory storyboard maps to four panels inside the uploaded sheet', () => {
-  const frames = mayStorySequenceFrames(1024, 572);
+  const frames = karateDuoSequenceFrames(1024, 572);
   assert.equal(frames.length, 4);
   for (const frame of frames) {
     assert.ok(frame.x >= 0 && frame.y >= 0);

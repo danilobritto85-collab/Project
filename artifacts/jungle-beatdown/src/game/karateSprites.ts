@@ -145,6 +145,63 @@ function gridFrames(
   });
 }
 
+function countTransparentPixels(pixels: Uint8ClampedArray) {
+  let count = 0;
+  for (let offset = 3; offset < pixels.length; offset += 4) {
+    if (pixels[offset] < 20) count += 1;
+  }
+  return count;
+}
+
+function sheetHasRealAlpha(pixels: Uint8ClampedArray, width: number, height: number) {
+  return countTransparentPixels(pixels) > width * height * 0.12;
+}
+
+/** Drop leftover Photoshop gray/white checker without touching dark outlines. */
+export function dropLightCheckerIslands(canvas: HTMLCanvasElement) {
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) return canvas;
+  const image = context.getImageData(0, 0, canvas.width, canvas.height);
+  const data = image.data;
+  const width = canvas.width;
+  const height = canvas.height;
+  const isLightChecker = (offset: number) => {
+    const red = data[offset], green = data[offset + 1], blue = data[offset + 2];
+    const chroma = Math.max(red, green, blue) - Math.min(red, green, blue);
+    const luma = (red + green + blue) / 3;
+    return data[offset + 3] >= 20 && chroma < 22 && luma >= 168;
+  };
+  const seen = new Uint8Array(width * height);
+  const queue = new Int32Array(width * height);
+  for (let start = 0; start < seen.length; start += 1) {
+    if (seen[start] || !isLightChecker(start * 4)) continue;
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = start;
+    seen[start] = 1;
+    while (head < tail) {
+      const point = queue[head++];
+      const x = point % width, y = Math.floor(point / width);
+      const neighbors = [point - 1, point + 1, point - width, point + width];
+      const valid = [
+        x > 0, x + 1 < width, y > 0, y + 1 < height,
+      ];
+      for (let i = 0; i < 4; i += 1) {
+        if (!valid[i]) continue;
+        const next = neighbors[i];
+        if (seen[next] || !isLightChecker(next * 4)) continue;
+        seen[next] = 1;
+        queue[tail++] = next;
+      }
+    }
+    if (tail >= 16) {
+      for (let i = 0; i < tail; i += 1) data[queue[i] * 4 + 3] = 0;
+    }
+  }
+  context.putImageData(image, 0, 0);
+  return canvas;
+}
+
 export function karateBlondeSequenceFrames(width: number, height: number): KaratePose[] {
   const cellWidth = width / 3;
   const titleInset = 0;
@@ -194,6 +251,7 @@ export function karateEbonyPunishmentSequence(
 
 export const KARATE_EBONY_PUNISHMENT_COUNT = 12;
 export const KARATE_EBONY_DEFEAT_DURATION = 14;
+export const KARATE_BLONDE_DEFEAT_DURATION = 16;
 
 /** Isolate a single combat pose, never an adjacent figure in the collage. */
 export function extractKarateCombatPose(sheet: HTMLCanvasElement, frame: KaratePose) {
@@ -278,6 +336,10 @@ export function prepareKarateSheet(image: HTMLImageElement, checkerboard = false
 
   const sheet = context.getImageData(0, 0, canvas.width, canvas.height);
   const pixels = sheet.data;
+  if (sheetHasRealAlpha(pixels, canvas.width, canvas.height)) {
+    context.putImageData(sheet, 0, 0);
+    return dropLightCheckerIslands(canvas);
+  }
   const edgePalette = new Map<string, { r: number; g: number; b: number; count: number }>();
   const sample = (x: number, y: number) => {
     const index = (y * canvas.width + x) * 4;
@@ -344,7 +406,7 @@ export function prepareKarateSheet(image: HTMLImageElement, checkerboard = false
   context.clearRect(canvas.width - 2, 0, 2, canvas.height);
   context.clearRect(0, 0, canvas.width, 2);
   context.clearRect(0, canvas.height - 2, canvas.width, 2);
-  return canvas;
+  return dropLightCheckerIslands(canvas);
 }
 
 /** Removes the pale gray isometric guide grid while preserving outlined gi sprites. */
@@ -358,6 +420,10 @@ export function prepareMaySheet(image: HTMLImageElement) {
 
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
   const pixels = imageData.data;
+  if (sheetHasRealAlpha(pixels, canvas.width, canvas.height)) {
+    context.putImageData(imageData, 0, 0);
+    return canvas;
+  }
   const pixelCount = canvas.width * canvas.height;
   const candidates = new Uint8Array(pixelCount);
   const visited = new Uint8Array(pixelCount);
@@ -411,6 +477,10 @@ export function prepareMinervaStorySheet(image: HTMLImageElement, frames: Karate
 
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
   const pixels = imageData.data;
+  if (sheetHasRealAlpha(pixels, canvas.width, canvas.height)) {
+    context.putImageData(imageData, 0, 0);
+    return canvas;
+  }
   const pixelCount = canvas.width * canvas.height;
   const candidates = new Uint8Array(pixelCount);
   const visited = new Uint8Array(pixelCount);
@@ -480,6 +550,10 @@ export function prepareKarateDuoSheet(
 
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
   const pixels = imageData.data;
+  if (sheetHasRealAlpha(pixels, canvas.width, canvas.height)) {
+    context.putImageData(imageData, 0, 0);
+    return dropLightCheckerIslands(canvas);
+  }
   const pixelCount = canvas.width * canvas.height;
   const candidates = new Uint8Array(pixelCount);
   const visited = new Uint8Array(pixelCount);

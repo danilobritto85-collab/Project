@@ -18,6 +18,8 @@ import {
   DEFAULT_FIGHT_CONFIG,
   KARATE_DEFEAT_DURATION,
   KARATE_EBONY_DEFEAT_DURATION,
+  KARATE_BLONDE_DEFEAT_DURATION,
+  LANA_DEFEAT_DURATION,
   LAURA_SPECIAL_DURATION,
   NINJA_FOOTSMOTHER_DURATION,
   STATE_NINJA_FOOTSMOTHER,
@@ -35,7 +37,7 @@ import {
 
 type OpponentCountKey =
   | 'amazonas' | 'ebony' | 'ninjas' | 'roxy' | 'karateBlonde' | 'karateEbony'
-  | 'minerva' | 'may' | 'laura' | 'pantera' | 'fourArmBoss';
+  | 'minerva' | 'may' | 'lana' | 'laura' | 'pantera' | 'fourArmBoss';
 
 function formatScore(score: number) {
   return Math.max(0, score).toString().padStart(6, '0');
@@ -170,6 +172,7 @@ function App() {
     karateEbony: 'Karateka Ebony',
     minerva: 'Minerva',
     may: 'May',
+    lana: 'Lana',
     laura: 'Laura',
     pantera: 'Pantera',
     fourArmBoss: 'Chefe Guerreira de Quatro Braços',
@@ -181,7 +184,7 @@ function App() {
       snapshot.phase === 'game-over');
   const fightCount = fightConfig.amazonas + fightConfig.ebony + fightConfig.ninjas + fightConfig.roxy +
     fightConfig.karateBlonde + fightConfig.karateEbony + fightConfig.minerva + fightConfig.may +
-    fightConfig.pantera + fightConfig.fourArmBoss + fightConfig.laura;
+    fightConfig.lana + fightConfig.pantera + fightConfig.fourArmBoss + fightConfig.laura;
   const handleOpponentCountChange = (kind: OpponentCountKey, value: number) => {
     if (!Number.isSafeInteger(value) || value < 0) return;
     if (kind === 'fourArmBoss' && value > 1) value = 1;
@@ -193,7 +196,9 @@ function App() {
   const sequenceDuration = isKarateChallenge
     ? (snapshot.lauraSpecialActive ? LAURA_SPECIAL_DURATION
       : snapshot.karateSequence === 'ebony' ? KARATE_EBONY_DEFEAT_DURATION
-        : KARATE_DEFEAT_DURATION)
+        : snapshot.karateSequence === 'blonde' ? KARATE_BLONDE_DEFEAT_DURATION
+          : snapshot.karateSequence === 'lana' ? LANA_DEFEAT_DURATION
+            : KARATE_DEFEAT_DURATION)
     : isFourArmBossChallenge ? FOUR_ARM_BOSS_SCENE_DURATION
       : isSpecialDefeat || isNinjaFootsmother || isRoxySmother
         ? NINJA_FOOTSMOTHER_DURATION : 20;
@@ -304,6 +309,9 @@ function App() {
                       <OpponentCounter label="May" kind="may"
                         value={fightConfig.may}
                         onChange={handleOpponentCountChange} />
+                      <OpponentCounter label="Lana" kind="lana"
+                        value={fightConfig.lana}
+                        onChange={handleOpponentCountChange} />
                       <OpponentCounter label="Laura" kind="laura"
                         value={fightConfig.laura}
                         onChange={handleOpponentCountChange} />
@@ -349,7 +357,8 @@ function App() {
                       <p className="roxy-special-help">Selecione ao menos uma adversária para começar.</p>
                     )}
                     {(fightConfig.karateBlonde > 0 || fightConfig.karateEbony > 0 ||
-                      fightConfig.minerva > 0 || fightConfig.may > 0 || fightConfig.laura > 0) && (
+                      fightConfig.minerva > 0 || fightConfig.may > 0 || fightConfig.lana > 0 ||
+                      fightConfig.laura > 0) && (
                       <p className="roxy-special-help">
                         As cenas especiais das lutadoras são opcionais: ao ser derrotada por uma delas,
                         você poderá aceitar, recusar ou encerrar a sequência.
@@ -361,6 +370,12 @@ function App() {
                       <p className="roxy-special-help">
                         May alterna combinações e chutes de longo alcance; quando você ataca de perto,
                         ela pode bloquear e reduzir bastante o dano, ou recuar para reposicionar.
+                      </p>
+                    )}
+                    {fightConfig.lana > 0 && (
+                      <p className="roxy-special-help">
+                        Lana entra correndo e mistura socos, chutes altos e um chute voador. A sequência
+                        de pisoteio e agarrão só começa se você aceitar após a derrota.
                       </p>
                     )}
                     {fightConfig.laura > 0 && (
@@ -559,9 +574,11 @@ function App() {
                       ? 'da Minerva'
                       : snapshot.karateOfferOpponent === 'may'
                         ? 'da May'
-                        : snapshot.karateOfferOpponent === 'laura'
-                          ? 'da Laura'
-                          : `da Karateka ${snapshot.karateOfferOpponent === 'ebony' ? 'Ebony' : 'loira'}`}
+                        : snapshot.karateOfferOpponent === 'lana'
+                          ? 'da Lana'
+                          : snapshot.karateOfferOpponent === 'laura'
+                            ? 'da Laura'
+                            : `da Karateka ${snapshot.karateOfferOpponent === 'ebony' ? 'Ebony' : 'loira'}`}
                 </h2>
                 <p>
                   {snapshot.karateOfferIsApproach
